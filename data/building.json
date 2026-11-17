@@ -1,0 +1,18 @@
+{
+  "maxStartHuts": 20,
+  "eddie": ["eddie-house", "eddie-workshop"],
+  "thingsAtStart": 3,
+  "thingsPerHouse": 1,
+  "school": "school",
+  "gathering": "market",
+  "community": {
+    "maxSites": 2,
+    "lowStockDays": 2,
+    "decideTicks": 240
+  },
+  "log": {
+    "built": { "nl": "Er staat een nieuw bouwsel: {subject}.", "en": "A new building stands: {subject}." },
+    "waiting-materials": { "nl": "De bouwplaats ({subject}) wacht op materiaal.", "en": "The site ({subject}) waits for materials." },
+    "waiting-builders": { "nl": "De bouwplaats ({subject}) wacht op bouwvakkers.", "en": "The site ({subject}) waits for builders." }
+  }
+}

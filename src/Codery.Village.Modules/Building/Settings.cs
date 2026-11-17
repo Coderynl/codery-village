@@ -1,0 +1,29 @@
+using Codery.Village.Modules.People;
+
+namespace Codery.Village.Modules.Building;
+
+/// <summary>The section "building" of the data.</summary>
+public sealed record BuildingSettings(
+    // one hut per household at the start, at most so many per island
+    int MaxStartHuts,
+    // the blueprints that stand finished on Eddie's islet from the start; outside the economy, never built by the islands
+    IReadOnlyList<string> Eddie,
+    int ThingsAtStart,
+    int ThingsPerHouse,
+    // the label a school serves, and the label of a place to gather, such as a market
+    string School,
+    string Gathering,
+    CommunitySettings Community,
+    IReadOnlyDictionary<string, Sentence> Log);
+
+/// <summary>How an island decides what to build.</summary>
+public sealed record CommunitySettings(
+    // sites going up at the same time, per island
+    int MaxSites,
+    // a workshop for a need comes when the stock holds less than so many days of it
+    int LowStockDays,
+    // how often the islands decide
+    int DecideTicks);
+
+/// <summary>What Building reads from the section "economy": the full crew of a site and the role of a builder.</summary>
+internal sealed record CrewSettings(int Crew, string BuilderRole);
