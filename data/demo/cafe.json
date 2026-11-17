@@ -1,0 +1,19 @@
+{
+  "blueprints": [
+    {
+      "id": "cafe", "nl": "café", "en": "café", "on": ["lot", "land"], "serves": "cafe", "range": 8,
+      "jobs": [{ "role": "host", "count": 2, "shift": "day", "outdoor": false }],
+      "phases": [
+        { "id": "foundation", "ticks": 400, "cost": {} },
+        { "id": "frame", "ticks": 600, "cost": {} },
+        { "id": "roof", "ticks": 500, "cost": {} },
+        { "id": "walls", "ticks": 600, "cost": {} },
+        { "id": "terrace", "ticks": 300, "cost": {} }
+      ],
+      "look": { "form": "building", "size": "medium", "walls": "plaster", "roof": "gable", "extras": ["door", "awning"] }
+    }
+  ],
+  "things": [
+    { "id": "parasol", "nl": "parasol", "en": "parasol" }
+  ]
+}

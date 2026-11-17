@@ -1,0 +1,163 @@
+{
+  "materials": [
+    { "id": "wood", "nl": "hout", "en": "wood", "satisfies": ["heat"] },
+    { "id": "planks", "nl": "planken", "en": "planks" },
+    { "id": "grain", "nl": "graan", "en": "grain" },
+    { "id": "bread", "nl": "brood", "en": "bread", "satisfies": ["food"] },
+    { "id": "stone", "nl": "steen", "en": "stone" },
+    { "id": "clay", "nl": "klei", "en": "clay" },
+    { "id": "bricks", "nl": "bakstenen", "en": "bricks" },
+    { "id": "peat", "nl": "turf", "en": "peat", "satisfies": ["heat"] },
+    { "id": "fish", "nl": "vis", "en": "fish", "satisfies": ["food"] }
+  ],
+  "blueprints": [
+    {
+      "id": "house", "nl": "huis", "en": "house", "on": ["lot"], "homes": 1,
+      "phases": [
+        { "id": "foundation", "ticks": 400, "cost": { "wood": 2 } },
+        { "id": "frame", "ticks": 600, "cost": { "planks": 4 } },
+        { "id": "roof", "ticks": 500, "cost": { "planks": 3 } },
+        { "id": "walls", "ticks": 600, "cost": { "planks": 4 } },
+        { "id": "garden", "ticks": 300, "cost": {} }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "wood", "roof": "gable", "extras": ["door", "chimney"] }
+    },
+    {
+      "id": "stone-house", "nl": "stenen huis", "en": "stone house", "on": ["lot"], "homes": 1,
+      "phases": [
+        { "id": "foundation", "ticks": 400, "cost": { "stone": 3 } },
+        { "id": "frame", "ticks": 600, "cost": { "stone": 4 } },
+        { "id": "roof", "ticks": 500, "cost": { "bricks": 3 } },
+        { "id": "walls", "ticks": 600, "cost": { "bricks": 4 } },
+        { "id": "garden", "ticks": 300, "cost": {} }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "stone", "roof": "hip", "extras": ["door", "chimney"] }
+    },
+    {
+      "id": "woodcutter", "nl": "houthakkerij", "en": "woodcutter's hut", "on": ["forest"],
+      "jobs": [{ "role": "woodcutter", "count": 2, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "wood": 2 }, "ticks": 240 },
+      "phases": [
+        { "id": "foundation", "ticks": 200, "cost": { "wood": 2 } },
+        { "id": "frame", "ticks": 300, "cost": { "wood": 3 } },
+        { "id": "roof", "ticks": 200, "cost": { "wood": 2 } }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "wood", "roof": "thatch", "extras": ["door", "crates"] }
+    },
+    {
+      "id": "sawmill", "nl": "zagerij", "en": "sawmill", "on": ["land"],
+      "jobs": [{ "role": "sawyer", "count": 2, "shift": "day", "outdoor": false }],
+      "recipe": { "in": { "wood": 2 }, "out": { "planks": 3 }, "ticks": 240 },
+      "phases": [
+        { "id": "foundation", "ticks": 300, "cost": { "wood": 3 } },
+        { "id": "frame", "ticks": 400, "cost": { "wood": 4 } },
+        { "id": "roof", "ticks": 300, "cost": { "wood": 2 } },
+        { "id": "walls", "ticks": 300, "cost": { "wood": 3 } }
+      ],
+      "look": { "form": "building", "size": "medium", "walls": "planks", "roof": "gable", "extras": ["door", "crates"] }
+    },
+    {
+      "id": "farm", "nl": "boerderij", "en": "farm", "on": ["fertile"],
+      "jobs": [{ "role": "farmer", "count": 3, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "grain": 3 }, "ticks": 480 },
+      "phases": [
+        { "id": "foundation", "ticks": 300, "cost": { "wood": 2 } },
+        { "id": "frame", "ticks": 400, "cost": { "planks": 3 } },
+        { "id": "roof", "ticks": 300, "cost": { "planks": 2 } }
+      ],
+      "look": { "form": "building", "size": "medium", "walls": "wood", "roof": "thatch", "extras": ["door", "crates"] }
+    },
+    {
+      "id": "bakery", "nl": "bakkerij", "en": "bakery", "on": ["land"],
+      "jobs": [{ "role": "baker", "count": 2, "shift": "early", "outdoor": false }],
+      "recipe": { "in": { "grain": 2 }, "out": { "bread": 4 }, "ticks": 240 },
+      "phases": [
+        { "id": "foundation", "ticks": 300, "cost": { "wood": 2 } },
+        { "id": "frame", "ticks": 400, "cost": { "planks": 3 } },
+        { "id": "roof", "ticks": 300, "cost": { "planks": 2 } },
+        { "id": "walls", "ticks": 300, "cost": { "planks": 3 } }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "plaster", "roof": "gable", "extras": ["door", "chimney"] }
+    },
+    {
+      "id": "fisher", "nl": "vissteiger", "en": "fishing jetty", "on": ["fishing"],
+      "jobs": [{ "role": "fisher", "count": 2, "shift": "early", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "fish": 2 }, "ticks": 360 },
+      "phases": [
+        { "id": "foundation", "ticks": 300, "cost": { "stone": 3 } },
+        { "id": "deck", "ticks": 300, "cost": { "stone": 2 } }
+      ],
+      "look": { "form": "deck", "surface": "stone", "extras": ["crates"] }
+    },
+    {
+      "id": "quarry", "nl": "steengroeve", "en": "quarry", "on": ["rock"],
+      "jobs": [{ "role": "quarrier", "count": 2, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "stone": 2 }, "ticks": 300 },
+      "phases": [
+        { "id": "foundation", "ticks": 300, "cost": { "stone": 2 } },
+        { "id": "frame", "ticks": 300, "cost": { "stone": 2 } }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "stone", "roof": "flat", "extras": ["crates"] }
+    },
+    {
+      "id": "claypit", "nl": "kleiput", "en": "clay pit", "on": ["clay"],
+      "jobs": [{ "role": "digger", "count": 2, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "clay": 2 }, "ticks": 240 },
+      "phases": [
+        { "id": "foundation", "ticks": 300, "cost": { "stone": 2 } }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "open", "roof": "flat", "extras": ["crates"] }
+    },
+    {
+      "id": "peat-cutter", "nl": "turfsteker", "en": "peat cutter", "on": ["clay"],
+      "jobs": [{ "role": "peat-cutter", "count": 2, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "peat": 2 }, "ticks": 300 },
+      "phases": [
+        { "id": "foundation", "ticks": 300, "cost": { "stone": 2 } }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "open", "roof": "thatch", "extras": ["crates"] }
+    },
+    {
+      "id": "brickworks", "nl": "steenbakkerij", "en": "brickworks", "on": ["land"],
+      "jobs": [
+        { "role": "brickmaker", "count": 2, "shift": "day", "outdoor": false },
+        { "role": "stoker", "count": 1, "shift": "night", "outdoor": false }
+      ],
+      "recipe": { "in": { "clay": 2 }, "out": { "bricks": 2 }, "ticks": 360 },
+      "phases": [
+        { "id": "foundation", "ticks": 300, "cost": { "stone": 3 } },
+        { "id": "frame", "ticks": 400, "cost": { "stone": 3 } },
+        { "id": "roof", "ticks": 300, "cost": { "stone": 2 } },
+        { "id": "walls", "ticks": 300, "cost": { "stone": 3 } }
+      ],
+      "look": { "form": "building", "size": "medium", "walls": "bricks", "roof": "flat", "extras": ["door", "chimney"] }
+    },
+    {
+      "id": "eddie-house", "nl": "huis van Eddie", "en": "Eddie's house", "on": ["land"], "homes": 1,
+      "phases": [
+        { "id": "foundation", "ticks": 400, "cost": { "wood": 2 } },
+        { "id": "frame", "ticks": 600, "cost": { "planks": 4 } },
+        { "id": "roof", "ticks": 500, "cost": { "planks": 3 } },
+        { "id": "walls", "ticks": 600, "cost": { "planks": 4 } },
+        { "id": "garden", "ticks": 300, "cost": {} }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "glass", "roof": "flat", "extras": ["door", "antenna"] }
+    },
+    {
+      "id": "eddie-workshop", "nl": "werkplaats van Eddie", "en": "Eddie's workshop", "on": ["land"],
+      "phases": [
+        { "id": "foundation", "ticks": 300, "cost": { "wood": 2 } },
+        { "id": "frame", "ticks": 400, "cost": { "planks": 3 } },
+        { "id": "roof", "ticks": 300, "cost": { "planks": 2 } },
+        { "id": "walls", "ticks": 300, "cost": { "planks": 3 } }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "planks", "roof": "gable", "extras": ["door", "awning", "antenna"] }
+    }
+  ],
+  "things": [
+    { "id": "bench", "nl": "bankje", "en": "bench" },
+    { "id": "crate", "nl": "kist", "en": "crate" },
+    { "id": "sapling", "nl": "jonge boom", "en": "sapling" },
+    { "id": "barrow", "nl": "kruiwagen", "en": "wheelbarrow" }
+  ]
+}

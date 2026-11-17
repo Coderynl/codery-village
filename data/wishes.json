@@ -1,0 +1,16 @@
+{
+  "wishes": [
+    { "id": "cafe", "nl": "café", "en": "café", "label": "cafe" },
+    { "id": "playground", "nl": "speeltuin", "en": "playground", "label": "playground" },
+    { "id": "football", "nl": "voetbalveld", "en": "football pitch", "label": "football" },
+    { "id": "library", "nl": "bibliotheek", "en": "library", "label": "library" },
+    { "id": "school", "nl": "school", "en": "school", "label": "school" },
+    { "id": "harbour", "nl": "haven", "en": "harbour", "label": "harbour" },
+    { "id": "market", "nl": "markt", "en": "market", "label": "market" },
+    { "id": "park", "nl": "park", "en": "park", "label": "park" },
+    { "id": "pool", "nl": "zwembad", "en": "swimming pool", "label": "pool" },
+    { "id": "stage", "nl": "podium", "en": "stage", "label": "stage" },
+    { "id": "doctor", "nl": "huisarts", "en": "doctor's practice", "label": "doctor" },
+    { "id": "workshop", "nl": "open werkplaats", "en": "open workshop", "label": "workshop" }
+  ]
+}
