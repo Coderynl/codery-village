@@ -11,7 +11,7 @@
       "jobs": [{ "role": "peat-cutter", "count": 2, "shift": "day", "outdoor": true }],
       "recipe": { "in": {}, "out": { "peat": 2 }, "ticks": 300 },
       "phases": [
-        { "id": "foundation", "ticks": 300, "cost": { "stones": 2 } }
+        { "id": "foundation", "nl": "fundering", "en": "foundation", "ticks": 300, "cost": { "stones": 2 } }
       ],
       "look": { "form": "building", "size": "small", "walls": "open", "roof": "thatch", "extras": ["crates"] }
     }

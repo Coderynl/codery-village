@@ -178,7 +178,7 @@ public class DataTests
     // a small catalog without a problem; each case below breaks it in one place
     private const string Materials = """[{ "id": "wood", "nl": "hout", "en": "wood" }]""";
     private const string Wishes = """{ "wishes": [{ "id": "cafe", "nl": "een café", "en": "a café", "label": "cafe" }] }""";
-    private const string Phase = """{ "id": "frame", "ticks": 10, "cost": { "wood": 1 } }""";
+    private const string Phase = """{ "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 10, "cost": { "wood": 1 } }""";
     private const string Look = """{ "form": "building" }""";
 
     private static string Hut(string phases = $"[{Phase}]", string look = Look, string more = "") =>
@@ -209,23 +209,25 @@ public class DataTests
         { Catalog(roles: $"[{Roles[1..^1]}, {Roles[1..^1]}]"), Wishes, "role 'carpenter' twice" },
         { Catalog($"[{Hut($"[{Phase}, {Phase}]")}]"), Wishes, "phase 'frame' twice" },
         { Catalog($"[{Hut(more: """, "jobs": [{ "role": "juggler", "count": 1, "shift": "day", "outdoor": false }]""")}]"), Wishes, "unknown role 'juggler'" },
-        { Catalog($"[{Hut("""[{ "id": "frame", "ticks": 10, "cost": { "gold": 1 } }]""")}]"), Wishes, "unknown material 'gold'" },
+        { Catalog($"[{Hut("""[{ "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 10, "cost": { "gold": 1 } }]""")}]"), Wishes, "unknown material 'gold'" },
         { Catalog($"[{Hut(more: """, "recipe": { "in": { "gold": 1 }, "out": { "wood": 1 }, "ticks": 5 }""")}]"), Wishes, "unknown material 'gold'" },
         { Catalog($"[{Hut(more: """, "recipe": { "in": {}, "out": { "gold": 1 }, "ticks": 5 }""")}]"), Wishes, "unknown material 'gold'" },
-        { Catalog($"[{Hut("""[{ "id": "frame", "ticks": 0, "cost": { "wood": 1 } }]""")}]"), Wishes, "0 ticks" },
-        { Catalog($"[{Hut("""[{ "id": "frame", "ticks": 10, "cost": { "wood": -2 } }]""")}]"), Wishes, "-2 wood" },
+        { Catalog($"[{Hut("""[{ "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 0, "cost": { "wood": 1 } }]""")}]"), Wishes, "0 ticks" },
+        { Catalog($"[{Hut("""[{ "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 10, "cost": { "wood": -2 } }]""")}]"), Wishes, "-2 wood" },
         { Catalog($"[{Hut(more: """, "recipe": { "in": {}, "out": { "wood": 1 }, "ticks": 0 }""")}]"), Wishes, "0 ticks" },
         { Catalog($"[{Hut(more: """, "recipe": { "in": {}, "out": { "wood": 0 }, "ticks": 5 }""")}]"), Wishes, "0 wood" },
         { Catalog($"[{Hut(more: """, "jobs": [{ "role": "carpenter", "count": 0, "shift": "day", "outdoor": false }]""")}]"), Wishes, "0 carpenter" },
         { Catalog($"[{Hut(more: """, "homes": 0""")}]"), Wishes, "0 homes" },
         { Catalog($"[{Hut(more: """, "serves": "cafe", "range": 0""")}]"), Wishes, "range 0" },
         { Catalog($"[{Hut("[]")}]"), Wishes, "no phases" },
-        { Catalog("""[{ "id": "hut", "nl": "hut", "en": "hut", "on": ["land"], "phases": [{ "id": "frame", "ticks": 10, "cost": {} }] }]"""), Wishes, "'look'" },
+        { Catalog("""[{ "id": "hut", "nl": "hut", "en": "hut", "on": ["land"], "phases": [{ "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 10, "cost": {} }] }]"""), Wishes, "'look'" },
         { Catalog($"[{Hut(look: """{ "form": "building", "roof": "straw" }""")}]"), Wishes, "unknown roof 'straw'" },
         { Catalog($"[{Hut(more: """, "shape": [[0, 1], [1, 0]]""")}]"), Wishes, "without [0,0]" },
         { Catalog($"[{Hut(more: """, "shape": [[0, 0], [1]]""")}]"), Wishes, "[row,col]" },
         { Catalog($"[{Hut(more: """, "serves": "pub" """)}]"), Wishes, "'pub', which no wish names" },
         { Catalog("""[{ "id": "hut", "en": "hut", "on": ["land"], "phases": [], "look": { "form": "building" } }]"""), Wishes, "'nl'" },
+        { Catalog($"[{Hut("""[{ "id": "frame", "en": "frame", "ticks": 10, "cost": {} }]""")}]"), Wishes, "'nl'" },
+        { Catalog($"[{Hut("""[{ "id": "frame", "nl": "geraamte", "ticks": 10, "cost": {} }]""")}]"), Wishes, "'en'" },
         { Catalog($"[{Hut(more: """, "jobs": [{ "role": "carpenter", "count": 1, "shift": "evening", "outdoor": false }]""")}]"), Wishes, "catalog" },
         { "{}", Wishes, "catalog" },
         { Catalog(), """{ "wishes": [{ "id": "cafe", "nl": "café", "en": "café" }] }""", "'label'" },

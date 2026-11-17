@@ -117,8 +117,9 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
 
     /// <summary>
     /// Puts a loose thing on another free land tile of its island; null when it is moved, else why not. A lot and
-    /// the tile where the island gathers count as taken: a visitor does not block a home or the square. A moved
-    /// thing that stands in someone's way goes back within <c>putBackMinutes</c>.
+    /// the tile where the island gathers count as taken: a visitor does not block a home or the square. The tile it
+    /// stands on counts as taken too: putting it down where it is moves nothing. A moved thing that stands in
+    /// someone's way goes back within <c>putBackMinutes</c>.
     /// </summary>
     public Refusal? Move(int thing, Cell to)
     {
@@ -128,7 +129,7 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         var map = _village.Map;
         if (!map.IsWalkable(to)) return Refusal.Water;
         if (map.IslandOf(to) != map.IslandOf(item.At)) return Refusal.OtherIsland;
-        if (to == item.At) return null;
+        if (to == item.At) return Refusal.Taken;
         if (map.At(to) == Ground.Lot || _squares.ContainsValue(to)) return Refusal.Taken;
         if (_covered.ContainsKey(to) || _things.Any(other => other.At == to)) return Refusal.Taken;
         _things[index] = item with { At = to };

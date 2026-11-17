@@ -122,10 +122,14 @@ public class HostTests
     internal const string Site = "http://localhost:3100";
 
     private static WebApplicationFactory<Program> Server(FakeStore? store = null, string saveSeconds = "3600", TimeProvider? time = null,
-        ITalker? talker = null, params (string Key, string Value)[] settings) =>
+        ITalker? talker = null, ILoggerProvider? log = null, params (string Key, string Value)[] settings) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
-            builder.ConfigureLogging(logging => logging.ClearProviders()).UseSetting("Village:SaveSeconds", saveSeconds);
+            builder.ConfigureLogging(logging =>
+            {
+                logging.ClearProviders();
+                if (log is not null) logging.AddProvider(log);
+            }).UseSetting("Village:SaveSeconds", saveSeconds);
             foreach (var (key, value) in settings) builder.UseSetting(key, value);
             builder.ConfigureTestServices(services =>
             {
@@ -404,6 +408,60 @@ public class HostTests
         var name = join.Map.Things.Single(kind => kind.Id == thing.Kind);
         Assert.Equal([$"{speaker.Name}: Hé, wie heeft de {name.Nl} verzet?"], word.Nl);
         Assert.Equal([$"{speaker.Name}: Hey, who moved the {name.En}?"], word.En);
+    }
+
+    [Fact]
+    public async Task A_tick_the_feed_cannot_pass_on_is_logged_and_the_village_runs_on()
+    {
+        var log = new ServerTests.Recorder();
+        await using var server = Server(log: log);
+        var host = await Started(server);
+        await using var connection = Connect(server);
+        var heard = 0L;
+        connection.On<TickMessage>("tick", message => Interlocked.Exchange(ref heard, message.Tick));
+        await connection.StartAsync();
+        host.SetSpeed(8);
+
+        var passOn = host.PassOn;
+        host.PassOn = (_, _, _) => throw new InvalidOperationException("the feed broke");
+        var broken = Tick(host);
+        await Until(() => Tick(host) > broken + 40, "the clock to run on with a broken feed");
+        Assert.Contains(log.Lines, line => line.Level == LogLevel.Error && line.Text.Contains("the feed broke"));
+
+        // the feed works again: the pages hear the ticks again
+        host.PassOn = passOn;
+        var mended = Tick(host);
+        await Until(() => Interlocked.Read(ref heard) > mended, "a tick after the feed works again");
+    }
+
+    [Fact]
+    public async Task A_thing_put_down_where_it_stands_is_refused_and_nobody_says_a_word()
+    {
+        await using var server = Server();
+        var host = await Started(server);
+        host.SetSpeed(0);
+        await using var connection = Connect(server);
+        var said = 0;
+        connection.On<TickMessage>("tick", message => Interlocked.Add(ref said, message.Said?.Count(s => s.B is null) ?? 0));
+        await connection.StartAsync();
+        var join = await connection.InvokeAsync<JoinMessage>("Join");
+        var thing = join.Things[0];
+
+        var result = await connection.InvokeAsync<InterventionResult>("Move", thing.Id, thing.Cell / join.Map.Cols, thing.Cell % join.Map.Cols);
+        Assert.Equal(new InterventionResult(false, "Taken", null), result);
+        // a refusal costs nothing: both moves a visitor has go through after it
+        foreach (var skip in new[] { 1, 2 })
+        {
+            await Task.Delay(TimeSpan.FromSeconds(1.1));
+            var (other, row, col) = FreeTileFor(host, join, skip);
+            Assert.True((await connection.InvokeAsync<InterventionResult>("Move", other.Id, row, col)).Ok);
+        }
+
+        host.SetSpeed(16);
+        var start = Tick(host);
+        await Until(() => Tick(host) > start + 60 * 4, "a minute of ticks");
+        // a word about each real move, none about the thing that stayed where it was
+        Assert.Equal(2, Volatile.Read(ref said));
     }
 
     /// <summary>A loose thing and a free land tile of its island to put it on.</summary>

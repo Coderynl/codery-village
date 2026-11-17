@@ -1,10 +1,10 @@
 {
   "currency": { "nl": "schelpen", "en": "shells" },
-  "wagePerHour": 600,
+  "wagePerHour": 200,
   "allowancePerDay": 300,
-  "pensionPerDay": 2400,
+  "pensionPerDay": 700,
   "spendPercent": 20,
-  "upkeepPerDay": 300,
+  "upkeepPerDay": 100,
   "startSubsidy": 20000,
   "subsidyDamping": 15,
   "builders": 3,
@@ -20,7 +20,7 @@
     "heat": { "perHousehold": 1 }
   },
   "prices": {
-    "berries": 1200, "roots": 1200, "fish": 1200, "branches": 500, "driftwood": 500,
+    "berries": 600, "roots": 600, "fish": 600, "firewood": 250, "driftwood": 250,
     "bread": 1200, "wood": 500, "peat": 500
   },
   "fits": {
@@ -44,7 +44,7 @@
   "start": {
     "cash": 100000,
     "stock": {
-      "West": { "branches": 40, "reed": 20, "berries": 40 },
+      "West": { "branches": 40, "firewood": 20, "reed": 20, "berries": 40 },
       "Oost": { "stones": 30, "loam": 20, "reed": 20, "fish": 40, "driftwood": 30 }
     }
   }

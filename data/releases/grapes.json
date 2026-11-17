@@ -8,7 +8,7 @@
       "jobs": [{ "role": "gatherer", "count": 2, "shift": "day", "outdoor": true }],
       "recipe": { "in": {}, "out": { "grapes": 2 }, "ticks": 360 },
       "phases": [
-        { "id": "clearing", "ticks": 200, "cost": {} }
+        { "id": "clearing", "nl": "open plek", "en": "clearing", "ticks": 200, "cost": {} }
       ],
       "look": { "form": "kit", "models": ["berry_bushes"] }
     }

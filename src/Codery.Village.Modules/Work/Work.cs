@@ -16,7 +16,7 @@ namespace Codery.Village.Modules.Work;
 /// Work and money, in their simplest form. A building that stands offers the jobs of its blueprint and each
 /// ordinary island has places for its own builders; a working resident without a job takes the free place on
 /// his island that fits his interests best. A workplace makes its recipe while someone works there, from and
-/// into the island's stock; a woodcutter fells a tree nearby, which grows back. The treasury of the island pays
+/// into the island's stock; a recipe that fells takes a tree nearby, which grows back. The treasury of the island pays
 /// a wage for every tick on the job, and once a calendar day, at 00:00, the island settles its day: the start
 /// subsidy comes in, the upkeep of its buildings goes out, children, students and the retired get their money,
 /// every household buys food and heat from the stock, and every resident spends after his thrift. Who leaves the
@@ -302,9 +302,8 @@ public sealed class Work : IModule, IJobs, IStock
         foreach (var gone in _batches.Keys.Where(id => !standing.Contains(id)).ToList()) _batches.Remove(gone);
     }
 
-    // a workplace that takes nothing from the stock and stands in the forest lives off the forest
-    private static bool Fells(Blueprint blueprint) =>
-        blueprint.Recipe is { In.Count: 0 } && blueprint.On.Contains(Ground.Forest);
+    // a recipe that fells, such as a woodcutter's; gathering branches leaves the forest standing
+    private static bool Fells(Blueprint blueprint) => blueprint.Recipe is { Fells: true };
 
     // the nearest standing tree of the island within reach, that no building stands on
     private Cell? Tree(IslandMap map, World world, StructureView hut)

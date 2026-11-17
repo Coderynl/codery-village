@@ -113,8 +113,11 @@ public sealed record MapView(
 /// <summary>An island and its tiles; <see cref="Eddie"/> for Eddie's islet.</summary>
 public sealed record IslandView(int Id, string Name, bool Eddie, IReadOnlyList<int> Cells);
 
-/// <summary>What can be built: its names, how it looks, and the ids of its phases in order.</summary>
-public sealed record BlueprintView(string Id, string Nl, string En, Look Look, IReadOnlyList<string> Phases);
+/// <summary>
+/// What can be built: its names, how it looks, and the ids of its phases in order. <see cref="PhaseNames"/> holds the
+/// same phases with their names in both languages (added to protocol 1; a page that does not know it ignores it).
+/// </summary>
+public sealed record BlueprintView(string Id, string Nl, string En, Look Look, IReadOnlyList<string> Phases, IReadOnlyList<NameView> PhaseNames);
 
 /// <summary>An id with its name in both languages.</summary>
 public sealed record NameView(string Id, string Nl, string En);

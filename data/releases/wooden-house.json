@@ -3,11 +3,11 @@
     {
       "id": "house", "nl": "huis", "en": "house", "on": ["lot"], "homes": 1, "serves": "house",
       "phases": [
-        { "id": "foundation", "ticks": 400, "cost": { "wood": 2 } },
-        { "id": "frame", "ticks": 600, "cost": { "planks": 4 } },
-        { "id": "roof", "ticks": 500, "cost": { "planks": 3 } },
-        { "id": "walls", "ticks": 600, "cost": { "planks": 4 } },
-        { "id": "garden", "ticks": 300, "cost": {} }
+        { "id": "foundation", "nl": "fundering", "en": "foundation", "ticks": 400, "cost": { "wood": 2 } },
+        { "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 600, "cost": { "planks": 4 } },
+        { "id": "roof", "nl": "dak", "en": "roof", "ticks": 500, "cost": { "planks": 3 } },
+        { "id": "walls", "nl": "wanden", "en": "walls", "ticks": 600, "cost": { "planks": 4 } },
+        { "id": "garden", "nl": "erf", "en": "garden", "ticks": 300, "cost": {} }
       ],
       "look": { "form": "building", "size": "small", "walls": "wood", "roof": "gable", "extras": ["door", "chimney"] }
     }

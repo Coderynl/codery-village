@@ -46,8 +46,11 @@ public sealed record Blueprint(
         : new Shape([.. Shape.Select(point => new Cell(point[0], point[1]))]);
 }
 
-/// <summary>One step of building: it starts when the stock holds its <see cref="Cost"/> and takes <see cref="Ticks"/> with a full crew.</summary>
-public sealed record Phase(string Id, int Ticks, IReadOnlyDictionary<string, int> Cost);
+/// <summary>
+/// One step of building, named as a visitor reads it: it starts when the stock holds its <see cref="Cost"/> and takes
+/// <see cref="Ticks"/> with a full crew.
+/// </summary>
+public sealed record Phase(string Id, string Nl, string En, int Ticks, IReadOnlyDictionary<string, int> Cost);
 
 /// <summary>Places to work at a building: <see cref="Count"/> people in the role, in one shift, inside or out.</summary>
 public sealed record Job(string Role, int Count, Shift Shift, bool Outdoor);
@@ -55,5 +58,8 @@ public sealed record Job(string Role, int Count, Shift Shift, bool Outdoor);
 /// <summary>When a job is worked. <see cref="Early"/> runs from 04:00 to 12:00.</summary>
 public enum Shift { Day, Early, Night }
 
-/// <summary>What a workplace makes: <see cref="In"/> from the stock becomes <see cref="Out"/> after <see cref="Ticks"/>. Nature has no <see cref="In"/>.</summary>
-public sealed record Recipe(IReadOnlyDictionary<string, int> In, IReadOnlyDictionary<string, int> Out, int Ticks);
+/// <summary>
+/// What a workplace makes: <see cref="In"/> from the stock becomes <see cref="Out"/> after <see cref="Ticks"/>. Nature
+/// has no <see cref="In"/>. A recipe that <see cref="Fells"/> takes a standing tree near the workplace for every batch.
+/// </summary>
+public sealed record Recipe(IReadOnlyDictionary<string, int> In, IReadOnlyDictionary<string, int> Out, int Ticks, bool Fells = false);

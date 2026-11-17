@@ -11,10 +11,10 @@
       "jobs": [{ "role": "baker", "count": 2, "shift": "early", "outdoor": false }],
       "recipe": { "in": { "grain": 2 }, "out": { "bread": 4 }, "ticks": 240 },
       "phases": [
-        { "id": "foundation", "ticks": 300, "cost": { "branches": 2 } },
-        { "id": "frame", "ticks": 400, "cost": { "branches": 3 } },
-        { "id": "roof", "ticks": 300, "cost": { "reed": 2 } },
-        { "id": "walls", "ticks": 300, "cost": { "branches": 3 } }
+        { "id": "foundation", "nl": "fundering", "en": "foundation", "ticks": 300, "cost": { "branches": 2 } },
+        { "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 400, "cost": { "branches": 3 } },
+        { "id": "roof", "nl": "dak", "en": "roof", "ticks": 300, "cost": { "reed": 2 } },
+        { "id": "walls", "nl": "wanden", "en": "walls", "ticks": 300, "cost": { "branches": 3 } }
       ],
       "look": { "form": "building", "size": "small", "walls": "plaster", "roof": "gable", "extras": ["door", "chimney"] }
     }

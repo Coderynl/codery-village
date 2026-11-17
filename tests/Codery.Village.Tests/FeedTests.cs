@@ -149,6 +149,12 @@ public class FeedTests(ITestOutputHelper output)
         var catalog = Data.Section<Catalog>("catalog");
         Assert.Equal(catalog.Blueprints.Select(blueprint => blueprint.Id), join.Map.Blueprints.Select(blueprint => blueprint.Id));
         Assert.Equal(["foundation", "frame", "roof", "walls", "garden"], join.Map.Blueprints.Single(blueprint => blueprint.Id == "hut").Phases);
+        // the phases by name, in both languages, as the data gives them
+        Assert.Equal(
+            [new NameView("foundation", "fundering", "foundation"), new NameView("frame", "geraamte", "frame"), new NameView("roof", "dak", "roof"),
+             new NameView("walls", "wanden", "walls"), new NameView("garden", "erf", "garden")],
+            join.Map.Blueprints.Single(blueprint => blueprint.Id == "hut").PhaseNames);
+        Assert.All(join.Map.Blueprints, blueprint => Assert.Equal(blueprint.Phases, blueprint.PhaseNames.Select(phase => phase.Id)));
         Assert.Equal(catalog.Roles.Select(role => role.Id), join.Map.Roles.Select(role => role.Id));
         Assert.Equal(catalog.Things.Select(thing => thing.Id), join.Map.Things.Select(thing => thing.Id));
 

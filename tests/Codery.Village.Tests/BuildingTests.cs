@@ -369,6 +369,8 @@ public class BuildingTests
         Assert.Equal(Refusal.OtherIsland, village.Building.Move(thing.Id, oost));
         Assert.Equal(Refusal.Taken, village.Building.Move(thing.Id, hut.Anchor));
         Assert.Equal(Refusal.Taken, village.Building.Move(thing.Id, other.At));
+        // put down where it stands: nothing moves, so it is no move
+        Assert.Equal(Refusal.Taken, village.Building.Move(thing.Id, thing.At));
         Assert.Equal(thing, village.Building.Things.Single(t => t.Id == thing.Id));
 
         Assert.Null(village.Building.Move(thing.Id, free));

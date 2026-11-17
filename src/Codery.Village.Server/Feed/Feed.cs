@@ -318,7 +318,8 @@ public sealed class VillageFeed
             map.Cols,
             new string(ground),
             [.. map.Islands.Select(island => new IslandView(island.Id, island.Name, island.Eddie, [.. island.Cells.Select(cell => cell.Row * map.Cols + cell.Col).Order()]))],
-            [.. catalog.Blueprints.Select(blueprint => new BlueprintView(blueprint.Id, blueprint.Nl, blueprint.En, blueprint.Look, [.. blueprint.Phases.Select(phase => phase.Id)]))],
+            [.. catalog.Blueprints.Select(blueprint => new BlueprintView(blueprint.Id, blueprint.Nl, blueprint.En, blueprint.Look,
+                [.. blueprint.Phases.Select(phase => phase.Id)], [.. blueprint.Phases.Select(phase => new NameView(phase.Id, phase.Nl, phase.En))]))],
             [.. catalog.Roles.Select(role => new NameView(role.Id, role.Nl, role.En))],
             [.. wishes.Select(wish => new NameView(wish.Id, wish.Nl, wish.En))],
             [.. catalog.Things.Select(thing => new NameView(thing.Id, thing.Nl, thing.En))]);

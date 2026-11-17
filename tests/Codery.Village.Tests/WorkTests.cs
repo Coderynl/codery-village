@@ -329,6 +329,23 @@ public class WorkTests
     }
 
     [Fact]
+    public void Gathering_in_the_forest_fells_nothing_only_a_recipe_that_fells_does()
+    {
+        var village = Start(1, June(1, 10), standing: [Built(1, "brushwood", West, 2, 4)]);
+        village.JumpTo(June(1, 10, 15));
+        Assert.NotEmpty(village.InRole("gatherer"));
+
+        for (var i = 0; i < 30_000 && !village.Ear.Heard.OfType<Produced>().Any(); i++)
+        {
+            village.Engine.Step();
+            Assert.Empty(village.Work.Felled);
+        }
+
+        Assert.Contains(village.Ear.Heard, e => e is Produced { Material: "branches" });
+        Assert.Contains(village.Ear.Heard, e => e is Produced { Material: "firewood" });
+    }
+
+    [Fact]
     public void A_resident_takes_the_place_that_fits_his_interests_best()
     {
         var interests = JsonNode.Parse(File.ReadAllText(Path.Combine(Folder, "people.json")))!["interests"]!.AsArray()
@@ -484,6 +501,8 @@ public class WorkTests
 
         var economy = JsonNode.Parse(File.ReadAllText(Path.Combine(Folder, "economy.json")))!;
         var prices = economy["prices"]!.AsObject().ToDictionary(price => price.Key, price => (long)price.Value!);
+        var (upkeep, allowance, pension) = ((long)economy["upkeepPerDay"]!, (long)economy["allowancePerDay"]!, (long)economy["pensionPerDay"]!);
+        var (startSubsidy, damping) = ((int)economy["startSubsidy"]!, (double)economy["subsidyDamping"]!);
         foreach (var (island, standing) in new[] { (West, 2), (Oost, 1) })
         {
             var residents = village.People.On(island).ToList();
@@ -492,23 +511,23 @@ public class WorkTests
             var (now, stockNow) = after[island];
             int Used(string material) => stockWas.GetValueOrDefault(material) - stockNow.GetValueOrDefault(material);
 
-            var subsidy = (long)Math.Floor(20000 / (1 + residents.Count / 15.0));
+            var subsidy = (long)Math.Floor(startSubsidy / (1 + residents.Count / damping));
             Assert.Equal(subsidy, now.Subsidy - was.Subsidy);
-            Assert.Equal(300L * standing, now.Upkeep - was.Upkeep);
+            Assert.Equal(upkeep * standing, now.Upkeep - was.Upkeep);
             Assert.Equal(0, now.Spent - was.Spent);
 
             var paid = Assert.Single(village.Ear.Heard.OfType<Paid>(), paid => paid.Island == island);
             Assert.Equal(0, paid.Wages);
-            Assert.Equal(300L * residents.Count(resident => resident.Phase is LifePhase.Child or LifePhase.Student), paid.Allowances);
-            Assert.Equal(2400L * residents.Count(resident => resident.Phase == LifePhase.Retired), paid.Pensions);
+            Assert.Equal(allowance * residents.Count(resident => resident.Phase is LifePhase.Child or LifePhase.Student), paid.Allowances);
+            Assert.Equal(pension * residents.Count(resident => resident.Phase == LifePhase.Retired), paid.Pensions);
 
             // one food each and one heat per household, from the island's own stock: what its ground gives
             var food = island == West ? "berries" : "fish";
-            var heat = island == West ? "branches" : "driftwood";
+            var heat = island == West ? "firewood" : "driftwood";
             Assert.Equal(residents.Count, Used(food));
             Assert.Equal(households, Used(heat));
             var bought = residents.Count * prices[food] + households * prices[heat];
-            Assert.Equal(subsidy - 300L * standing - paid.Allowances - paid.Pensions + bought, now.Cash - was.Cash);
+            Assert.Equal(subsidy - upkeep * standing - paid.Allowances - paid.Pensions + bought, now.Cash - was.Cash);
         }
         Assert.Equal(money + (after.Values.Sum(a => a.Books.Subsidy) - before.Values.Sum(b => b.Books.Subsidy))
             - (after.Values.Sum(a => a.Books.Upkeep) - before.Values.Sum(b => b.Books.Upkeep)), village.Money);

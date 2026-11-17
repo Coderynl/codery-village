@@ -3,11 +3,11 @@
     {
       "id": "stone-house", "nl": "stenen huis", "en": "stone house", "on": ["lot"], "homes": 1, "serves": "house",
       "phases": [
-        { "id": "foundation", "ticks": 400, "cost": { "stone": 3 } },
-        { "id": "frame", "ticks": 600, "cost": { "stone": 4 } },
-        { "id": "roof", "ticks": 500, "cost": { "bricks": 3 } },
-        { "id": "walls", "ticks": 600, "cost": { "bricks": 4 } },
-        { "id": "garden", "ticks": 300, "cost": {} }
+        { "id": "foundation", "nl": "fundering", "en": "foundation", "ticks": 400, "cost": { "stone": 3 } },
+        { "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 600, "cost": { "stone": 4 } },
+        { "id": "roof", "nl": "dak", "en": "roof", "ticks": 500, "cost": { "bricks": 3 } },
+        { "id": "walls", "nl": "wanden", "en": "walls", "ticks": 600, "cost": { "bricks": 4 } },
+        { "id": "garden", "nl": "erf", "en": "garden", "ticks": 300, "cost": {} }
       ],
       "look": { "form": "building", "size": "small", "walls": "stone", "roof": "hip", "extras": ["door", "chimney"] }
     }

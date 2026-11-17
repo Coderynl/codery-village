@@ -7,11 +7,11 @@
       "id": "cafe", "nl": "café", "en": "café", "on": ["lot", "land"], "serves": "cafe", "range": 8,
       "jobs": [{ "role": "host", "count": 2, "shift": "day", "outdoor": false }],
       "phases": [
-        { "id": "foundation", "ticks": 400, "cost": {} },
-        { "id": "frame", "ticks": 600, "cost": {} },
-        { "id": "roof", "ticks": 500, "cost": {} },
-        { "id": "walls", "ticks": 600, "cost": {} },
-        { "id": "terrace", "ticks": 300, "cost": {} }
+        { "id": "foundation", "nl": "fundering", "en": "foundation", "ticks": 400, "cost": {} },
+        { "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 600, "cost": {} },
+        { "id": "roof", "nl": "dak", "en": "roof", "ticks": 500, "cost": {} },
+        { "id": "walls", "nl": "wanden", "en": "walls", "ticks": 600, "cost": {} },
+        { "id": "terrace", "nl": "terras", "en": "terrace", "ticks": 300, "cost": {} }
       ],
       "look": { "form": "building", "size": "medium", "walls": "plaster", "roof": "gable", "extras": ["door", "awning"] }
     }

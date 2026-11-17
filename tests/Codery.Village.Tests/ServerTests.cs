@@ -271,7 +271,7 @@ public class ServerTests(WebApplicationFactory<Program> factory) : IClassFixture
     }
 
     /// <summary>Keeps what the server logs, to read back in a test.</summary>
-    private sealed class Recorder : ILoggerProvider
+    internal sealed class Recorder : ILoggerProvider
     {
         public System.Collections.Concurrent.ConcurrentQueue<(LogLevel Level, string Text)> Lines { get; } = new();
 

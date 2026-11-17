@@ -58,6 +58,9 @@ public sealed class VillageHost(
     /// <summary>Done once there is a village: at once without a store, once it is loaded with one.</summary>
     internal Task Ready => _ready.Task;
 
+    /// <summary>What a tick becomes for the pages: the feed's next message, with what was said about a visitor's hand. A test can make it fail.</summary>
+    internal Func<VillageFeed, Engine, IReadOnlyList<Said>, TickMessage> PassOn { get; set; } = (feed, engine, said) => feed.Next(engine, said);
+
     public override Task StartAsync(CancellationToken cancellationToken)
     {
         // a release that could make the village stall does not get in: with a problem in the data the server does not start
@@ -92,21 +95,29 @@ public sealed class VillageHost(
         using var clock = new PeriodicTimer(TimeSpan.FromMilliseconds(1000.0 / VillageFeed.TicksPerSecond));
         while (await clock.WaitForNextTickAsync(stoppingToken))
         {
-            TickMessage message;
+            TickMessage? message = null;
             lock (_gate)
             {
                 if (_engine is null || _feed is null) continue;
-                for (var i = 0; i < _speed; i++)
+                // what goes wrong in one tick is written down; the clock runs on, and the next tick tries again
+                try
                 {
-                    _engine.Step();
-                    Converse(_engine);
-                    // without a store nothing keeps the old log lines; with one, a save lets go of them
-                    if (store is null && _engine.Tick % ForgetEvery == 0) _engine.Forget();
+                    for (var i = 0; i < _speed; i++)
+                    {
+                        _engine.Step();
+                        Converse(_engine);
+                        // without a store nothing keeps the old log lines; with one, a save lets go of them
+                        if (store is null && _engine.Tick % ForgetEvery == 0) _engine.Forget();
+                    }
+                    message = PassOn(_feed, _engine, _hand!.Due(_engine));
+                    if (message.Said is { } said) Remember(said);
                 }
-                message = _feed.Next(_engine, _hand!.Due(_engine));
-                if (message.Said is { } said) Remember(said);
+                catch (Exception exception)
+                {
+                    logger.LogError(exception, "Tick {Tick} went wrong ({Reason}); the village runs on.", _engine.Tick, exception.Message);
+                }
             }
-            await hub.Clients.All.SendAsync("tick", message, stoppingToken);
+            if (message is not null) await hub.Clients.All.SendAsync("tick", message, stoppingToken);
         }
     }
 

@@ -5,8 +5,8 @@
       "jobs": [{ "role": "fisher", "count": 2, "shift": "early", "outdoor": true }],
       "recipe": { "in": {}, "out": { "fish": 4 }, "ticks": 360 },
       "phases": [
-        { "id": "foundation", "ticks": 300, "cost": { "stone": 3 } },
-        { "id": "deck", "ticks": 300, "cost": { "stone": 2 } }
+        { "id": "foundation", "nl": "fundering", "en": "foundation", "ticks": 300, "cost": { "stone": 3 } },
+        { "id": "deck", "nl": "vlonder", "en": "deck", "ticks": 300, "cost": { "stone": 2 } }
       ],
       "look": { "form": "deck", "surface": "stone", "extras": ["crates"] }
     }
