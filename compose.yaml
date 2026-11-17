@@ -1,0 +1,17 @@
+# Postgres for running the village with a database on a developer's machine: `docker compose up -d` in this
+# folder. The login is for development only.
+services:
+  postgres:
+    image: postgres:18.7-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: village
+      POSTGRES_USER: village
+      POSTGRES_PASSWORD: village-dev-only
+    volumes:
+      # from Postgres 18 on, the image keeps its data under /var/lib/postgresql/18
+      - village-data:/var/lib/postgresql
+
+volumes:
+  village-data:

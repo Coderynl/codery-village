@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The core of the village: clock, random numbers and the rules of the world. No network, files or processes. -->
+
+</Project>

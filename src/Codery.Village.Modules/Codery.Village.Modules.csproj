@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The modules of the village. No network, files or processes. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Codery.Village.Core\Codery.Village.Core.csproj" />
+  </ItemGroup>
+
+</Project>
