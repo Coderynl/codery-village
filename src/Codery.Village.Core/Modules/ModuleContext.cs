@@ -27,8 +27,8 @@ public sealed class ModuleContext
 
     public DataSet Data { get; }
 
-    /// <summary>This module's own stream, <c>Rng.For(seed, Name)</c>; it continues from tick to tick.</summary>
-    public Rng Random { get; }
+    /// <summary>This module's own stream, <c>Rng.For(seed, Name)</c>; it continues from tick to tick, and after a load.</summary>
+    public Rng Random { get; internal set; }
 
     /// <summary>What was published in the previous tick, in the order it was published.</summary>
     public IReadOnlyList<VillageEvent> Received => _engine.Received;

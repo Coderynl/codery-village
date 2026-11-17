@@ -15,7 +15,8 @@ public static class TestVillage
     public static readonly DateTimeOffset Start = new(2026, 6, 1, 10, 0, 0, TimeSpan.Zero);
 
     /// <summary>A fresh list of fresh modules on every call: modules hold state.</summary>
-    public static IReadOnlyList<IModule> Modules() => [new DrawingModule("dice"), new CountingModule("counter")];
+    public static IReadOnlyList<IModule> Modules() =>
+        [new DrawingModule("dice"), new CountingModule("counter"), new ChimingModule("bell"), new HearingModule("ear"), new LoggingModule("scribe")];
 
     public static IslandMap Map() => MapText.Parse("""
         ~~~~~
@@ -48,12 +49,12 @@ public sealed class RecordingModule(string name, List<string> trace) : IModule
 
 public sealed record Rang(long Tick, string Text) : VillageEvent(Tick);
 
-/// <summary>Publishes the given texts on the given tick.</summary>
+/// <summary>Publishes the given texts on the given tick; on tick 0 that is in <see cref="Start"/>.</summary>
 public sealed class PublishingModule(string name, long onTick, params string[] texts) : IModule
 {
     public string Name => name;
     public int Version => 1;
-    public void Start(ModuleContext village) { }
+    public void Start(ModuleContext village) => Step(village);
     public void Step(ModuleContext village)
     {
         if (village.Clocks.Tick != onTick) return;
@@ -160,5 +161,117 @@ public sealed class AskingModule(string name) : IModule
         Thrown = Record.Exception(() => village.Module<RecordingModule>());
     }
     public JsonNode Save() => new JsonObject();
+    public void Load(ModuleContext village, JsonNode data, int version) { }
+}
+
+/// <summary>Notes on every tick whether it finds a running <typeparamref name="T"/>.</summary>
+public sealed class LookingModule<T>(string name) : IModule where T : class
+{
+    public string Name => name;
+    public int Version => 1;
+    public Dictionary<long, T?> Found { get; } = [];
+    public void Start(ModuleContext village) { }
+    public void Step(ModuleContext village) => Found[village.Clocks.Tick] = village.Find<T>();
+    public JsonNode Save() => new JsonObject();
+    public void Load(ModuleContext village, JsonNode data, int version) { }
+}
+
+/// <summary>Tries to empty what it received, as a module should not be able to.</summary>
+public sealed class GreedyModule(string name) : IModule
+{
+    public string Name => name;
+    public int Version => 1;
+    public void Start(ModuleContext village) { }
+    public void Step(ModuleContext village)
+    {
+        if (village.Received is ICollection<VillageEvent> { IsReadOnly: false } received) received.Clear();
+    }
+    public JsonNode Save() => new JsonObject();
+    public void Load(ModuleContext village, JsonNode data, int version) { }
+}
+
+public sealed record Chimed(long Tick, int Strength) : VillageEvent(Tick);
+
+/// <summary>Chimes on every tick, as hard as its stream says.</summary>
+public sealed class ChimingModule(string name) : IModule
+{
+    public string Name => name;
+    public int Version => 1;
+    public void Start(ModuleContext village) => Step(village);
+    public void Step(ModuleContext village) => village.Publish(new Chimed(village.Clocks.Tick, village.Random.Next(10)));
+    public JsonNode Save() => new JsonObject();
+    public void Load(ModuleContext village, JsonNode data, int version) { }
+}
+
+/// <summary>Adds up the chimes it hears, with the tick they were rung on.</summary>
+public sealed class HearingModule(string name) : IModule
+{
+    public string Name => name;
+    public int Version => 1;
+    public long Heard { get; private set; }
+    public long Sum { get; private set; }
+    public void Start(ModuleContext village) { }
+    public void Step(ModuleContext village)
+    {
+        foreach (var chime in village.Received.OfType<Chimed>())
+        {
+            Heard++;
+            Sum += chime.Tick * chime.Strength;
+        }
+    }
+    public JsonNode Save() => new JsonObject { ["heard"] = Heard, ["sum"] = Sum };
+    public void Load(ModuleContext village, JsonNode data, int version)
+    {
+        Heard = (long)data["heard"]!;
+        Sum = (long)data["sum"]!;
+    }
+}
+
+/// <summary>At version 1; a part of version 0 it cannot read and throws on.</summary>
+public sealed class MigratingModule(string name) : IModule
+{
+    public string Name => name;
+    public int Version => 1;
+    public int Steps { get; private set; }
+    public void Start(ModuleContext village) { }
+    public void Step(ModuleContext village) => Steps++;
+    public JsonNode Save() => new JsonObject { ["steps"] = Steps };
+    public void Load(ModuleContext village, JsonNode data, int version)
+    {
+        if (version == 0) throw new InvalidDataException("version 0 kept its steps elsewhere");
+        Steps = (int)data["steps"]!;
+    }
+}
+
+/// <summary>A resident born thirty life years before the village started; knows its age.</summary>
+public sealed class ResidentModule(string name) : IModule
+{
+    public string Name => name;
+    public int Version => 1;
+    public long Born { get; private set; }
+    public double Age { get; private set; }
+    public void Start(ModuleContext village)
+    {
+        Born = village.Clocks.Tick - village.Clocks.Life.TickOfAge(30);
+        Step(village);
+    }
+    public void Step(ModuleContext village) => Age = village.Clocks.Life.YearsAt(village.Clocks.Tick - Born);
+    public JsonNode Save() => new JsonObject { ["born"] = Born };
+    public void Load(ModuleContext village, JsonNode data, int version)
+    {
+        Born = (long)data["born"]!;
+        Step(village);
+    }
+}
+
+/// <summary>Runs, but throws when asked for its part of the save.</summary>
+public sealed class UnsaveableModule(string name) : IModule
+{
+    public string Name => name;
+    public int Version => 1;
+    public int Steps { get; private set; }
+    public void Start(ModuleContext village) { }
+    public void Step(ModuleContext village) => Steps++;
+    public JsonNode Save() => throw new InvalidOperationException("the drawer is stuck");
     public void Load(ModuleContext village, JsonNode data, int version) { }
 }

@@ -163,14 +163,67 @@ public class EngineTests
     [Fact]
     public void A_stopped_module_is_not_found()
     {
-        var asking = new AskingModule("asking");
-        var engine = Village([new BrokenAtStartModule("broken"), asking]);
+        var failing = new FailingModule("failing", 2);
+        var looking = new LookingModule<FailingModule>("looking");
+        var engine = Village([failing, looking]);
 
         engine.Start();
-        engine.Step();
+        Run(engine, 3);
 
-        Assert.Null(asking.Missing);
-        Assert.Null(engine.Running.OfType<BrokenAtStartModule>().FirstOrDefault());
+        Assert.Same(failing, looking.Found[1]);
+        Assert.Null(looking.Found[2]);
+        Assert.Null(looking.Found[3]);
+    }
+
+    [Fact]
+    public void Events_published_at_the_start_arrive_in_tick_1()
+    {
+        var listening = new ListeningModule("listening");
+        var engine = Village([new PublishingModule("a", 0, "dawn"), listening]);
+
+        engine.Start();
+        Run(engine, 2);
+
+        Assert.Equal([new Rang(0, "dawn")], listening.Heard[1]);
+        Assert.Empty(listening.Heard[2]);
+    }
+
+    [Fact]
+    public void A_module_cannot_take_the_events_away_from_the_next()
+    {
+        var listening = new ListeningModule("listening");
+        var engine = Village([new PublishingModule("a", 1, "bell"), new GreedyModule("greedy"), listening]);
+
+        engine.Start();
+        Run(engine, 2);
+
+        Assert.Equal([new Rang(1, "bell")], listening.Heard[2]);
+    }
+
+    [Fact]
+    public void What_the_engine_shows_cannot_be_changed_from_outside()
+    {
+        var engine = Village([new LoggingModule("scribe")]);
+        engine.Start();
+        Run(engine, 3);
+
+        Assert.False(engine.Running is ICollection<IModule> { IsReadOnly: false });
+        Assert.False(engine.Log is ICollection<LogEntry> { IsReadOnly: false });
+        Assert.False(engine.Stopped is ICollection<(string, string)> { IsReadOnly: false });
+    }
+
+    [Fact]
+    public void The_lines_from_a_number_on_stay_what_they_were_when_the_log_forgets()
+    {
+        var engine = Village([new LoggingModule("scribe")]);
+        engine.Start();
+        Run(engine, 3000);
+
+        var lines = engine.LogFrom(0);
+        engine.Forget();
+
+        Assert.Equal(3000, lines.Count());
+        Assert.Equal((0L, new LogEntry(1, "noted", "scribe", "1")), lines.First());
     }
 
     [Fact]
