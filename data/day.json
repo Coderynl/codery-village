@@ -1,0 +1,152 @@
+{
+  "ticksPerCell": 8,
+  "lateMinutes": 60,
+  "outside": { "always": 1, "byDay": 3, "dayFrom": "08:00", "dayTo": "18:00" },
+  "evening": { "chance": 0.35, "perExtraversion": 0.4, "visit": 0.4 },
+  "free": [
+    { "do": "leisure", "weight": 3 },
+    { "do": "wander", "weight": 2 },
+    { "do": "shop", "weight": 1 },
+    { "do": "visit", "weight": 1 },
+    { "do": "home", "weight": 3 }
+  ],
+  "rhythms": {
+    "toddler": {
+      "weekday": [
+        { "from": "07:00", "do": "home" },
+        { "from": "10:00", "do": "free" },
+        { "from": "12:00", "do": "home" },
+        { "from": "15:00", "do": "free" },
+        { "from": "17:30", "do": "home" },
+        { "from": "19:30", "do": "sleep" }
+      ]
+    },
+    "pupil": {
+      "weekday": [
+        { "from": "07:00", "do": "home" },
+        { "from": "08:30", "do": "school" },
+        { "from": "15:00", "do": "free" },
+        { "from": "17:30", "do": "home" },
+        { "from": "20:30", "do": "sleep" }
+      ],
+      "weekend": [
+        { "from": "08:00", "do": "home" },
+        { "from": "10:00", "do": "free" },
+        { "from": "12:00", "do": "home" },
+        { "from": "13:30", "do": "free" },
+        { "from": "17:30", "do": "home" },
+        { "from": "21:00", "do": "sleep" }
+      ]
+    },
+    "student": {
+      "weekday": [
+        { "from": "08:00", "do": "home" },
+        { "from": "09:00", "do": "study" },
+        { "from": "12:00", "do": "free" },
+        { "from": "13:00", "do": "study" },
+        { "from": "17:00", "do": "home" },
+        { "from": "19:00", "do": "out" },
+        { "from": "23:30", "do": "sleep" }
+      ],
+      "weekend": [
+        { "from": "00:30", "do": "sleep" },
+        { "from": "09:30", "do": "home" },
+        { "from": "11:00", "do": "free" },
+        { "from": "17:00", "do": "home" },
+        { "from": "19:00", "do": "out" }
+      ]
+    },
+    "day": {
+      "weekday": [
+        { "from": "07:00", "do": "home" },
+        { "from": "08:30", "do": "work" },
+        { "from": "17:30", "do": "home" },
+        { "from": "19:00", "do": "out" },
+        { "from": "22:00", "do": "home" },
+        { "from": "23:00", "do": "sleep" }
+      ],
+      "weekend": [
+        { "from": "00:00", "do": "sleep" },
+        { "from": "08:30", "do": "home" },
+        { "from": "10:00", "do": "free" },
+        { "from": "12:30", "do": "home" },
+        { "from": "13:30", "do": "free" },
+        { "from": "17:30", "do": "home" },
+        { "from": "19:00", "do": "out" }
+      ]
+    },
+    "early": {
+      "weekday": [
+        { "from": "04:00", "do": "work" },
+        { "from": "12:00", "do": "home" },
+        { "from": "13:00", "do": "sleep" },
+        { "from": "20:00", "do": "home" },
+        { "from": "20:30", "do": "out" },
+        { "from": "22:30", "do": "home" }
+      ]
+    },
+    "night": {
+      "weekday": [
+        { "from": "06:30", "do": "home" },
+        { "from": "07:30", "do": "sleep" },
+        { "from": "15:00", "do": "free" },
+        { "from": "18:00", "do": "home" },
+        { "from": "19:00", "do": "out" },
+        { "from": "21:30", "do": "home" },
+        { "from": "22:00", "do": "work" }
+      ]
+    },
+    "idle": {
+      "weekday": [
+        { "from": "07:30", "do": "home" },
+        { "from": "09:00", "do": "free" },
+        { "from": "12:30", "do": "home" },
+        { "from": "13:30", "do": "free" },
+        { "from": "17:30", "do": "home" },
+        { "from": "19:00", "do": "out" },
+        { "from": "22:00", "do": "home" },
+        { "from": "23:00", "do": "sleep" }
+      ],
+      "weekend": [
+        { "from": "00:00", "do": "sleep" },
+        { "from": "08:30", "do": "home" },
+        { "from": "10:00", "do": "free" },
+        { "from": "12:30", "do": "home" },
+        { "from": "13:30", "do": "free" },
+        { "from": "17:30", "do": "home" },
+        { "from": "19:00", "do": "out" }
+      ]
+    },
+    "retired": {
+      "weekday": [
+        { "from": "08:00", "do": "home" },
+        { "from": "09:30", "do": "free" },
+        { "from": "12:00", "do": "home" },
+        { "from": "13:30", "do": "free" },
+        { "from": "17:00", "do": "home" },
+        { "from": "19:00", "do": "out" },
+        { "from": "21:00", "do": "home" },
+        { "from": "22:30", "do": "sleep" }
+      ]
+    },
+    "eddie": {
+      "weekday": [
+        { "from": "07:30", "do": "home" },
+        { "from": "08:30", "do": "work" },
+        { "from": "18:00", "do": "home" },
+        { "from": "19:00", "do": "leisure" },
+        { "from": "22:00", "do": "home" },
+        { "from": "23:30", "do": "sleep" }
+      ],
+      "weekend": [
+        { "from": "09:00", "do": "home" },
+        { "from": "10:00", "do": "work" },
+        { "from": "14:00", "do": "leisure" },
+        { "from": "18:00", "do": "home" },
+        { "from": "19:00", "do": "leisure" },
+        { "from": "22:00", "do": "home" },
+        { "from": "23:30", "do": "sleep" }
+      ]
+    }
+  }
+}
