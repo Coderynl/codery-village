@@ -104,6 +104,58 @@ public class CommunityTests
     }
 
     [Fact]
+    public void Open_sites_keep_what_they_still_need()
+    {
+        // twelve planks: the house takes eleven of them, so a bakery cannot count on them
+        var data = Builders.Data(
+            economy: economy => Stock(economy,
+                new JsonObject { ["wood"] = 40, ["planks"] = 12 },
+                new JsonObject { ["stone"] = 45, ["bricks"] = 20 }));
+        var village = Builders.Start(1, June(1, 9), data, community: true);
+        var decide = (int)JsonNode.Parse(File.ReadAllText(Path.Combine(Builders.Folder, "building.json")))!["community"]!["decideTicks"]!;
+
+        village.Run(2 * decide);
+
+        // not the farm for the bakery, which would wait for planks with the house, but what makes planks
+        Assert.Equal(["house", "sawmill"], Sites(village)[West]);
+        Assert.Empty(village.Engine.Stopped);
+    }
+
+    [Fact]
+    public void Sites_that_wait_for_each_other_get_their_maker_beyond_maxSites()
+    {
+        // two sites need sixteen planks of the twelve there are, and fill the two places for sites
+        var data = Builders.Data(
+            building: building => building["community"]!["maxSites"] = 2,
+            economy: economy => Stock(economy,
+                new JsonObject { ["wood"] = 40, ["planks"] = 12, ["bread"] = 40 },
+                new JsonObject { ["stone"] = 45, ["bricks"] = 20, ["fish"] = 40, ["peat"] = 20 }));
+        var village = Builders.Start(1, June(1, 9), data, community: true);
+        var decide = (int)JsonNode.Parse(File.ReadAllText(Path.Combine(Builders.Folder, "building.json")))!["community"]!["decideTicks"]!;
+        village.Run(1);
+        var house = village.Get(village.PlaceNearHeart("house", West));
+        var farm = village.Get(village.PlaceNearHeart("farm", West));
+
+        village.Run(decide);
+
+        // one site more than maxSites, for the maker, and no more than that
+        Assert.Equal(["house", "farm", "sawmill"], Sites(village)[West]);
+        village.Run(3 * decide);
+        Assert.Equal(3, Sites(village)[West].Length);
+
+        // it goes up, the sawyers make planks, and the site that waited is finished
+        for (var day = 2; day <= 8 && !house.Done; day++)
+        {
+            village.JumpTo(June(day, 9));
+            village.Run(8 * 3600 * 4);
+        }
+        Assert.True(village.Building.All.Single(structure => structure.Blueprint == "sawmill").Done);
+        Assert.True(house.Done);
+        Assert.True(farm.Done);
+        Assert.Empty(village.Engine.Stopped);
+    }
+
+    [Fact]
     public void The_heaviest_wish_the_data_can_fulfil_is_built()
     {
         var extras = new[] { File.ReadAllText(Path.Combine(Builders.Folder, "demo", "cafe.json")) };

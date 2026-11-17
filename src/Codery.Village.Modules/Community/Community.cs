@@ -11,11 +11,12 @@ namespace Codery.Village.Modules.Community;
 
 /// <summary>
 /// What an island builds. Every <c>decideTicks</c> each ordinary island with room for another site starts the
-/// first of, in this order: what a site of the island waits for and nobody on the island makes; a home, when a
+/// first of, in this order: what a site of the island waits for and nobody on the island makes (also as one site
+/// beyond <c>maxSites</c>, so sites waiting for each other never block the island); a home, when a
 /// household has none or no home is free for a newcomer; a workshop for food or heat, when the stock holds less
 /// than <c>lowStockDays</c> days of it and nothing on the island makes it; a building for the heaviest wish the
 /// data can fulfil. A building needs what the island lacks and does not make, so it comes after its maker: a
-/// bakery after a farm. Each goes as near the heart of the island as it fits. Eddie's islet builds nothing.
+/// bakery after a farm. What the open sites still have to pay counts as spent. Each goes as near the heart of the island as it fits. Eddie's islet builds nothing.
 /// </summary>
 public sealed class Community : IModule
 {
@@ -40,8 +41,12 @@ public sealed class Community : IModule
         {
             if (island.Eddie) continue;
             var here = new Island(island.Id, building, stock, village.Find<PeopleModule>(), village.Find<IWishSource>());
-            if (building.All.Count(structure => structure.Island == island.Id && !structure.Done) >= _settings.MaxSites) continue;
-            foreach (var wanted in Wants(here))
+            var open = building.All.Count(structure => structure.Island == island.Id && !structure.Done);
+            // with every place for a site taken, only the maker of what those sites wait for may come, as one site more
+            var wants = open < _settings.MaxSites ? Supplies(here).Concat(Wants(here))
+                : open == _settings.MaxSites ? Supplies(here)
+                : [];
+            foreach (var wanted in wants)
             {
                 if (Resolve(here, wanted, []) is not { } chosen) continue;
                 building.Place(chosen.Blueprint, chosen.Anchor, chosen.Rotation);
@@ -52,13 +57,16 @@ public sealed class Community : IModule
 
     // ── what the island wants, in order ──
 
+    // what a site of the island waits for, or will, and nobody on the island makes
+    private IEnumerable<string> Supplies(Island here)
+    {
+        foreach (var site in OpenSites(here))
+            if (Missing(here, StillToPay(site), site) is { } material)
+                foreach (var maker in Makers(material)) yield return maker;
+    }
+
     private IEnumerable<string> Wants(Island here)
     {
-        // what a site waits for that nobody on the island makes
-        foreach (var site in here.Building.All.Where(structure => structure.Island == here.Id && !structure.Done))
-            if (_byId.TryGetValue(site.Blueprint, out var plan) && Missing(here, BuildingModule.CostFrom(plan, site.Paid ? site.Phase + 1 : site.Phase)) is { } material)
-                foreach (var maker in Makers(material)) yield return maker;
-
         // a home for every household, and one to spare for a newcomer
         if (Homeless(here) + 1 > FreeHomes(here))
         {
@@ -96,17 +104,32 @@ public sealed class Community : IModule
         return null;
     }
 
-    // the first material, in the order of the catalog, of which the island holds too little and that nothing on it makes
-    private string? Missing(Island here, IReadOnlyDictionary<string, int> needs)
+    /// <summary>
+    /// The first material, in the order of the catalog, of which the island holds too little and that nothing on it
+    /// makes. What the open sites (but <paramref name="self"/>) still have to pay is not there to be had.
+    /// </summary>
+    private string? Missing(Island here, IReadOnlyDictionary<string, int> needs, Structure? self = null)
     {
+        var promised = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var site in OpenSites(here).Where(site => site != self))
+            foreach (var (material, amount) in StillToPay(site))
+                promised[material] = promised.GetValueOrDefault(material) + amount;
         foreach (var material in _materials)
         {
-            if (!needs.TryGetValue(material.Id, out var amount) || here.Stock.Count(here.Id, material.Id) >= amount) continue;
+            if (!needs.TryGetValue(material.Id, out var amount)
+                || here.Stock.Count(here.Id, material.Id) - promised.GetValueOrDefault(material.Id) >= amount) continue;
             if (here.Building.All.Any(structure => structure.Island == here.Id && Makes(structure.Blueprint, new HashSet<string> { material.Id }))) continue;
             return material.Id;
         }
         return null;
     }
+
+    private IEnumerable<Structure> OpenSites(Island here) =>
+        here.Building.All.Where(structure => structure.Island == here.Id && !structure.Done && _byId.ContainsKey(structure.Blueprint));
+
+    // the cost of the phases it has not paid yet
+    private Dictionary<string, int> StillToPay(Structure site) =>
+        BuildingModule.CostFrom(_byId[site.Blueprint], site.Paid ? site.Phase + 1 : site.Phase);
 
     // all its phases cost, and what one batch of its recipe takes
     private static Dictionary<string, int> Needs(Blueprint plan)
