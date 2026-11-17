@@ -32,7 +32,9 @@ public sealed record EconomySettings(
     IReadOnlyDictionary<string, int> Prices,
     // by role, the interests that fit it
     IReadOnlyDictionary<string, IReadOnlyList<string>> Fits,
-    StartHoldings Start);
+    StartHoldings Start,
+    // a day, to who is of working age but has no job
+    int SupportPerDay = 0);
 
 /// <summary>How much of a need a household buys a day: so much per member and so much for the household.</summary>
 public sealed record Need(int PerPerson = 0, int PerHousehold = 0);

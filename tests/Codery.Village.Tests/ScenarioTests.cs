@@ -44,8 +44,12 @@ public class ScenarioTests(ITestOutputHelper output)
                 foreach (var island in village.Ordinary)
                 {
                     var (residents, cash, median) = (village.People.On(island.Id).Count(), village.Work.Of(island.Id).Cash, village.Median(island.Id));
-                    if (residents is >= 6 and <= 60 && cash >= 0 && cash <= most && median is >= 20 and <= 90) continue;
-                    Assert.Fail($"{island.Name} on {village.Now:yyyy-MM-dd HH:mm}: {residents} residents, {cash} in the treasury, median happiness {median}");
+                    // poverty may be there, hunger not as a rule: at most a quarter of the households goes without food
+                    var shopping = village.Work.LastShopping(island.Id);
+                    var hungry = shopping.Short["food"];
+                    if (residents is >= 6 and <= 60 && cash >= 0 && cash <= most && median is >= 20 and <= 90 && hungry * 4 <= shopping.Households) continue;
+                    Assert.Fail($"{island.Name} on {village.Now:yyyy-MM-dd HH:mm}: {residents} residents, {cash} in the treasury, median happiness {median}, " +
+                        $"{hungry} of {shopping.Households} households without all their food, {village.Food(island.Id)} food in stock");
                 }
             });
 
@@ -422,5 +426,6 @@ internal sealed class Scenario
         $"  {island.Name}: {People.On(island.Id).Count()} residents, " +
         $"{Building.All.Count(structure => structure.Island == island.Id && structure.Done && structure.Households.Count > 0)} homes lived in, " +
         $"{Work.Of(island.Id).Cash / 100} shells in the treasury, median happiness {Median(island.Id)}, " +
+        $"{Work.LastShopping(island.Id).Short["food"]} of {Work.LastShopping(island.Id).Households} households without all their food, " +
         $"food {Food(island.Id)}, heat {Heat(island.Id)}, stock {string.Join(" ", Work.Stock(island.Id).Select(item => $"{item.Key} {item.Value}"))}"));
 }

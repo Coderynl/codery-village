@@ -18,7 +18,7 @@ namespace Codery.Village.Modules.Work;
 /// his island that fits his interests best. A workplace makes its recipe while someone works there, from and
 /// into the island's stock; a recipe that fells takes a tree nearby, which grows back. The treasury of the island pays
 /// a wage for every tick on the job, and once a calendar day, at 00:00, the island settles its day: the start
-/// subsidy comes in, the upkeep of its buildings goes out, children, students and the retired get their money,
+/// subsidy comes in, the upkeep of its buildings goes out, children, students, the retired and who has no job get their money,
 /// every household buys food and heat from the stock, and every resident spends after his thrift. Who leaves the
 /// village takes his money with him; the island books it the tick after. Eddie works
 /// in his workshop for nothing: he is outside the economy.
@@ -42,6 +42,8 @@ public sealed class Work : IModule, IJobs, IStock
     private readonly SortedDictionary<int, int> _batches = [];
     // felled forest, with the tick it is forest again
     private readonly Dictionary<Cell, long> _felled = [];
+    // per island, how the households did at the last settling of the day
+    private readonly Dictionary<int, Shopping> _shopping = [];
     // the calendar day that was settled last
     private DateOnly _day;
     private ModuleContext? _village;
@@ -78,6 +80,13 @@ public sealed class Work : IModule, IJobs, IStock
     /// <summary>What the island holds, by material; a material it has none of is not listed.</summary>
     public IReadOnlyDictionary<string, int> Stock(int island) =>
         _stock.TryGetValue(island, out var stock) ? stock : new SortedDictionary<string, int>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// How the households of the island did at the last settling of the day: how many there were, and per need how
+    /// many could not buy all of it, for want of money or of stock. Before the first midnight there were none.
+    /// </summary>
+    public Shopping LastShopping(int island) =>
+        _shopping.TryGetValue(island, out var shopping) ? shopping : new Shopping(0, _needs.ToDictionary(need => need.Need, _ => 0));
 
     public int Count(int island, string material) =>
         _stock.TryGetValue(island, out var stock) && stock.TryGetValue(material, out var count) ? count : 0;
@@ -351,7 +360,7 @@ public sealed class Work : IModule, IJobs, IStock
                 {
                     LifePhase.Child or LifePhase.Student => _settings.AllowancePerDay,
                     LifePhase.Retired => _settings.PensionPerDay,
-                    _ => 0,
+                    _ => _jobs.ContainsKey(resident.Id) ? 0 : _settings.SupportPerDay,
                 };
                 var paid = Math.Min(due, treasury.Cash);
                 treasury.Cash -= paid;
@@ -360,7 +369,7 @@ public sealed class Work : IModule, IJobs, IStock
                 else allowances += paid;
             }
 
-            Shop(island.Id, residents, treasury);
+            _shopping[island.Id] = Shop(island.Id, residents, treasury);
 
             // what is left, a resident spends after his thrift: it leaves the village
             foreach (var resident in residents)
@@ -375,20 +384,27 @@ public sealed class Work : IModule, IJobs, IStock
         }
     }
 
-    // every household buys what it needs from the stock, of the first material in stock that it can pay
-    private void Shop(int island, List<Resident> residents, Treasury treasury)
+    // every household buys what it needs from the stock, of the first material in stock that it can pay; who
+    // cannot buy all of a need goes without
+    private Shopping Shop(int island, List<Resident> residents, Treasury treasury)
     {
-        foreach (var household in residents.GroupBy(resident => resident.Household ?? -1 - resident.Id))
+        var shortOf = _needs.ToDictionary(need => need.Need, _ => 0);
+        var households = residents.GroupBy(resident => resident.Household ?? -1 - resident.Id).ToList();
+        foreach (var household in households)
         {
             var members = household.ToList();
-            foreach (var (_, amount, goods) in _needs)
+            foreach (var (need, amount, goods) in _needs)
             {
                 var units = amount.PerPerson * members.Count + amount.PerHousehold;
                 for (var unit = 0; unit < units; unit++)
                 {
                     var purse = members.Sum(member => member.Money);
                     var (material, price) = goods.FirstOrDefault(good => good.Price <= purse && Count(island, good.Material) > 0);
-                    if (material is null) break;
+                    if (material is null)
+                    {
+                        shortOf[need]++;
+                        break;
+                    }
                     Add(island, material, -1);
                     var due = (long)price;
                     foreach (var member in members)
@@ -401,6 +417,7 @@ public sealed class Work : IModule, IJobs, IStock
                 }
             }
         }
+        return new Shopping(households.Count, shortOf);
     }
 
     // ── helpers ──
@@ -444,7 +461,7 @@ public sealed class Work : IModule, IJobs, IStock
         var materials = catalog.Materials.Select(material => material.Id).ToHashSet();
 
         if (_settings.Builders < 0 || _settings.ForestRegrowTicks <= 0 || _settings.ForestRange < 0 || _settings.SubsidyDamping <= 0
-            || _settings.SpendPercent is < 0 or > 100 || _settings.WagePerHour < 0)
+            || _settings.SpendPercent is < 0 or > 100 || _settings.WagePerHour < 0 || _settings.SupportPerDay < 0)
             throw new InvalidDataException($"The data section '{Section}' has a number out of range.");
         foreach (var (island, stock) in _settings.Start.Stock)
             foreach (var (material, amount) in stock)
@@ -479,7 +496,8 @@ public sealed class Work : IModule, IJobs, IStock
         JsonSerializer.SerializeToNode(new SavedWork(
             _day,
             [.. _treasuries.OrderBy(item => item.Key).Select(item => new SavedIsland(item.Key, item.Value.Cash, item.Value.Subsidy, item.Value.Upkeep,
-                item.Value.Spent, _wages.GetValueOrDefault(item.Key), Stock(item.Key), item.Value.Departed))],
+                item.Value.Spent, _wages.GetValueOrDefault(item.Key), Stock(item.Key), item.Value.Departed,
+                _shopping.TryGetValue(item.Key, out var shopping) ? shopping : null))],
             [.. _jobs.Select(job => new SavedJob(job.Key, job.Value, _owed.GetValueOrDefault(job.Key)))],
             [.. _vacant.OrderBy(item => (item.Key.Island, item.Key.Structure, item.Key.Job, item.Key.Index)).Select(item => new SavedVacancy(item.Key, item.Value))],
             [.. _batches.Select(batch => new SavedBatch(batch.Key, batch.Value))],
@@ -498,6 +516,7 @@ public sealed class Work : IModule, IJobs, IStock
         _vacant.Clear();
         _batches.Clear();
         _felled.Clear();
+        _shopping.Clear();
         foreach (var island in village.Map.Islands)
         {
             _treasuries[island.Id] = new Treasury();
@@ -508,6 +527,7 @@ public sealed class Work : IModule, IJobs, IStock
             _treasuries[island.Id] = new Treasury { Cash = island.Cash, Subsidy = island.Subsidy, Upkeep = island.Upkeep, Spent = island.Spent, Departed = island.Departed };
             _wages[island.Id] = island.Wages;
             _stock[island.Id] = new SortedDictionary<string, int>(island.Stock.ToDictionary(), StringComparer.Ordinal);
+            if (island.Shopping is { } shopping) _shopping[island.Id] = shopping;
         }
         foreach (var job in saved.Jobs)
         {
@@ -535,7 +555,8 @@ public sealed class Work : IModule, IJobs, IStock
     private sealed record SavedWork(DateOnly Day, IReadOnlyList<SavedIsland> Islands, IReadOnlyList<SavedJob> Jobs,
         IReadOnlyList<SavedVacancy> Vacant, IReadOnlyList<SavedBatch> Batches, IReadOnlyList<SavedFelled> Felled);
 
-    private sealed record SavedIsland(int Id, long Cash, long Subsidy, long Upkeep, long Spent, long Wages, IReadOnlyDictionary<string, int> Stock, long Departed = 0);
+    private sealed record SavedIsland(int Id, long Cash, long Subsidy, long Upkeep, long Spent, long Wages, IReadOnlyDictionary<string, int> Stock, long Departed = 0,
+        Shopping? Shopping = null);
 
     private sealed record SavedJob(int Resident, Seat Seat, long Owed);
 
@@ -545,3 +566,6 @@ public sealed class Work : IModule, IJobs, IStock
 
     private sealed record SavedFelled(Cell Cell, long Until);
 }
+
+/// <summary>How the households of an island did at a settling of the day: how many there were, and per need how many went without some of it.</summary>
+public sealed record Shopping(int Households, IReadOnlyDictionary<string, int> Short);

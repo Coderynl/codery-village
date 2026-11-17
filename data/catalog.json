@@ -53,8 +53,8 @@
     },
     {
       "id": "brushwood", "nl": "sprokkelplek", "en": "brushwood spot", "on": ["forest"],
-      "jobs": [{ "role": "gatherer", "count": 2, "shift": "day", "outdoor": true }],
-      "recipe": { "in": {}, "out": { "branches": 2, "firewood": 2 }, "ticks": 14400 },
+      "jobs": [{ "role": "gatherer", "count": 4, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "branches": 2, "firewood": 2 }, "ticks": 9000 },
       "phases": [
         { "id": "clearing", "nl": "open plek", "en": "clearing", "ticks": 200, "cost": {} }
       ],
@@ -62,8 +62,8 @@
     },
     {
       "id": "berry-patch", "nl": "bessenplek", "en": "berry patch", "on": ["fertile"],
-      "jobs": [{ "role": "gatherer", "count": 2, "shift": "day", "outdoor": true }],
-      "recipe": { "in": {}, "out": { "berries": 2, "roots": 1 }, "ticks": 12000 },
+      "jobs": [{ "role": "gatherer", "count": 4, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "berries": 2, "roots": 1 }, "ticks": 7000 },
       "phases": [
         { "id": "clearing", "nl": "open plek", "en": "clearing", "ticks": 200, "cost": {} }
       ],
@@ -98,8 +98,8 @@
     },
     {
       "id": "fishing-spot", "nl": "visplek", "en": "fishing spot", "on": ["fishing"],
-      "jobs": [{ "role": "fisher", "count": 2, "shift": "early", "outdoor": true }],
-      "recipe": { "in": {}, "out": { "fish": 2 }, "ticks": 9600 },
+      "jobs": [{ "role": "fisher", "count": 3, "shift": "early", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "fish": 2 }, "ticks": 6500 },
       "phases": [
         { "id": "trap", "nl": "fuik", "en": "fish trap", "ticks": 300, "cost": { "reed": 2 } }
       ],
@@ -107,8 +107,8 @@
     },
     {
       "id": "driftwood-beach", "nl": "jutplek", "en": "beachcombing spot", "on": ["fishing"],
-      "jobs": [{ "role": "beachcomber", "count": 2, "shift": "day", "outdoor": true }],
-      "recipe": { "in": {}, "out": { "driftwood": 2 }, "ticks": 14400 },
+      "jobs": [{ "role": "beachcomber", "count": 3, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "driftwood": 2 }, "ticks": 9000 },
       "phases": [
         { "id": "clearing", "nl": "open plek", "en": "clearing", "ticks": 200, "cost": {} }
       ],

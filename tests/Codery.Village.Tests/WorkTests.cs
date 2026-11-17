@@ -208,6 +208,8 @@ public class WorkTests
         var village = Start(seed, June(1, 22), standing: Economy());
         village.Structures.Sites.AddRange([Built(10, "house", West, 3, 8), Built(11, "stone-house", Oost, 3, 27)]);
         village.JumpTo(June(1, 22, 15));
+        // something in every purse, so there is something left to spend whatever the prices
+        foreach (var resident in village.People.All.Where(resident => !resident.IsEddie)) resident.Money = 5_000;
         var before = village.Money;
         var books = Books(village);
 
@@ -488,6 +490,7 @@ public class WorkTests
         {
             e["wagePerHour"] = 0;
             e["spendPercent"] = 0;
+            e["supportPerDay"] = 500;
         });
         var village = Start(1, June(1, 23), data, [Built(1, "woodcutter", West, 2, 4), Built(4, "bakery", West, 4, 13), Built(5, "quarry", Oost, 2, 28)]);
         village.JumpTo(June(1, 23, 30));
@@ -507,6 +510,9 @@ public class WorkTests
         {
             var residents = village.People.On(island).ToList();
             var households = residents.Select(resident => resident.Household).Distinct().Count();
+            // everyone could pay: no household went without
+            Assert.Equal(households, village.Work.LastShopping(island).Households);
+            Assert.All(village.Work.LastShopping(island).Short, item => Assert.Equal(0, item.Value));
             var (was, stockWas) = before[island];
             var (now, stockNow) = after[island];
             int Used(string material) => stockWas.GetValueOrDefault(material) - stockNow.GetValueOrDefault(material);
@@ -518,7 +524,10 @@ public class WorkTests
 
             var paid = Assert.Single(village.Ear.Heard.OfType<Paid>(), paid => paid.Island == island);
             Assert.Equal(0, paid.Wages);
-            Assert.Equal(allowance * residents.Count(resident => resident.Phase is LifePhase.Child or LifePhase.Student), paid.Allowances);
+            // children and students get their allowance, and who is of working age but has no job his support
+            var jobless = residents.Count(resident => resident.Phase == LifePhase.Working && village.Work.JobOf(resident.Id) is null);
+            Assert.True(jobless > 0);
+            Assert.Equal(allowance * residents.Count(resident => resident.Phase is LifePhase.Child or LifePhase.Student) + 500L * jobless, paid.Allowances);
             Assert.Equal(pension * residents.Count(resident => resident.Phase == LifePhase.Retired), paid.Pensions);
 
             // one food each and one heat per household, from the island's own stock: what its ground gives
@@ -531,6 +540,38 @@ public class WorkTests
         }
         Assert.Equal(money + (after.Values.Sum(a => a.Books.Subsidy) - before.Values.Sum(b => b.Books.Subsidy))
             - (after.Values.Sum(a => a.Books.Upkeep) - before.Values.Sum(b => b.Books.Upkeep)), village.Money);
+    }
+
+    [Fact]
+    public void A_household_that_cannot_pay_for_its_food_is_counted_once_a_day()
+    {
+        // nobody gets money but what the test gives
+        var data = Data(economy: e =>
+        {
+            foreach (var pay in new[] { "wagePerHour", "allowancePerDay", "pensionPerDay", "supportPerDay" }) e[pay] = 0;
+        });
+        var village = Start(1, June(1, 23), data);
+        village.JumpTo(June(1, 23, 30));
+        // before the first midnight nothing has been bought yet
+        Assert.Equal(0, village.Work.LastShopping(West).Households);
+
+        // on West only the first household has money, and enough for all it needs; on Oost everyone has
+        var west = village.People.On(West).GroupBy(resident => resident.Household).ToList();
+        foreach (var resident in village.People.All) resident.Money = 0;
+        west[0].First().Money = 100_000;
+        foreach (var resident in village.People.On(Oost)) resident.Money = 100_000;
+        village.JumpTo(June(2, 0));
+
+        var shopping = village.Work.LastShopping(West);
+        Assert.Equal(west.Count, shopping.Households);
+        Assert.Equal(west.Count - 1, shopping.Short["food"]);
+        Assert.Equal(0, village.Work.LastShopping(Oost).Short["food"]);
+
+        // it is saved with the village
+        var saved = SaveJson.FromJson(SaveJson.ToJson(village.Engine.Save()));
+        IModule[] modules = [new People(), new FakeStructures(), new Day(), new Work(), new Ear()];
+        Engine.Load(saved, modules, data, RealMap, new SimulatedTime(saved.Calendar));
+        Assert.Equal(shopping.Short["food"], modules.OfType<Work>().Single().LastShopping(West).Short["food"]);
     }
 
     private static (long Cash, long Subsidy, long Upkeep, long Spent) Snapshot(Treasury treasury) =>
