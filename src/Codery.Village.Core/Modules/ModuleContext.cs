@@ -43,5 +43,6 @@ public sealed class ModuleContext
     /// <summary>Reaches every module in the next tick.</summary>
     public void Publish(VillageEvent e) => _engine.Publish(e);
 
+    /// <summary>Adds a line to the log; the engine sets its tick to the current one.</summary>
     public void Log(LogEntry entry) => _engine.Note(entry);
 }

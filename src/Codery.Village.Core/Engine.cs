@@ -84,7 +84,8 @@ public sealed class Engine
 
     internal void Publish(VillageEvent e) => _published.Add(e);
 
-    internal void Note(LogEntry entry) => _log.Add(entry);
+    // the engine stamps the tick, so the log stays in order whatever tick a module wrote
+    internal void Note(LogEntry entry) => _log.Add(entry with { Tick = Tick });
 
     // ── the log ──
 

@@ -247,6 +247,34 @@ public class EngineTests
         Assert.Equal(51, engine.Log[0].Tick);
     }
 
+    [Fact]
+    public void The_engine_stamps_its_own_tick_on_every_line()
+    {
+        var engine = Village([new WrongTickModule()]);
+
+        engine.Start();
+        Run(engine, 3000);
+
+        Assert.Equal(Enumerable.Range(1, 3000).Select(tick => (long)tick), engine.Log.Select(entry => entry.Tick));
+
+        engine.Forget();
+
+        Assert.Equal(600, engine.LogStart);
+        Assert.Equal(601, engine.Log[0].Tick);
+    }
+
+    /// <summary>Logs with a tick of its own: far ahead on odd ticks, 0 on even ones.</summary>
+    private sealed class WrongTickModule : IModule
+    {
+        public string Name => "wrong";
+        public int Version => 1;
+        public void Start(ModuleContext village) { }
+        public void Step(ModuleContext village) =>
+            village.Log(new LogEntry(village.Clocks.Tick % 2 == 1 ? village.Clocks.Tick + 10_000 : 0, "noted", Name));
+        public JsonNode Save() => new JsonObject();
+        public void Load(ModuleContext village, JsonNode data, int version) { }
+    }
+
     private sealed class LifeModule : IModule
     {
         public double Years { get; private set; }
