@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Codery.Village.Core;
+using Codery.Village.Core.Data;
 using Codery.Village.Core.Map;
 using Codery.Village.Core.Modules;
 using Codery.Village.Core.Save;
@@ -13,17 +14,16 @@ namespace Codery.Village.Modules.Day;
 /// <summary>
 /// The rhythm of the day. Every quarter of an hour of the Dutch calendar each resident gets an activity from
 /// the schedule in the data, after his phase, the shift of his job, the weekend and his character, and walks
-/// to its place. An island is never empty: when too few are outside, the most outgoing one who is awake goes
-/// for a wander. After a stop the village does at once what the hour asks.
+/// to its place. An ordinary island is never empty: when too few are outside, the most outgoing one who is
+/// awake goes for a wander; Eddie's islet keeps Eddie's own rhythm. After a stop the village does at once
+/// what the hour asks.
 /// </summary>
 public sealed class Day : IModule
 {
     private const string Free = "free";
     private const string Out = "out";
     private const string Idle = "idle";
-    private const string Early = "early";
-    private const string Night = "night";
-    private static readonly string[] RhythmNames = ["toddler", "pupil", "student", "day", Early, Night, Idle, "retired", "eddie"];
+    private static readonly string[] RhythmNames = ["toddler", "pupil", "student", "day", "early", "night", Idle, "retired", "eddie"];
     private static readonly TimeSpan Quarter = TimeSpan.FromMinutes(15);
 
     private readonly Dictionary<int, Plan> _plans = [];
@@ -146,7 +146,7 @@ public sealed class Day : IModule
     }
 
     /// <summary>The block the resident's rhythm is in this quarter, and a key that names it for this day.</summary>
-    private (Block Block, string Key) BlockOf(Now now, Resident resident, Job? job)
+    private (Block Block, string Key) BlockOf(Now now, Resident resident, JobPlace? job)
     {
         var name = RhythmOf(now.People, resident, job);
         if (!_rhythms.TryGetValue(name, out var schedule))
@@ -166,14 +166,14 @@ public sealed class Day : IModule
         return (block, string.Create(CultureInfo.InvariantCulture, $"{name} {(weekend ? "weekend" : "weekday")} {started:yyyy-MM-dd HH:mm}"));
     }
 
-    private string RhythmOf(People.People people, Resident resident, Job? job)
+    private string RhythmOf(People.People people, Resident resident, JobPlace? job)
     {
         if (resident.IsEddie) return "eddie";
         return resident.Phase switch
         {
             LifePhase.Child => people.AgeOf(resident) < _course.SchoolFrom ? "toddler" : "pupil",
             LifePhase.Student => "student",
-            LifePhase.Working => job?.Shift ?? Idle,
+            LifePhase.Working => job is null ? Idle : job.Shift.ToString().ToLowerInvariant(),
             _ => "retired",
         };
     }
@@ -181,7 +181,7 @@ public sealed class Day : IModule
     // ── places ──
 
     /// <summary>Where the activity is done and whether that is inside; a visit without anyone to visit stays home.</summary>
-    private (Activity Activity, Cell Place, bool Inside) PlaceOf(Now now, Resident resident, Activity activity, Job? job)
+    private (Activity Activity, Cell Place, bool Inside) PlaceOf(Now now, Resident resident, Activity activity, JobPlace? job)
     {
         var island = resident.Island;
         var home = HomeOf(now, resident);
@@ -247,7 +247,7 @@ public sealed class Day : IModule
     }
 
     /// <summary>
-    /// Too few outside on an island: the most outgoing one who is inside and awake goes for a wander; when
+    /// Too few outside on an ordinary island: the most outgoing one who is inside and awake goes for a wander; when
     /// nobody is free, someone of the night shift, and else whoever is most outgoing. He wanders until his
     /// block ends.
     /// </summary>
@@ -255,7 +255,8 @@ public sealed class Day : IModule
     {
         var time = TimeOnly.FromDateTime(_quarter.DateTime);
         var least = time >= _dayFrom && time < _dayTo ? _settings.Outside.ByDay : _settings.Outside.Always;
-        foreach (var island in now.Map.Islands)
+        // Eddie's islet keeps his own rhythm: he sleeps at night like anyone
+        foreach (var island in now.Map.Islands.Where(island => !island.Eddie))
         {
             var on = now.People.All.Where(resident => resident.Island == island.Id).ToList();
             var outside = on.Count(resident => !_plans[resident.Id].InsideThere);
@@ -279,8 +280,8 @@ public sealed class Day : IModule
         var shift = now.Jobs?.JobOf(resident.Id)?.Shift;
         return _plans[resident.Id].Doing.Activity switch
         {
-            Activity.Sleep => shift is Night or Early ? 4 : 3,
-            Activity.Work or Activity.School or Activity.Study => shift == Night ? 1 : 2,
+            Activity.Sleep => shift is Shift.Night or Shift.Early ? 4 : 3,
+            Activity.Work or Activity.School or Activity.Study => shift == Shift.Night ? 1 : 2,
             _ => 0,
         };
     }

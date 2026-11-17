@@ -1,3 +1,4 @@
+using Codery.Village.Core.Data;
 using Codery.Village.Core.Map;
 
 namespace Codery.Village.Modules.Contracts;
@@ -9,11 +10,11 @@ namespace Codery.Village.Modules.Contracts;
 public interface IJobs
 {
     /// <summary>The job the resident has now, or null.</summary>
-    Job? JobOf(int resident);
+    JobPlace? JobOf(int resident);
 }
 
 /// <summary>
-/// A job in a building: where it is done, the role, the shift ("day", "early" or "night", as the catalog
-/// names it) and whether it is done outdoors.
+/// A resident's job in a building: where it is done, the role, the shift of the catalog's job and whether it
+/// is done outdoors. Not the catalog's <see cref="Job"/>, which says what a blueprint offers.
 /// </summary>
-public sealed record Job(int Building, Cell Place, string Role, string Shift, bool Outdoor);
+public sealed record JobPlace(int Building, Cell Place, string Role, Shift Shift, bool Outdoor);

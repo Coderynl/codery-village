@@ -8,7 +8,6 @@ using Codery.Village.Core.Time;
 using Codery.Village.Modules.Contracts;
 using Codery.Village.Modules.Day;
 using Codery.Village.Modules.People;
-using Job = Codery.Village.Modules.Contracts.Job;
 
 namespace Codery.Village.Tests;
 
@@ -76,7 +75,8 @@ public class DayTests
         return Of(engine, time, modules);
     }
 
-    private static IEnumerable<int> Islands => RealMap.Islands.Select(island => island.Id);
+    // the islands where someone is always outside: Eddie's islet keeps his own rhythm
+    private static IEnumerable<int> Ordinary => RealMap.Islands.Where(island => !island.Eddie).Select(island => island.Id);
 
     public static TheoryData<ulong> Seeds => [.. Enumerable.Range(1, 10).Select(seed => (ulong)seed)];
 
@@ -91,20 +91,42 @@ public class DayTests
             if (quarter > 0) village.SettleNextQuarter();
             var time = village.Now.TimeOfDay;
             var byDay = time >= TimeSpan.FromHours(8) && time < TimeSpan.FromHours(18);
-            foreach (var island in Islands)
+            foreach (var island in Ordinary)
             {
                 var on = village.People.On(island).ToList();
                 var outside = on.Count(resident => !village.Day.Of(resident.Id).Inside);
-                var least = Math.Min(byDay ? 3 : 1, on.Count);
+                var least = byDay ? 3 : 1;
                 Assert.True(outside >= least, $"{village.Now:ddd HH:mm} island {island}: {outside} outside of {on.Count}, at least {least}");
             }
         }
     }
 
     [Fact]
+    public void Eddie_sleeps_at_night_while_the_islands_stay_lively()
+    {
+        foreach (var fakes in new[] { true, false })
+        {
+            var village = Start(1, June(2, 3), fakes);
+            var eddie = village.People.All.Single(resident => resident.IsEddie);
+
+            var doing = village.Day.Of(eddie.Id);
+            Assert.Equal(Activity.Sleep, doing.Activity);
+            Assert.True(doing.Inside);
+            foreach (var island in Ordinary)
+                Assert.Contains(village.People.On(island), resident => !village.Day.Of(resident.Id).Inside);
+
+            // by day he works on his islet
+            village.Time.Advance(TimeSpan.FromHours(8));
+            village.Day.Settle(village.Probe.Context);
+            Assert.Equal(Activity.Work, village.Day.Of(eddie.Id).Activity);
+            Assert.Equal(eddie.Island, RealMap.IslandOf(village.Day.Of(eddie.Id).Place));
+        }
+    }
+
+    [Fact]
     public void Night_workers_sleep_by_day()
     {
-        var checkedOnes = new HashSet<string>();
+        var checkedOnes = new HashSet<Shift>();
         foreach (var seed in new ulong[] { 1, 2, 3 })
         {
             var village = Start(seed, June(1, 0));
@@ -116,14 +138,14 @@ public class DayTests
                 if (now.Hour != 14) continue;
                 foreach (var resident in village.People.All)
                 {
-                    if (village.Jobs!.JobOf(resident.Id) is not { Shift: "night" or "early" } job) continue;
+                    if (village.Jobs!.JobOf(resident.Id) is not { Shift: Shift.Night or Shift.Early } job) continue;
                     Assert.True(village.Day.Of(resident.Id).Activity == Activity.Sleep, $"{now:ddd HH:mm} {resident.Name} of the {job.Shift} shift: {village.Day.Of(resident.Id).Activity}");
                     Assert.True(village.Day.Of(resident.Id).Inside);
                     checkedOnes.Add(job.Shift);
                 }
             }
         }
-        Assert.Equal(["early", "night"], checkedOnes.Order());
+        Assert.Equal([Shift.Early, Shift.Night], checkedOnes.Order());
     }
 
     [Fact]
@@ -145,7 +167,7 @@ public class DayTests
             Assert.Null(doing.Walk);
             Assert.Equal(doing.Place, doing.At);
             if (doing.Activity != Activity.Work) continue;
-            Assert.True(loaded.Jobs!.JobOf(resident.Id) is { Shift: "night" or "early" }, $"{resident.Name} still works at three at night");
+            Assert.True(loaded.Jobs!.JobOf(resident.Id) is { Shift: Shift.Night or Shift.Early }, $"{resident.Name} still works at three at night");
         }
     }
 
@@ -444,13 +466,13 @@ public sealed class FakeJobs(bool abroad = false) : IModule, IJobs
         _map = village.Map;
     }
 
-    public Job? JobOf(int resident)
+    public JobPlace? JobOf(int resident)
     {
         var who = _people.All.FirstOrDefault(r => r.Id == resident);
         if (who is not { Phase: LifePhase.Working, IsEddie: false }) return null;
         var lots = FakePlaces.Lots(_map, abroad ? FakePlaces.Other(_map, who.Island) : who.Island);
-        var shift = (resident % 7) switch { 0 => "night", 1 => "early", _ => "day" };
-        return new Job(0, lots[resident * 3 % lots.Count], "worker", shift, resident % 4 == 0);
+        var shift = (resident % 7) switch { 0 => Shift.Night, 1 => Shift.Early, _ => Shift.Day };
+        return new JobPlace(0, lots[resident * 3 % lots.Count], "worker", shift, resident % 4 == 0);
     }
 }
 

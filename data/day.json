@@ -134,17 +134,16 @@
         { "from": "07:30", "do": "home" },
         { "from": "08:30", "do": "work" },
         { "from": "18:00", "do": "home" },
-        { "from": "19:00", "do": "leisure" },
-        { "from": "22:00", "do": "home" },
+        { "from": "19:30", "do": "out" },
+        { "from": "21:30", "do": "home" },
         { "from": "23:30", "do": "sleep" }
       ],
       "weekend": [
         { "from": "09:00", "do": "home" },
         { "from": "10:00", "do": "work" },
-        { "from": "14:00", "do": "leisure" },
-        { "from": "18:00", "do": "home" },
-        { "from": "19:00", "do": "leisure" },
-        { "from": "22:00", "do": "home" },
+        { "from": "15:00", "do": "home" },
+        { "from": "19:30", "do": "out" },
+        { "from": "21:30", "do": "home" },
         { "from": "23:30", "do": "sleep" }
       ]
     }
