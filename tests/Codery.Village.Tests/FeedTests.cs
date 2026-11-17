@@ -267,6 +267,33 @@ public class FeedTests(ITestOutputHelper output)
             Assert.NotEmpty(start.People);
             Assert.Equal(start.Map.Ground, grown.Map.Ground);
             Assert.DoesNotContain("null", File.ReadAllText(Path.Combine(folder, "grown.json")));
+            Assert.False(File.Exists(Path.Combine(folder, "feed.json")));
+        }
+        finally
+        {
+            if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Export_can_record_the_ticks_after_the_grown_village()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "village-export-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            VillageSetup.Export(folder, TimeSpan.FromMinutes(10), seed: 1, extras: [], feedTicks: 40);
+
+            using var feed = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, "feed.json")));
+            var join = feed.RootElement.GetProperty("join").Deserialize<JoinMessage>(Protocol.Json)!;
+            var ticks = feed.RootElement.GetProperty("ticks").Deserialize<TickMessage[]>(Protocol.Json)!;
+            var last = feed.RootElement.GetProperty("last").Deserialize<JoinMessage>(Protocol.Json)!;
+            var grown = JsonSerializer.Deserialize<JoinMessage>(File.ReadAllText(Path.Combine(folder, "grown.json")), Protocol.Json)!;
+
+            // the recording begins where the grown village stands, and runs on tick by tick
+            Assert.Equal(grown.Tick, join.Tick);
+            Assert.Equal(Enumerable.Range(1, 40).Select(i => join.Tick + i), ticks.Select(tick => tick.Tick));
+            Assert.Equal(join.Tick + 40, last.Tick);
+            Assert.Equal(1, last.Protocol);
         }
         finally
         {

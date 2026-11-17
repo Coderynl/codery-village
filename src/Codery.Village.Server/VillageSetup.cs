@@ -46,9 +46,11 @@ public static class VillageSetup
 
     /// <summary>
     /// Writes the village as it begins (<c>start.json</c>) and after <paramref name="duration"/> on the simulated
-    /// clock (<c>grown.json</c>), as a page gets it when it joins: for the still village in the hero.
+    /// clock (<c>grown.json</c>), as a page gets it when it joins: for the still village in the hero. With
+    /// <paramref name="feedTicks"/> it also records what a page gets after that (<c>feed.json</c>): the join, that
+    /// many ticks, and the join at the end, for the hero's tests.
     /// </summary>
-    public static void Export(string folder, TimeSpan duration, ulong seed, IEnumerable<string> extras)
+    public static void Export(string folder, TimeSpan duration, ulong seed, IEnumerable<string> extras, int feedTicks = 0)
     {
         var data = Data(extras);
         if (data.Problems() is { Count: > 0 } problems) throw new InvalidDataException(string.Join(" ", problems));
@@ -66,6 +68,19 @@ public static class VillageSetup
             if (tick % 240 == 0) engine.Forget();
         }
         File.WriteAllText(Path.Combine(folder, "grown.json"), ProtocolJson.Write(new VillageFeed(data, map, time).Join(engine)));
+        if (feedTicks <= 0) return;
+
+        var feed = new VillageFeed(data, map, time);
+        var join = feed.Join(engine);
+        var recorded = new List<TickMessage>(feedTicks);
+        for (var i = 0; i < feedTicks; i++)
+        {
+            engine.Step();
+            if (engine.Tick % 240 == 0) engine.Forget();
+            recorded.Add(feed.Next(engine));
+        }
+        var last = new VillageFeed(data, map, time).Join(engine);
+        File.WriteAllText(Path.Combine(folder, "feed.json"), ProtocolJson.Write(new { join, ticks = recorded, last }));
     }
 }
 
