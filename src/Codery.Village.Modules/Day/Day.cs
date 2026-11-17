@@ -14,9 +14,12 @@ namespace Codery.Village.Modules.Day;
 /// <summary>
 /// The rhythm of the day. Every quarter of an hour of the Dutch calendar each resident gets an activity from
 /// the schedule in the data, after his phase, the shift of his job, the weekend and his character, and walks
-/// to its place. An ordinary island is never empty: when too few are outside, the most outgoing one who is
-/// awake goes for a wander; Eddie's islet keeps Eddie's own rhythm. After a stop the village does at once
-/// what the hour asks.
+/// to its place. Free time and wandering go to a place where there is something: the fire, the water, a tree, a
+/// neighbour's door; a friendly resident spends his free time helping at a building site. An ordinary island is
+/// never empty: when too few are outside, the most outgoing one who is awake goes for a wander; Eddie's islet keeps
+/// Eddie's own rhythm. Other modules send residents on errands (<see cref="Send"/>): to a target and back to what
+/// they were doing. Every step wears the tile a little; a well-walked tile becomes a path, which is walked faster
+/// and preferred. After a stop the village does at once what the hour asks.
 /// </summary>
 public sealed class Day : IModule
 {
@@ -25,8 +28,11 @@ public sealed class Day : IModule
     private const string Idle = "idle";
     private static readonly string[] RhythmNames = ["toddler", "pupil", "student", "day", "early", "night", Idle, "retired", "eddie"];
     private static readonly TimeSpan Quarter = TimeSpan.FromMinutes(15);
+    private static readonly IReadOnlyList<OutingChoice> AtTheWater = [new(Outing.Water, 1)];
 
     private readonly Dictionary<int, Plan> _plans = [];
+    private readonly Wear _wear = new();
+    private ModuleContext? _village;
     // the quarter the activities belong to
     private DateTimeOffset _quarter;
     private DaySettings _settings = null!;
@@ -44,18 +50,55 @@ public sealed class Day : IModule
     public Doing Of(int resident) =>
         _plans.TryGetValue(resident, out var plan) ? plan.Doing : throw new KeyNotFoundException($"No resident {resident} lives in the village.");
 
+    /// <summary>The errand the resident is on, or null.</summary>
+    public Trip? TripOf(int resident) => _plans.TryGetValue(resident, out var plan) ? plan.Trip : null;
+
+    /// <summary>The tiles that are paths now.</summary>
+    public IReadOnlyCollection<Cell> Paths => _wear.Paths;
+
+    /// <summary>
+    /// Sends the resident on an errand from where he is now: to its target, and back to the place he was at or going
+    /// to, where he goes on with what he was doing. He says <see cref="Reached"/> at the target and
+    /// <see cref="Returned"/> when he is back. False when he does not live here, is on an errand already, or the
+    /// target is not on his island. An errand lasts while his block does; a new block or a stop ends it.
+    /// </summary>
+    public bool Send(int resident, Errand errand)
+    {
+        if (errand.Kind is not (Activity.Fetch or Activity.Bring or Activity.Tend))
+            throw new ArgumentException($"{errand.Kind} is no errand.", nameof(errand));
+        if (_village is not { } village || !_plans.TryGetValue(resident, out var plan) || plan.Trip is not null) return false;
+        var tick = village.Clocks.Tick;
+        var from = Walker.Position(plan.Doing, tick);
+        if (!village.Map.IsWalkable(errand.Target) || village.Map.IslandOf(errand.Target) != village.Map.IslandOf(from)) return false;
+        plan.Trip = new Trip(errand, plan.Doing.Activity, plan.Doing.Place, Back: false);
+        plan.Doing = Walker.Go(village.Map, errand.Kind, from, errand.Target, false, true, tick, _settings.TicksPerCell, Cost, errand.There);
+        if (plan.Doing.Walk is null) TurnBack(village, resident, plan, tick);
+        return true;
+    }
+
     public void Start(ModuleContext village)
     {
         Read(village);
+        _wear.Load(null);
         Settle(village);
     }
 
     public void Step(ModuleContext village)
     {
+        _village = village;
         var tick = village.Clocks.Tick;
-        foreach (var plan in _plans.Values)
-            if (plan.Doing.Walk is { } walk && Walker.Arrived(walk, tick))
-                plan.Doing = plan.Doing with { At = plan.Doing.Place, Walk = null, Inside = plan.InsideThere };
+        var today = DateOnly.FromDateTime(village.Clocks.Calendar.Now.DateTime);
+        _wear.Turn(today, _settings.PathWindowDays, _settings.PathKeep);
+        foreach (var id in _plans.Keys.Order().ToList())
+        {
+            var plan = _plans[id];
+            if (plan.Doing.Walk is not { } walk) continue;
+            if (Walker.SteppedOn(walk, tick) is { } stepped) _wear.Step(stepped, today, _settings.PathWindowDays, _settings.PathThreshold, _settings.PathKeep);
+            if (!Walker.Arrived(walk, tick)) continue;
+            if (plan.Trip is { Back: false }) TurnBack(village, id, plan, tick);
+            else if (plan.Trip is { Back: true }) Finish(village, id, plan, tick);
+            else plan.Doing = plan.Doing with { At = plan.Doing.Place, Walk = null, Inside = plan.InsideThere, Carry = null };
+        }
 
         var quarter = QuarterOf(village);
         if (quarter != _quarter)
@@ -105,12 +148,27 @@ public sealed class Day : IModule
         var (block, key) = BlockOf(now, resident, job);
         _plans.TryGetValue(resident.Id, out var plan);
 
+        if (plan?.Trip is { } trip)
+        {
+            // an errand goes on while its block does; else he leaves it where he is, for what he was doing
+            if (plan.Block == key && now.Walk) return;
+            plan.Trip = null;
+            plan.Doing = now.Walk
+                ? Walker.Go(now.Map, trip.Was, Walker.Position(plan.Doing, now.Tick), trip.Home, plan.InsideThere, true, now.Tick, _settings.TicksPerCell, Cost)
+                : new Doing(trip.Was, trip.Home, trip.Home, null, plan.InsideThere);
+        }
+
         if (plan is not null && plan.Block == key)
         {
-            // the same block goes on; a wanderer wanders on to another tile each quarter, and a worker whose work
-            // moved, such as a builder sent to a new site, goes to where it is now
+            // the same block goes on; a wanderer wanders on to another place each quarter, a helper goes where the
+            // work is now, and a worker whose work moved, such as a builder sent to a new site, goes to where it is now
             var doing = plan.Doing;
-            if (doing.Activity == Activity.Wander && newQuarter) Go(now, resident, key, Activity.Wander, RandomTile(now, resident.Island, coast: false), inside: false);
+            if (doing.Activity == Activity.Wander && newQuarter) Go(now, resident, key, Activity.Wander, PlaceToGo(now, resident), inside: false);
+            else if (doing.Activity == Activity.Help && newQuarter && now.Places?.HelpOn(resident.Island) != doing.Place)
+            {
+                var (free, there, indoors) = PlaceOf(now, resident, Activity.Leisure, job);
+                Go(now, resident, key, free, there, indoors);
+            }
             else if (doing.Activity == Activity.Work && PlaceOf(now, resident, Activity.Work, job) is var (_, moved, indoors) && moved != doing.Place)
                 Go(now, resident, key, Activity.Work, moved, indoors);
             else Go(now, resident, key, doing.Activity, doing.Place, plan.InsideThere);
@@ -205,8 +263,11 @@ public sealed class Day : IModule
             Activity.School => now.Places?.SchoolOn(island) is { } school ? (activity, school, true) : (activity, Gathering(now, island), false),
             Activity.Shop => (activity, Gathering(now, island), true),
             Activity.Visit => VisitFrom(now, resident) is { } host ? (activity, host, true) : (Activity.Home, home, true),
-            Activity.Leisure => (activity, RandomTile(now, island, coast: true), false),
-            _ => (activity, RandomTile(now, island, coast: false), false),
+            // free time: a friendly one helps where the island builds, the others go where there is something
+            Activity.Leisure or Activity.Help => resident.Traits.Agreeableness >= _settings.HelpFrom && now.Places?.HelpOn(island) is { } site
+                ? (Activity.Help, site, false)
+                : (Activity.Leisure, PlaceToGo(now, resident), false),
+            _ => (activity, PlaceToGo(now, resident), false),
         };
         // a place he cannot walk to is not his
         if (!now.Map.IsWalkable(place) || now.Map.IslandOf(place) != island) place = home;
@@ -223,8 +284,11 @@ public sealed class Day : IModule
         return cells[key * 7 % cells.Count];
     }
 
+    // where the island gathers, if that is land of the island; else its middle
     private Cell Gathering(Now now, int island) =>
-        now.Places?.GatheringOn(island) ?? _grounds[island].Centre;
+        now.Places?.GatheringOn(island) is { } gathering && now.Map.IsWalkable(gathering) && now.Map.IslandOf(gathering) == island
+            ? gathering
+            : _grounds[island].Centre;
 
     // the home of someone of another household on the island
     private Cell? VisitFrom(Now now, Resident resident)
@@ -234,12 +298,54 @@ public sealed class Day : IModule
         return hosts.Count == 0 ? null : HomeOf(now, hosts[now.Random.Next(hosts.Count)]);
     }
 
-    // a free tile of the island, by the water or anywhere
-    private Cell RandomTile(Now now, int island, bool coast)
+    /// <summary>A place where there is something, of a kind drawn by the weights of the data; his home when there is none.</summary>
+    private Cell PlaceToGo(Now now, Resident resident)
     {
-        var grounds = _grounds[island];
-        var cells = coast ? grounds.Coast : grounds.Free;
-        return cells[now.Random.Next(cells.Count)];
+        var grounds = _grounds[resident.Island];
+        var options = new List<(int Weight, IReadOnlyList<Cell> Cells)>();
+        foreach (var choice in _settings.Outings ?? AtTheWater)
+        {
+            IReadOnlyList<Cell> cells = choice.To switch
+            {
+                Outing.Fire => [Gathering(now, resident.Island)],
+                Outing.Water => grounds.Coast,
+                Outing.Tree => grounds.Trees,
+                _ => Doors(now, resident),
+            };
+            if (cells.Count > 0) options.Add((choice.Weight, cells));
+        }
+        if (options.Count == 0) return HomeOf(now, resident);
+        var roll = now.Random.Next(options.Sum(option => option.Weight));
+        foreach (var (weight, cells) in options)
+        {
+            if (roll >= weight)
+            {
+                roll -= weight;
+                continue;
+            }
+            return cells[now.Random.Next(cells.Count)];
+        }
+        return HomeOf(now, resident);
+    }
+
+    // the tiles by the doors of the homes of other households of the island: land beside the home that is no lot
+    private List<Cell> Doors(Now now, Resident resident)
+    {
+        var own = resident.Household ?? -1 - resident.Id;
+        var doors = new List<Cell>();
+        var homes = new HashSet<Cell>();
+        foreach (var other in now.People.All)
+        {
+            if (other.Island != resident.Island || (other.Household ?? -1 - other.Id) == own) continue;
+            if (now.Places?.HomeOf(other.Id) is not { } home || !homes.Add(home)) continue;
+            foreach (var next in home.Neighbours())
+                if (now.Map.IsWalkable(next) && now.Map.IslandOf(next) == resident.Island && now.Map.At(next) != Ground.Lot)
+                {
+                    if (!doors.Contains(next)) doors.Add(next);
+                    break;
+                }
+        }
+        return doors;
     }
 
     // ── going there ──
@@ -254,8 +360,31 @@ public sealed class Day : IModule
             return;
         }
         var from = plan is null ? place : Walker.Position(plan.Doing, now.Tick);
-        var doing = Walker.Go(now.Map, activity, from, place, inside, now.Walk, now.Tick, _settings.TicksPerCell);
+        var doing = Walker.Go(now.Map, activity, from, place, inside, now.Walk, now.Tick, _settings.TicksPerCell, Cost);
         _plans[resident.Id] = new Plan(key, inside, doing);
+    }
+
+    // what a step onto the tile costs: less on a path
+    private int Cost(Cell cell) => _wear.IsPath(cell) ? (int)Math.Round(Walker.Step / _settings.PathSpeed, MidpointRounding.AwayFromZero) : Walker.Step;
+
+    // at the target of his errand: he says so, and goes back with what he carries back
+    private void TurnBack(ModuleContext village, int resident, Plan plan, long tick)
+    {
+        var trip = plan.Trip!;
+        var errand = trip.Errand;
+        village.Publish(new Reached(tick, resident, errand.Kind, errand.Target, errand.There));
+        plan.Trip = trip with { Back = true };
+        plan.Doing = Walker.Go(village.Map, errand.Kind, errand.Target, trip.Home, plan.InsideThere, true, tick, _settings.TicksPerCell, Cost, errand.Back);
+        if (plan.Doing.Walk is null) Finish(village, resident, plan, tick);
+    }
+
+    // back from his errand: he goes on with what he was doing
+    private static void Finish(ModuleContext village, int resident, Plan plan, long tick)
+    {
+        var trip = plan.Trip!;
+        village.Publish(new Returned(tick, resident, trip.Errand.Kind, trip.Home, trip.Errand.Back));
+        plan.Trip = null;
+        plan.Doing = new Doing(trip.Was, trip.Home, trip.Home, null, plan.InsideThere);
     }
 
     /// <summary>
@@ -272,7 +401,7 @@ public sealed class Day : IModule
         {
             var on = now.People.All.Where(resident => resident.Island == island.Id).ToList();
             var outside = on.Count(resident => !_plans[resident.Id].InsideThere);
-            var inside = on.Where(resident => _plans[resident.Id].InsideThere)
+            var inside = on.Where(resident => _plans[resident.Id] is { InsideThere: true, Trip: null })
                 .OrderBy(resident => Wakefulness(now, resident))
                 .ThenByDescending(resident => resident.Traits.Extraversion)
                 .ThenBy(resident => resident.Id)
@@ -280,7 +409,7 @@ public sealed class Day : IModule
             for (var i = 0; outside < Math.Min(least, on.Count); i++, outside++)
             {
                 var resident = inside[i];
-                Go(now, resident, _plans[resident.Id].Block, Activity.Wander, RandomTile(now, island.Id, coast: false), inside: false);
+                Go(now, resident, _plans[resident.Id].Block, Activity.Wander, PlaceToGo(now, resident), inside: false);
             }
         }
     }
@@ -308,11 +437,16 @@ public sealed class Day : IModule
 
     private void Read(ModuleContext village)
     {
+        _village = village;
         _settings = village.Data.Section<DaySettings>("day");
         _course = village.Data.Section<LifeCourse>("life");
         if (_settings.TicksPerCell <= 0) throw new InvalidDataException("The data section 'day' needs ticksPerCell above 0.");
         if (_settings.Free.Count == 0 || _settings.Free.Any(choice => choice.Weight <= 0))
             throw new InvalidDataException("The data section 'day' needs free choices with weights above 0.");
+        if (_settings.Outings is { } outings && outings.Any(choice => choice.Weight <= 0))
+            throw new InvalidDataException("The data section 'day' needs outings with weights above 0.");
+        if (_settings.PathWindowDays < 1 || _settings.PathThreshold < 0 || _settings.PathKeep < 0 || _settings.PathSpeed <= 0)
+            throw new InvalidDataException("The data section 'day' has a number for paths out of range.");
         _dayFrom = Time(_settings.Outside.DayFrom);
         _dayTo = Time(_settings.Outside.DayTo);
 
@@ -331,7 +465,8 @@ public sealed class Day : IModule
         for (var i = 1; i < timed.Count; i++)
             if (timed[i].From <= timed[i - 1].From) throw new InvalidDataException($"The blocks of the rhythm '{rhythm}' are not in the order of the day.");
         foreach (var block in blocks)
-            if (block.Do is not (Free or Out) && !Enum.TryParse<Activity>(block.Do, ignoreCase: true, out _))
+            // an errand or helping is never in a rhythm
+            if (block.Do is not (Free or Out) && (!Enum.TryParse<Activity>(block.Do, ignoreCase: true, out var activity) || activity >= Activity.Fetch))
                 throw new InvalidDataException($"The rhythm '{rhythm}' does '{block.Do}', which is no activity.");
         return timed;
     }
@@ -345,7 +480,8 @@ public sealed class Day : IModule
 
     public JsonNode Save() =>
         JsonSerializer.SerializeToNode(
-            new SavedDay(_quarter, [.. _plans.OrderBy(plan => plan.Key).Select(plan => new SavedPlan(plan.Key, plan.Value.Block, plan.Value.InsideThere, plan.Value.Doing))]),
+            new SavedDay(_quarter, [.. _plans.OrderBy(plan => plan.Key).Select(plan => new SavedPlan(plan.Key, plan.Value.Block, plan.Value.InsideThere, plan.Value.Doing, plan.Value.Trip))],
+                _wear.Save()),
             SaveJson.Options)!;
 
     public void Load(ModuleContext village, JsonNode data, int version)
@@ -354,12 +490,13 @@ public sealed class Day : IModule
         var saved = data.Deserialize<SavedDay>(SaveJson.Options) ?? throw new InvalidDataException("The day part of the save is empty.");
         _quarter = saved.Quarter;
         _plans.Clear();
-        foreach (var plan in saved.Plans) _plans[plan.Resident] = new Plan(plan.Block, plan.InsideThere, plan.Doing);
+        foreach (var plan in saved.Plans) _plans[plan.Resident] = new Plan(plan.Block, plan.InsideThere, plan.Doing) { Trip = plan.Trip };
+        _wear.Load(saved.Wear);
     }
 
-    private sealed record SavedDay(DateTimeOffset Quarter, IReadOnlyList<SavedPlan> Plans);
+    private sealed record SavedDay(DateTimeOffset Quarter, IReadOnlyList<SavedPlan> Plans, Wear.SavedWear? Wear = null);
 
-    private sealed record SavedPlan(int Resident, string Block, bool InsideThere, Doing Doing);
+    private sealed record SavedPlan(int Resident, string Block, bool InsideThere, Doing Doing, Trip? Trip = null);
 
     // ── inner parts ──
 
@@ -369,6 +506,8 @@ public sealed class Day : IModule
         public string Block { get; set; } = block;
         public bool InsideThere { get; } = insideThere;
         public Doing Doing { get; set; } = doing;
+        // the errand he is on, if any
+        public Trip? Trip { get; set; }
     }
 
     private sealed record Timed(TimeOnly From, Block Block);
@@ -383,8 +522,11 @@ public sealed class Day : IModule
         public long Tick => Village.Clocks.Tick;
     }
 
-    /// <summary>The tiles of an island: lots (where buildings go), free land, free land by the water, and the middle.</summary>
-    private sealed record Grounds(IReadOnlyList<Cell> Lots, IReadOnlyList<Cell> Free, IReadOnlyList<Cell> Coast, Cell Centre)
+    /// <summary>
+    /// The tiles of an island: lots (where buildings go), free land, free land by the water, the edge of its woods
+    /// (forest beside open land), and the middle.
+    /// </summary>
+    private sealed record Grounds(IReadOnlyList<Cell> Lots, IReadOnlyList<Cell> Free, IReadOnlyList<Cell> Coast, IReadOnlyList<Cell> Trees, Cell Centre)
     {
         public static Grounds Of(IslandMap map, Island island)
         {
@@ -394,7 +536,9 @@ public sealed class Day : IModule
             if (free.Count == 0) free = land;
             var coast = free.Where(cell => cell.Neighbours().Any(next => !map.IsWalkable(next))).ToList();
             if (coast.Count == 0) coast = free;
-            return new Grounds(lots, free, coast, Middle(land));
+            var trees = land.Where(cell => map.At(cell) == Ground.Forest
+                && cell.Neighbours().Any(next => map.IsWalkable(next) && map.At(next) is not (Ground.Forest or Ground.Lot))).ToList();
+            return new Grounds(lots, free, coast, trees, Middle(land));
         }
 
         // the walkable tile nearest the middle of the island

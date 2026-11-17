@@ -33,7 +33,7 @@ public sealed record EconomySettings(
     // by role, the interests that fit it
     IReadOnlyDictionary<string, IReadOnlyList<string>> Fits,
     StartHoldings Start,
-    // a day, to who is of working age but has no job
+    // a day, to who is of working age, less the wage he earned that day: in full to who has no job
     int SupportPerDay = 0);
 
 /// <summary>How much of a need a household buys a day: so much per member and so much for the household.</summary>

@@ -5,6 +5,7 @@
   "thingsAtStart": 3,
   "thingsPerHouse": 1,
   "putBackMinutes": 5,
+  "helpShare": 0.5,
   "school": "school",
   "gathering": "market",
   "community": {

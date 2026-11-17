@@ -30,7 +30,7 @@ internal static class Builders
     /// <summary>The real data, changed as the test needs.</summary>
     public static DataSet Data(Action<JsonObject>? building = null, Action<JsonObject>? economy = null,
         Action<JsonObject>? people = null, Action<JsonObject>? catalog = null, IEnumerable<string>? extras = null,
-        Action<JsonObject>? wishes = null, Action<JsonObject>? life = null)
+        Action<JsonObject>? wishes = null, Action<JsonObject>? life = null, Action<JsonObject>? day = null)
     {
         JsonObject Read(string name) => JsonNode.Parse(File.ReadAllText(Path.Combine(Folder, name + ".json")))!.AsObject();
         var sections = new Dictionary<string, JsonObject>
@@ -44,6 +44,7 @@ internal static class Builders
             ["wishes"] = Read("wishes"),
         };
         building?.Invoke(sections["building"]);
+        day?.Invoke(sections["day"]);
         wishes?.Invoke(sections["wishes"]);
         life?.Invoke(sections["life"]);
         economy?.Invoke(sections["economy"]);
@@ -133,21 +134,22 @@ public class BuildingTests
         Assert.Contains(((IStructures)village.Building).Sites(), view => view.Id == id && view.Island == West && view.Place == site.Anchor);
         Assert.DoesNotContain(((IStructures)village.Building).Standing(), view => view.Id == id);
 
-        // the morning after: Day settles and the island's three builders are at the site, a full crew
+        // the morning after: Day settles and the island's three builders come to the site, a full crew; the
+        // foundation is paid in one go when it starts, and they go to fetch it
         village.JumpTo(June(1, 10));
-        Assert.Equal(3, village.BuildersAt(site));
-        Assert.Equal((0, 1), (site.Phase, site.Progress));
-        // the foundation is paid in one go when it starts
+        Assert.Equal((0, 0), (site.Phase, site.Progress));
         Assert.Equal((branches - 2, reed), (village.Work.Count(West, "branches"), village.Work.Count(West, "reed")));
 
-        var ticks = 1;
-        while (!site.Done && ticks < 5000)
+        // 2400 ticks of work with a full crew, a step every tick, besides the walks to fetch what the phases cost
+        var working = 0;
+        for (var tick = 0; tick < 5000 && !site.Done; tick++)
         {
+            var before = (site.Phase, site.Progress);
             village.Run(1);
-            ticks++;
+            if ((site.Phase, site.Progress) != before) working++;
         }
 
-        Assert.Equal(2400, ticks);
+        Assert.Equal(2400, working);
         Assert.Equal(5, site.Phase);
         village.Run(1);
         Assert.Equal(["foundation", "frame", "roof", "walls", "garden"],

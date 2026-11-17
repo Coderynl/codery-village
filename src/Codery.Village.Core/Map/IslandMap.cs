@@ -58,6 +58,43 @@ public sealed class IslandMap
         return null;
     }
 
+    /// <summary>
+    /// The walk over land that costs least, stepping onto a tile costing <paramref name="cost"/> of it, or null when
+    /// the goal cannot be reached. Of walks that cost the same, it takes the one the plain search would: with the same
+    /// cost everywhere it is the shortest walk of <see cref="FindRoute(Cell, Cell)"/>.
+    /// </summary>
+    public Route? FindRoute(Cell from, Cell to, Func<Cell, int> cost)
+    {
+        if (!IsWalkable(from) || !IsWalkable(to)) return null;
+        var best = new Dictionary<Cell, int> { [from] = 0 };
+        var cameFrom = new Dictionary<Cell, Cell>();
+        // ties go in the order the tiles were reached, as in the plain search
+        var open = new PriorityQueue<Cell, (int Cost, long Order)>();
+        long order = 0;
+        open.Enqueue(from, (0, order++));
+        while (open.TryDequeue(out var cell, out var priority))
+        {
+            if (priority.Cost > best[cell]) continue;
+            if (cell == to)
+            {
+                var cells = new List<Cell>();
+                for (var at = cell; at != from; at = cameFrom[at]) cells.Add(at);
+                cells.Reverse();
+                return new Route(cells);
+            }
+            foreach (var next in cell.Neighbours())
+            {
+                if (!IsWalkable(next)) continue;
+                var total = priority.Cost + Math.Max(1, cost(next));
+                if (best.TryGetValue(next, out var known) && known <= total) continue;
+                best[next] = total;
+                cameFrom[next] = cell;
+                open.Enqueue(next, (total, order++));
+            }
+        }
+        return null;
+    }
+
     internal static bool IsLand(Ground ground) => ground is not (Ground.Water or Ground.Fishing);
 
     private bool Contains(Cell cell) => cell.Row >= 0 && cell.Row < Rows && cell.Col >= 0 && cell.Col < Cols;

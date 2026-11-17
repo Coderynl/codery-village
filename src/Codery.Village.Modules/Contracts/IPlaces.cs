@@ -16,4 +16,7 @@ public interface IPlaces
 
     /// <summary>The tile where the island gathers, or null when there is none.</summary>
     Cell? GatheringOn(int island);
+
+    /// <summary>Where a helper works on a building site of the island that has work to do, or null when none has.</summary>
+    Cell? HelpOn(int island) => null;
 }

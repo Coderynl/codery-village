@@ -19,7 +19,9 @@ namespace Codery.Village.Modules.Building;
 /// <summary>
 /// What stands and what goes up. A building is placed on free tiles of one island that its blueprint may stand
 /// on, and goes up in the phases of its blueprint: a phase starts when the island's stock holds its cost, which
-/// is taken in one go, and goes on while builders are at the site, each builder a crew-th of a tick per tick.
+/// is taken in one go. The builders at the site then fetch it from the store where the island gathers, and once
+/// one is back with it the phase goes on while builders are at the site, each builder a crew-th of a tick per tick
+/// and each helper (a resident who spends his free time there) a share of a builder, up to a full crew.
 /// A site that stands still says why, once per reason. Each ordinary island starts with its fireplace and a hut
 /// per household, Eddie with his house and workshop; all finished. Building gives the homes, as People moves households in and
 /// out of them, the places of the day, and the buildings Work staffs. It also keeps the loose things a visitor
@@ -33,6 +35,8 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
     private const string Section = "building";
     private const string Built = "built";
     private const string PutBackKind = "put-back";
+    // the work of one builder in one tick, in units: a helper does a share of it
+    private const int Full = 100;
     private static readonly string[] LogKinds = [Built, Waiting(Materials), Waiting(Builders), PutBackKind];
 
     private readonly List<Structure> _structures = [];
@@ -228,6 +232,10 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
 
     public Cell? SchoolOn(int island) => Serving(island, _settings?.School);
 
+    /// <summary>Where a helper works: the first site of the island that does not wait for materials, or null.</summary>
+    public Cell? HelpOn(int island) =>
+        _village is null ? null : _structures.Find(structure => structure.Island == island && !structure.Done && structure.Waiting != Materials) is { } site ? Spot(site) : null;
+
     /// <summary>What serves the gathering label, else the island's fireplace, else a fixed tile of the island.</summary>
     public Cell? GatheringOn(int island) =>
         Serving(island, _settings?.Gathering) ?? Fireplace(island) ?? (_squares.TryGetValue(island, out var square) ? square : null);
@@ -285,9 +293,21 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         PutBack(village);
         var sites = _structures.Where(structure => !structure.Done).ToList();
         if (sites.Count == 0) return;
+        Delivered(village, sites);
         var present = Present(village, sites);
         var stock = village.Find<IStock>();
-        foreach (var site in sites) Advance(village, site, present.GetValueOrDefault(site.Id), stock);
+        foreach (var site in sites) Advance(village, site, present.GetValueOrDefault(site.Id) ?? [], stock);
+    }
+
+    // a builder back from the store with what the phase costs: the site has it
+    private void Delivered(ModuleContext village, List<Structure> sites)
+    {
+        foreach (var back in village.Received.OfType<Returned>())
+        {
+            if (back.Errand != Activity.Fetch) continue;
+            foreach (var site in sites)
+                if (site.Paid && Spot(site) == back.At && site.Island == IslandAt(back.At)) site.Delivered = true;
+        }
     }
 
     // a home whose last resident has left is free again
@@ -301,10 +321,11 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         }
     }
 
-    // per site, the builders of its island who are at work on its tile, and not on their way
-    private Dictionary<int, int> Present(ModuleContext village, List<Structure> sites)
+    // per site, who is at work on its tile and not on his way, with the share of a builder he does: the builders of
+    // its island, and the helpers
+    private Dictionary<int, List<(int Resident, int Share)>?> Present(ModuleContext village, List<Structure> sites)
     {
-        var present = new Dictionary<int, int>();
+        var present = new Dictionary<int, List<(int Resident, int Share)>?>();
         if (village.Find<DayModule>() is not { } day || village.Find<IJobs>() is not { } jobs || village.Find<PeopleModule>() is not { } people) return present;
         var spots = new Dictionary<Cell, List<Structure>>();
         foreach (var site in sites)
@@ -313,12 +334,18 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
             if (!spots.TryGetValue(spot, out var here)) spots[spot] = here = [];
             here.Add(site);
         }
+        var helping = (int)Math.Round(Full * _settings.HelpShare, MidpointRounding.AwayFromZero);
         foreach (var resident in people.All)
         {
-            if (Doing(day, resident.Id) is not { Activity: Activity.Work, Walk: null } doing || !spots.TryGetValue(doing.Place, out var here)) continue;
-            if (jobs.JobOf(resident.Id) is not { } job || job.Role != _crew.BuilderRole) continue;
-            var site = here.Find(structure => structure.Id == job.Building) ?? here[0];
-            if (site.Island == resident.Island) present[site.Id] = present.GetValueOrDefault(site.Id) + 1;
+            if (Doing(day, resident.Id) is not { Activity: Activity.Work or Activity.Help, Walk: null } doing || !spots.TryGetValue(doing.Place, out var here)) continue;
+            Structure site;
+            int share;
+            if (doing.Activity == Activity.Help) (site, share) = (here[0], helping);
+            else if (jobs.JobOf(resident.Id) is { } job && job.Role == _crew.BuilderRole) (site, share) = (here.Find(structure => structure.Id == job.Building) ?? here[0], Full);
+            else continue;
+            if (site.Island != resident.Island) continue;
+            if (!present.TryGetValue(site.Id, out var crew) || crew is null) present[site.Id] = crew = [];
+            crew.Add((resident.Id, share));
         }
         return present;
     }
@@ -336,7 +363,7 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         }
     }
 
-    private void Advance(ModuleContext village, Structure site, int builders, IStock? stock)
+    private void Advance(ModuleContext village, Structure site, List<(int Resident, int Share)> crew, IStock? stock)
     {
         if (!_blueprints.TryGetValue(site.Blueprint, out var plan)) return;
         var tick = village.Clocks.Tick;
@@ -349,9 +376,21 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
                 return;
             }
             site.Paid = true;
+            site.Delivered = phase.Cost.Count == 0;
             village.Publish(new PhaseStarted(tick, site.Id, phase.Id));
         }
-        var working = Math.Min(builders, _crew.Crew);
+        if (!site.Delivered)
+        {
+            if (Fetch(village, site, phase, crew)) return;
+            // nobody to fetch it, or nowhere to fetch it from
+            if (crew.Count == 0)
+            {
+                Wait(village, site, Builders);
+                return;
+            }
+            site.Delivered = true;
+        }
+        var working = Math.Min(crew.Sum(member => member.Share), _crew.Crew * Full);
         if (working == 0)
         {
             Wait(village, site, Builders);
@@ -359,17 +398,32 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         }
         site.Waiting = null;
         site.Units += working;
-        site.Progress = site.Units / _crew.Crew;
-        if (site.Units < phase.Ticks * _crew.Crew) return;
+        site.Progress = site.Units / (_crew.Crew * Full);
+        if (site.Units < phase.Ticks * _crew.Crew * Full) return;
 
         site.Phase++;
         site.Units = 0;
         site.Progress = 0;
         site.Paid = false;
+        site.Delivered = false;
         if (!site.Done) return;
         village.Publish(new StructureDone(tick, site.Id));
         village.Log(new LogEntry(tick, Built, site.Blueprint, Id(site)));
         if (HomesIn(site) > 0) Scatter(village, site.Island, site.Anchor, _settings.ThingsPerHouse);
+    }
+
+    // who is at the site goes to the store for the most of what the phase costs; true while someone is on his way
+    private bool Fetch(ModuleContext village, Structure site, Phase phase, List<(int Resident, int Share)> crew)
+    {
+        if (village.Find<DayModule>() is not { } day || GatheringOn(site.Island) is not { } store) return false;
+        var spot = Spot(site);
+        var material = phase.Cost.OrderByDescending(item => item.Value).ThenBy(item => item.Key, StringComparer.Ordinal).First().Key;
+        var sent = false;
+        foreach (var (resident, _) in crew) sent |= day.Send(resident, new Errand(Activity.Fetch, store, null, material));
+        var fetching = sent || village.Find<PeopleModule>()?.All.Any(resident =>
+            day.TripOf(resident.Id) is { Errand.Kind: Activity.Fetch } trip && trip.Home == spot && resident.Island == site.Island) == true;
+        if (fetching) site.Waiting = null;
+        return fetching;
     }
 
     private static void Wait(ModuleContext village, Structure site, string reason)
@@ -471,7 +525,7 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         _kinds = [.. catalog.Things.Select(thing => thing.Id)];
 
         var community = _settings.Community;
-        if (_crew.Crew <= 0 || _settings.PutBackMinutes < 1 || _settings.MaxStartHuts < 0 || _settings.ThingsAtStart < 0 || _settings.ThingsPerHouse < 0
+        if (_crew.Crew <= 0 || _settings.PutBackMinutes < 1 || _settings.HelpShare is < 0 or > 1 || _settings.MaxStartHuts < 0 || _settings.ThingsAtStart < 0 || _settings.ThingsPerHouse < 0
             || community.MaxSites < 0 || community.LowStockDays < 0 || community.DecideTicks <= 0)
             throw new InvalidDataException($"The data section '{Section}' or the crew in 'economy' has a number out of range.");
         foreach (var blueprint in _settings.Eddie.Where(blueprint => !_blueprints.ContainsKey(blueprint)))
@@ -515,7 +569,7 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
             _nextStructure,
             _nextThing,
             [.. _structures.Select(structure => new SavedStructure(structure.Id, structure.Blueprint, structure.Anchor, structure.Rotation,
-                structure.Phase, structure.Units, structure.Paid, [.. structure.Living], [.. structure.Told], structure.Waiting))],
+                structure.Phase, structure.Units, structure.Paid, [.. structure.Living], [.. structure.Told], structure.Waiting, structure.Delivered))],
             [.. _things],
             _inTheWay.Count > 0 ? _inTheWay : null), SaveJson.Options)!;
 
@@ -531,8 +585,9 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
             var structure = Add(part.Blueprint, part.Anchor, part.Rotation, part.Id);
             structure.Phase = part.Phase;
             structure.Units = part.Units;
-            structure.Progress = part.Units / _crew.Crew;
+            structure.Progress = part.Units / (_crew.Crew * Full);
             structure.Paid = part.Paid;
+            structure.Delivered = part.Delivered;
             structure.Waiting = part.Waiting;
             structure.Living.AddRange(part.Households);
             foreach (var reason in part.Told) structure.Told.Add(reason);
@@ -547,5 +602,5 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         IReadOnlyDictionary<int, long>? InTheWay = null);
 
     private sealed record SavedStructure(int Id, string Blueprint, Cell Anchor, int Rotation, int Phase, int Units, bool Paid,
-        IReadOnlyList<int> Households, IReadOnlyList<string> Told, string? Waiting = null);
+        IReadOnlyList<int> Households, IReadOnlyList<string> Told, string? Waiting = null, bool Delivered = false);
 }

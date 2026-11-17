@@ -67,8 +67,11 @@ public class CommunityTests
         // the house goes up and a household moves in
         var house = village.Building.All.Single(structure => structure.Island == West && !structure.Done);
         village.JumpTo(June(2, 9));
-        village.Run(2400);
+        // 2400 ticks of building, and the walks to fetch what the phases cost
+        for (var tick = 0; tick < 4000 && !house.Done; tick++) village.Run(1);
         Assert.True(house.Done);
+        // a household moves in the tick after
+        village.Run(1);
         Assert.NotNull(house.Household);
         Assert.True(village.Building.HasHome(house.Household!.Value));
         Assert.Contains(village.People.On(West), resident => resident.Household == house.Household);

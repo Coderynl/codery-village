@@ -5,6 +5,7 @@ using Codery.Village.Core.Modules;
 using Codery.Village.Modules.Building;
 using Codery.Village.Modules.Community;
 using Codery.Village.Modules.Day;
+using Codery.Village.Modules.Fire;
 using Codery.Village.Modules.Happiness;
 using Codery.Village.Modules.People;
 using Codery.Village.Modules.Wishes;
@@ -26,7 +27,7 @@ public static class VillageSetup
     /// order is written down.
     /// </summary>
     public static IReadOnlyList<IModule> Modules() =>
-        [new People(), new Day(), new Work(), new Building(), new Community(), new Wishes(), new Happiness(), new TalkModule()];
+        [new People(), new Day(), new Work(), new Building(), new Fire(), new Community(), new Wishes(), new Happiness(), new TalkModule()];
 
     /// <summary>The data in <see cref="Folder"/>, with the releases <paramref name="extras"/> names (such as <c>releases/cafe.json</c>).</summary>
     public static DataSet Data(IEnumerable<string> extras) => DataFolder.Load(Folder, extras);

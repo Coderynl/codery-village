@@ -42,7 +42,7 @@ public sealed class Structure
     /// <summary>How many phases its blueprint has.</summary>
     public int Phases { get; }
 
-    /// <summary>Ticks of a full crew done in the phase going on.</summary>
+    /// <summary>Ticks of a full crew done in the phase going on; it does not grow before the builders have fetched what the phase costs.</summary>
     public int Progress { get; internal set; }
 
     public bool Done => Phase >= Phases;
@@ -61,6 +61,9 @@ public sealed class Structure
 
     // the cost of the phase going on has been taken from the stock
     internal bool Paid { get; set; }
+
+    // a builder has brought the cost of the phase going on from the store to the site
+    internal bool Delivered { get; set; }
 
     // the reasons it has been told to wait for
     internal SortedSet<string> Told { get; } = new(StringComparer.Ordinal);

@@ -524,10 +524,12 @@ public class WorkTests
 
             var paid = Assert.Single(village.Ear.Heard.OfType<Paid>(), paid => paid.Island == island);
             Assert.Equal(0, paid.Wages);
-            // children and students get their allowance, and who is of working age but has no job his support
-            var jobless = residents.Count(resident => resident.Phase == LifePhase.Working && village.Work.JobOf(resident.Id) is null);
-            Assert.True(jobless > 0);
-            Assert.Equal(allowance * residents.Count(resident => resident.Phase is LifePhase.Child or LifePhase.Student) + 500L * jobless, paid.Allowances);
+            // children and students get their allowance, and who is of working age his support less his wage of the
+            // day: here nobody earns a wage, so all of them, with a job or without
+            var working = residents.Count(resident => resident.Phase == LifePhase.Working);
+            Assert.Contains(residents, resident => resident.Phase == LifePhase.Working && village.Work.JobOf(resident.Id) is null);
+            Assert.Contains(residents, resident => village.Work.JobOf(resident.Id) is not null);
+            Assert.Equal(allowance * residents.Count(resident => resident.Phase is LifePhase.Child or LifePhase.Student) + 500L * working, paid.Allowances);
             Assert.Equal(pension * residents.Count(resident => resident.Phase == LifePhase.Retired), paid.Pensions);
 
             // one food each and one heat per household, from the island's own stock: what its ground gives
@@ -540,6 +542,38 @@ public class WorkTests
         }
         Assert.Equal(money + (after.Values.Sum(a => a.Books.Subsidy) - before.Values.Sum(b => b.Books.Subsidy))
             - (after.Values.Sum(a => a.Books.Upkeep) - before.Values.Sum(b => b.Books.Upkeep)), village.Money);
+    }
+
+    [Fact]
+    public void The_support_makes_up_for_a_wage_that_did_not_reach_it_that_day()
+    {
+        // a Monday of work; a support that a full day's wage reaches, but less does not
+        var data = Data(economy: e =>
+        {
+            e["spendPercent"] = 0;
+            e["supportPerDay"] = 500;
+        });
+        // the woodcutters work by day; the fire keeper by night, so by day he earns nothing
+        var village = Start(1, June(1, 8), data, [Built(1, "woodcutter", West, 2, 4), Built(2, "campfire", West, 5, 13)]);
+        village.Run(1);
+        village.JumpTo(June(1, 9));
+        var morning = village.People.All.ToDictionary(resident => resident.Id, resident => resident.Money);
+        for (var hour = 9; hour < 18; hour++) village.Run(14400);
+        var earned = village.People.All.ToDictionary(resident => resident.Id, resident => resident.Money - morning[resident.Id]);
+
+        village.JumpTo(June(2, 0));
+        village.Run(1);
+
+        var allowance = (long)JsonNode.Parse(File.ReadAllText(Path.Combine(Folder, "economy.json")))!["allowancePerDay"]!;
+        var residents = village.People.On(West).ToList();
+        var working = residents.Where(resident => resident.Phase == LifePhase.Working).ToList();
+        // some earned a day's wage and get nothing, the others what their wage did not reach
+        Assert.Contains(working, resident => earned[resident.Id] >= 500);
+        Assert.Contains(working, resident => earned[resident.Id] == 0 && village.Work.JobOf(resident.Id) is null);
+        Assert.Contains(working, resident => earned[resident.Id] < 500 && village.Work.JobOf(resident.Id) is { Role: "fire-keeper" });
+        var paid = Assert.Single(village.Ear.Heard.OfType<Paid>(), paid => paid.Island == West);
+        Assert.Equal(allowance * residents.Count(resident => resident.Phase is LifePhase.Child or LifePhase.Student)
+            + working.Sum(resident => Math.Max(0, 500 - earned[resident.Id])), paid.Allowances);
     }
 
     [Fact]

@@ -8,6 +8,7 @@ using Codery.Village.Core.Time;
 using Codery.Village.Modules.Contracts;
 using Codery.Village.Modules.People;
 using Activity = Codery.Village.Modules.Day.Activity;
+using Errand = Codery.Village.Modules.Day.Errand;
 using DayModule = Codery.Village.Modules.Day.Day;
 
 namespace Codery.Village.Modules.Work;
@@ -16,9 +17,12 @@ namespace Codery.Village.Modules.Work;
 /// Work and money, in their simplest form. A building that stands offers the jobs of its blueprint and each
 /// ordinary island has places for its own builders; a working resident without a job takes the free place on
 /// his island that fits his interests best. A workplace makes its recipe while someone works there, from and
-/// into the island's stock; a recipe that fells takes a tree nearby, which grows back. The treasury of the island pays
+/// into the island's stock; a recipe that fells takes a tree nearby, which grows back. After every batch the
+/// workers there bring it to the store where the island gathers, and come back. The treasury of the island pays
 /// a wage for every tick on the job, and once a calendar day, at 00:00, the island settles its day: the start
-/// subsidy comes in, the upkeep of its buildings goes out, children, students, the retired and who has no job get their money,
+/// subsidy comes in, the upkeep of its buildings goes out, children, students and the retired get their money, and who is
+/// of working age the support, less what he earned that day (so a new worker who has had no wage yet, or one whose job
+/// rests at the weekend, is not left without),
 /// every household buys food and heat from the stock, and every resident spends after his thrift. Who leaves the
 /// village takes his money with him; the island books it the tick after. Eddie works
 /// in his workshop for nothing: he is outside the economy.
@@ -34,6 +38,8 @@ public sealed class Work : IModule, IJobs, IStock
     private readonly SortedDictionary<int, Seat> _jobs = [];
     // per worker, the wage earned that is not yet a whole cent, in 1/TicksPerHour cents
     private readonly Dictionary<int, long> _owed = [];
+    // per worker, the wage paid since the last settling of the day, in cents
+    private readonly SortedDictionary<int, long> _earned = [];
     // places nobody has, with the tick they came free
     private readonly Dictionary<Seat, long> _vacant = [];
     // per island, the wages paid since the last Paid
@@ -238,15 +244,27 @@ public sealed class Work : IModule, IJobs, IStock
 
     // ── working and making ──
 
-    /// <summary>Pays everyone who is at his job and says which workplaces have someone there.</summary>
-    private HashSet<int> Labour(World world)
+    /// <summary>
+    /// Pays everyone who is at his job, or on an errand for it (fetching or bringing to the store), and says who is at
+    /// work at which workplace.
+    /// </summary>
+    private Dictionary<int, List<int>> Labour(World world)
     {
-        var staffed = new HashSet<int>();
+        var staffed = new Dictionary<int, List<int>>();
         if (world.Day is not { } day) return staffed;
         foreach (var (resident, seat) in _jobs)
         {
-            if (PlaceOf(world, seat) is not { } job || !AtWork(day, resident, job.Place)) continue;
-            if (seat.Structure >= 0) staffed.Add(seat.Structure);
+            if (PlaceOf(world, seat) is not { } job) continue;
+            if (!AtWork(day, resident, job.Place))
+            {
+                if (day.TripOf(resident) is { Errand.Kind: Activity.Fetch or Activity.Bring } trip && trip.Home == job.Place) Pay(world.Residents[resident], seat.Island);
+                continue;
+            }
+            if (seat.Structure >= 0)
+            {
+                if (!staffed.TryGetValue(seat.Structure, out var workers)) staffed[seat.Structure] = workers = [];
+                workers.Add(resident);
+            }
             Pay(world.Residents[resident], seat.Island);
         }
         return staffed;
@@ -278,14 +296,15 @@ public sealed class Work : IModule, IJobs, IStock
         treasury.Cash -= paid;
         worker.Money += paid;
         _wages[island] += paid;
+        _earned[worker.Id] = _earned.GetValueOrDefault(worker.Id) + paid;
     }
 
-    private void Produce(ModuleContext village, World world, HashSet<int> staffed)
+    private void Produce(ModuleContext village, World world, Dictionary<int, List<int>> staffed)
     {
         var tick = village.Clocks.Tick;
         foreach (var structure in world.Standing)
         {
-            if (!staffed.Contains(structure.Id) || !InEconomy(village.Map, structure)
+            if (!staffed.ContainsKey(structure.Id) || !InEconomy(village.Map, structure)
                 || !_blueprints.TryGetValue(structure.Blueprint, out var blueprint) || blueprint.Recipe is not { } recipe) continue;
             if (!_batches.TryGetValue(structure.Id, out var worked))
             {
@@ -306,9 +325,18 @@ public sealed class Work : IModule, IJobs, IStock
                 Add(structure.Island, material, amount);
                 village.Publish(new Produced(tick, structure.Island, material, amount));
             }
+            Bring(world, structure, recipe, staffed[structure.Id]);
         }
         var standing = world.Standing.Select(structure => structure.Id).ToHashSet();
         foreach (var gone in _batches.Keys.Where(id => !standing.Contains(id)).ToList()) _batches.Remove(gone);
+    }
+
+    // the stock stays a number; the workers carry the most of the batch to the store where the island gathers, for all to see
+    private static void Bring(World world, StructureView structure, Recipe recipe, List<int> workers)
+    {
+        if (world.Day is not { } day || recipe.Out.Count == 0 || world.Places?.GatheringOn(structure.Island) is not { } store) return;
+        var carry = recipe.Out.OrderByDescending(item => item.Value).ThenBy(item => item.Key, StringComparer.Ordinal).First().Key;
+        foreach (var worker in workers) day.Send(worker, new Errand(Activity.Bring, store, carry));
     }
 
     // a recipe that fells, such as a woodcutter's; gathering branches leaves the forest standing
@@ -360,7 +388,7 @@ public sealed class Work : IModule, IJobs, IStock
                 {
                     LifePhase.Child or LifePhase.Student => _settings.AllowancePerDay,
                     LifePhase.Retired => _settings.PensionPerDay,
-                    _ => _jobs.ContainsKey(resident.Id) ? 0 : _settings.SupportPerDay,
+                    _ => Math.Max(0, _settings.SupportPerDay - _earned.GetValueOrDefault(resident.Id)),
                 };
                 var paid = Math.Min(due, treasury.Cash);
                 treasury.Cash -= paid;
@@ -382,6 +410,7 @@ public sealed class Work : IModule, IJobs, IStock
             village.Publish(new Paid(village.Clocks.Tick, island.Id, _wages[island.Id], allowances, pensions));
             _wages[island.Id] = 0;
         }
+        _earned.Clear();
     }
 
     // every household buys what it needs from the stock, of the first material in stock that it can pay; who
@@ -501,7 +530,8 @@ public sealed class Work : IModule, IJobs, IStock
             [.. _jobs.Select(job => new SavedJob(job.Key, job.Value, _owed.GetValueOrDefault(job.Key)))],
             [.. _vacant.OrderBy(item => (item.Key.Island, item.Key.Structure, item.Key.Job, item.Key.Index)).Select(item => new SavedVacancy(item.Key, item.Value))],
             [.. _batches.Select(batch => new SavedBatch(batch.Key, batch.Value))],
-            [.. _felled.OrderBy(item => (item.Key.Row, item.Key.Col)).Select(item => new SavedFelled(item.Key, item.Value))]), SaveJson.Options)!;
+            [.. _felled.OrderBy(item => (item.Key.Row, item.Key.Col)).Select(item => new SavedFelled(item.Key, item.Value))],
+            _earned.Count > 0 ? [.. _earned.Select(item => new SavedEarned(item.Key, item.Value))] : null), SaveJson.Options)!;
 
     public void Load(ModuleContext village, JsonNode data, int version)
     {
@@ -517,6 +547,7 @@ public sealed class Work : IModule, IJobs, IStock
         _batches.Clear();
         _felled.Clear();
         _shopping.Clear();
+        _earned.Clear();
         foreach (var island in village.Map.Islands)
         {
             _treasuries[island.Id] = new Treasury();
@@ -537,6 +568,7 @@ public sealed class Work : IModule, IJobs, IStock
         foreach (var vacancy in saved.Vacant) _vacant[vacancy.Seat] = vacancy.Freed;
         foreach (var batch in saved.Batches) _batches[batch.Structure] = batch.Worked;
         foreach (var felled in saved.Felled) _felled[felled.Cell] = felled.Until;
+        foreach (var earned in saved.Earned ?? []) _earned[earned.Resident] = earned.Cents;
     }
 
     /// <summary>A place to work: a builder's of the island (<see cref="Structure"/> −1), or one of a building's jobs.</summary>
@@ -553,7 +585,9 @@ public sealed class Work : IModule, IJobs, IStock
         IReadOnlyList<StructureView> Sites);
 
     private sealed record SavedWork(DateOnly Day, IReadOnlyList<SavedIsland> Islands, IReadOnlyList<SavedJob> Jobs,
-        IReadOnlyList<SavedVacancy> Vacant, IReadOnlyList<SavedBatch> Batches, IReadOnlyList<SavedFelled> Felled);
+        IReadOnlyList<SavedVacancy> Vacant, IReadOnlyList<SavedBatch> Batches, IReadOnlyList<SavedFelled> Felled, IReadOnlyList<SavedEarned>? Earned = null);
+
+    private sealed record SavedEarned(int Resident, long Cents);
 
     private sealed record SavedIsland(int Id, long Cash, long Subsidy, long Upkeep, long Spent, long Wages, IReadOnlyDictionary<string, int> Stock, long Departed = 0,
         Shopping? Shopping = null);

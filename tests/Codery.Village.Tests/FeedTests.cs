@@ -7,7 +7,13 @@ using Codery.Village.Modules.Wishes;
 using Codery.Village.Server;
 using Codery.Village.Server.Feed;
 using Xunit.Abstractions;
+using System.Text.Json.Nodes;
+using Codery.Village.Modules.Contracts;
+using Codery.Village.Modules.Day;
 using BuildingModule = Codery.Village.Modules.Building.Building;
+using DayModule = Codery.Village.Modules.Day.Day;
+using FireModule = Codery.Village.Modules.Fire.Fire;
+using PeopleModule = Codery.Village.Modules.People.People;
 
 namespace Codery.Village.Tests;
 
@@ -32,11 +38,21 @@ public class FeedTests(ITestOutputHelper output)
         public T Module<T>() => Engine.Running.OfType<T>().Single();
     }
 
-    private static Village Start(DateTimeOffset at, ulong seed = 1)
+    private static Village Start(DateTimeOffset at, ulong seed = 1, DataSet? data = null)
     {
         var time = new SimulatedTime(at);
-        var engine = VillageSetup.Begin(Data, Map, seed, time);
-        return new Village(engine, time, new VillageFeed(Data, Map, time));
+        var engine = VillageSetup.Begin(data ?? Data, Map, seed, time);
+        return new Village(engine, time, new VillageFeed(data ?? Data, Map, time));
+    }
+
+    /// <summary>The real data with the section "day" changed as the test needs.</summary>
+    private static DataSet WithDay(Action<JsonObject> change)
+    {
+        var sections = Directory.GetFiles(VillageSetup.Folder, "*.json").ToDictionary(file => Path.GetFileNameWithoutExtension(file), File.ReadAllText);
+        var day = JsonNode.Parse(sections["day"])!.AsObject();
+        change(day);
+        sections["day"] = day.ToJsonString();
+        return DataSet.FromTexts(sections, []);
     }
 
     private static string Json<T>(T value) => JsonSerializer.Serialize(value, Protocol.Json);
@@ -120,6 +136,82 @@ public class FeedTests(ITestOutputHelper output)
         foreach (var move in now.Moves)
             Assert.Equal(Where(move, now.Tick), Where(moves[move.Person], now.Tick));
         Assert.True(walked);
+    }
+
+    [Fact]
+    public void What_is_carried_the_paths_the_fires_and_the_homes_reach_the_page()
+    {
+        // paths wear in after a few walks here; the evening before dusk
+        var data = WithDay(day =>
+        {
+            day["pathThreshold"] = 3;
+            day["pathKeep"] = 1;
+            day["pathWindowDays"] = 2;
+        });
+        var village = Start(Builders.June(1, 21, 40), data: data);
+        // the fireplaces are there from the start
+        Assert.Equal(2, village.Feed.Join(village.Engine).Fires.Count);
+        village.Run(1);
+        var join = village.Feed.Join(village.Engine);
+        var building = village.Module<BuildingModule>();
+        var fire = village.Module<FireModule>();
+        var day = village.Module<DayModule>();
+        int Flat(Cell cell) => cell.Row * Map.Cols + cell.Col;
+
+        // who lives where: the tile of his home
+        Assert.All(join.People, person => Assert.Equal(((IPlaces)building).HomeOf(person.Id) is { } home ? Flat(home) : null, person.Home));
+        Assert.Contains(join.People, person => person.Home is not null);
+        // every fireplace, with how strong it burns
+        var campfires = building.All.Where(structure => structure.Blueprint == "campfire").Select(structure => structure.Id).Order().ToList();
+        Assert.Equal(campfires, join.Fires.Select(item => item.Structure));
+        Assert.All(join.Fires, item => Assert.Equal(0, item.Strength));
+        Assert.Empty(join.Map.Paths ?? []);
+
+        // someone carries stones to the far end of West, four times: his way there wears into a path
+        var walker = village.Module<PeopleModule>().All.First(resident => resident.Island == Builders.West && day.Of(resident.Id) is { Walk: null, Inside: false });
+        var far = Map.Islands.Single(island => island.Id == Builders.West).Cells.Where(Map.IsWalkable)
+            .OrderByDescending(cell => cell.DistanceTo(day.Of(walker.Id).At)).ThenBy(cell => cell.Row).ThenBy(cell => cell.Col).First();
+        var fires = join.Fires.ToDictionary(item => item.Structure, item => item.Strength);
+        var paths = new HashSet<int>(join.Map.Paths ?? []);
+        var carried = false;
+        void Follow(TickMessage message)
+        {
+            carried |= message.Moves?.Any(move => move.Person == walker.Id && move.Carry == "stones" && move.Cells.Count > 1) == true;
+            foreach (var item in message.Fires ?? []) fires[item.Structure] = item.Strength;
+            foreach (var cell in message.Paths ?? []) Assert.True(paths.Add(cell));
+            foreach (var cell in message.PathsGone ?? []) Assert.True(paths.Remove(cell));
+        }
+        for (var trip = 0; trip < 4; trip++)
+        {
+            Assert.True(day.Send(walker.Id, new Errand(Activity.Bring, far, "stones")));
+            for (var tick = 0; tick < 4000 && day.TripOf(walker.Id) is not null; tick++)
+            {
+                village.Run(1);
+                Follow(village.Feed.Next(village.Engine));
+            }
+        }
+        Assert.True(carried);
+        Assert.NotEmpty(paths);
+
+        // past dusk the fires burn
+        for (var tick = 0; tick < 30 * 60 * VillageFeed.TicksPerSecond; tick++)
+        {
+            village.Run(1);
+            Follow(village.Feed.Next(village.Engine));
+        }
+        Assert.Contains(fires.Values, strength => strength > 0);
+        var now = village.Feed.Join(village.Engine);
+        Assert.Equal(now.Fires.ToDictionary(item => item.Structure, item => item.Strength), fires);
+        Assert.Equal(fire.All.Select(item => new FireView(item.Structure, item.Strength)), now.Fires);
+        Assert.Equal(day.Paths.Select(Flat).Order(), now.Map.Paths!.Order());
+        Assert.Equal(now.Map.Paths!.Order(), paths.Order());
+
+        // days later, nobody walked there: the paths grow over
+        village.Time.Advance(TimeSpan.FromDays(3));
+        village.Run(1);
+        Follow(village.Feed.Next(village.Engine));
+        Assert.Equal(day.Paths.Select(Flat).Order(), paths.Order());
+        Assert.True(paths.Count < now.Map.Paths!.Count);
     }
 
     /// <summary>Where a move has someone at a tick, and whether he is inside then.</summary>

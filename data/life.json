@@ -9,7 +9,7 @@
   "happiness": {
     "base": 50,
     "maxStepPerHour": 3,
-    "leisure": ["leisure", "visit"],
+    "leisure": ["leisure", "visit", "help"],
     "reasons": {
       "home": { "plus": 15, "minus": -25, "nl": "een huis", "en": "a home" },
       "food": { "plus": 10, "minus": -20, "nl": "eten", "en": "food" },

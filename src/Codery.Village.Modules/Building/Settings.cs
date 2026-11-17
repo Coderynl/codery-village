@@ -18,7 +18,9 @@ public sealed record BuildingSettings(
     // the blueprint that stands finished on every ordinary island from the start, where it gathers while nothing serves the gathering label
     string? Fireplace = null,
     // a moved thing in someone's way goes back within so many minutes
-    int PutBackMinutes = 5);
+    int PutBackMinutes = 5,
+    // what a helper does at a site, as a share of a builder
+    double HelpShare = 0.5);
 
 /// <summary>How an island decides what to build.</summary>
 public sealed record CommunitySettings(

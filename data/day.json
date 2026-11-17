@@ -3,6 +3,23 @@
   "lateMinutes": 60,
   "outside": { "always": 1, "byDay": 3, "dayFrom": "08:00", "dayTo": "18:00" },
   "night": { "from": "22:00", "to": "06:00" },
+  "dusk": ["16:50", "17:45", "18:35", "20:25", "21:15", "21:55", "21:50", "21:05", "19:55", "18:50", "16:55", "16:30"],
+  "dawn": ["08:40", "08:00", "07:05", "06:55", "05:55", "05:20", "05:35", "06:20", "07:15", "08:05", "08:05", "08:40"],
+  "fireFeedMinutes": 120,
+  "fireReserveDays": 1,
+  "fireSmoulderMinutes": 180,
+  "fireFuel": "heat",
+  "outings": [
+    { "to": "fire", "weight": 2 },
+    { "to": "water", "weight": 3 },
+    { "to": "tree", "weight": 2 },
+    { "to": "neighbour", "weight": 2 }
+  ],
+  "helpFrom": 70,
+  "pathWindowDays": 3,
+  "pathThreshold": 60,
+  "pathKeep": 20,
+  "pathSpeed": 1.5,
   "evening": { "chance": 0.35, "perExtraversion": 0.4, "visit": 0.4 },
   "free": [
     { "do": "leisure", "weight": 3 },

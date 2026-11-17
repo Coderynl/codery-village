@@ -12,6 +12,7 @@ using Codery.Village.Modules.Wishes;
 using BuildingModule = Codery.Village.Modules.Building.Building;
 using Calendar = Codery.Village.Core.Time.Calendar;
 using DayModule = Codery.Village.Modules.Day.Day;
+using FireModule = Codery.Village.Modules.Fire.Fire;
 using HappinessModule = Codery.Village.Modules.Happiness.Happiness;
 using PeopleModule = Codery.Village.Modules.People.People;
 using TalkModule = Codery.Village.Modules.Talk.Talk;
@@ -45,6 +46,8 @@ public sealed class VillageFeed
     private readonly Dictionary<int, Person> _people = [];
     private readonly Dictionary<int, (int Phase, int Progress, bool Done)> _sites = [];
     private readonly Dictionary<int, int> _things = [];
+    private readonly Dictionary<int, int> _fires = [];
+    private readonly HashSet<int> _paths = [];
     private CalendarView? _calendarSent;
     private TaskView? _task;
     // the number of the first log line not passed on yet, and the last conversation passed on
@@ -74,7 +77,7 @@ public sealed class VillageFeed
         var now = Now.Of(engine);
         return new JoinMessage(
             Protocol.Version,
-            _view,
+            _view with { Paths = [.. Paths(now).Order()] },
             [.. People(now).Select(item => item.Person)],
             [.. Moves(now)],
             [.. Sites(now)],
@@ -83,7 +86,8 @@ public sealed class VillageFeed
             Task(now),
             History(engine),
             engine.Tick,
-            TicksPerSecond);
+            TicksPerSecond,
+            [.. Fires(now)]);
     }
 
     /// <summary>What changed since the last call, with what residents said besides their conversations.</summary>
@@ -143,6 +147,25 @@ public sealed class VillageFeed
             (things ??= []).Add(thing);
         }
 
+        List<FireView>? fires = null;
+        foreach (var fire in Fires(now))
+        {
+            if (_fires.TryGetValue(fire.Structure, out var strength) && strength == fire.Strength) continue;
+            _fires[fire.Structure] = fire.Strength;
+            (fires ??= []).Add(fire);
+        }
+
+        List<int>? paths = null;
+        List<int>? pathsGone = null;
+        var worn = Paths(now).ToHashSet();
+        if (!worn.SetEquals(_paths))
+        {
+            paths = [.. worn.Where(cell => !_paths.Contains(cell)).Order()];
+            pathsGone = [.. _paths.Where(cell => !worn.Contains(cell)).Order()];
+            _paths.Clear();
+            _paths.UnionWith(worn);
+        }
+
         var calendar = Calendar();
         var newQuarter = calendar != _calendarSent;
         _calendarSent = calendar;
@@ -168,7 +191,8 @@ public sealed class VillageFeed
         _logged = engine.LogEnd;
 
         return new TickMessage(engine.Tick, moves, people, left, sites, gone, things,
-            newQuarter ? calendar : null, newTask ? task : null, noTask ? true : null, spoken, events);
+            newQuarter ? calendar : null, newTask ? task : null, noTask ? true : null, spoken, events,
+            fires, paths is { Count: > 0 } ? paths : null, pathsGone is { Count: > 0 } ? pathsGone : null);
     }
 
     /// <summary>Takes the village as it is as the starting point: what is there now is not news.</summary>
@@ -180,6 +204,8 @@ public sealed class VillageFeed
         foreach (var (id, person) in People(now)) _people[id] = person;
         foreach (var site in Sites(now)) _sites[site.Id] = (site.Phase, site.Progress, site.Done);
         foreach (var thing in Things(now)) _things[thing.Id] = thing.Cell;
+        foreach (var fire in Fires(now)) _fires[fire.Structure] = fire.Strength;
+        _paths.UnionWith(Paths(now));
         _calendarSent = Calendar();
         _task = Task(now);
         _talked = now.Talk?.Recent.Select(conversation => conversation.Id).DefaultIfEmpty(0).Max() ?? 0;
@@ -214,7 +240,8 @@ public sealed class VillageFeed
                 happiness,
                 [.. resident.Traits.Notable().Select(trait => $"{trait.Trait}-{(trait.High ? "high" : "low")}")],
                 now.Wishes?.Of(resident) ?? [],
-                resident.IsEddie));
+                resident.IsEddie,
+                now.Building?.HomeOf(resident.Id) is { } home ? Flat(home) : null));
         }
     }
 
@@ -234,7 +261,7 @@ public sealed class VillageFeed
                 continue;
             }
             yield return doing.Walk is { } walk
-                ? new Move(resident.Id, [Flat(doing.At), .. walk.Cells.Select(Flat)], walk.StartTick, walk.TicksPerCell, Inside: false)
+                ? new Move(resident.Id, [Flat(doing.At), .. walk.Cells.Select(Flat)], walk.StartTick, walk.TicksPerCell, Inside: false, doing.Carry)
                 : new Move(resident.Id, [Flat(doing.At)], now.Tick, _ticksPerCell, doing.Inside);
         }
     }
@@ -249,6 +276,11 @@ public sealed class VillageFeed
             structure.Phases,
             Progress(structure),
             structure.Done)) ?? [];
+
+    private static IEnumerable<FireView> Fires(Now now) =>
+        now.Fire?.All.Select(fire => new FireView(fire.Structure, fire.Strength)) ?? [];
+
+    private IEnumerable<int> Paths(Now now) => now.Day?.Paths.Select(Flat) ?? [];
 
     private IEnumerable<Thing> Things(Now now) =>
         now.Building?.Things.Select(thing => new Thing(thing.Id, thing.Kind, Flat(thing.At))) ?? [];
@@ -292,7 +324,8 @@ public sealed class VillageFeed
     private static bool Same(Move sent, Move now) =>
         now.Cells.Count == 1
             ? sent.Cells[^1] == now.Cells[0] && sent.Inside == now.Inside
-            : sent.Start == now.Start && sent.TicksPerCell == now.TicksPerCell && sent.Inside == now.Inside && sent.Cells.SequenceEqual(now.Cells);
+            : sent.Start == now.Start && sent.TicksPerCell == now.TicksPerCell && sent.Inside == now.Inside && sent.Carry == now.Carry
+              && sent.Cells.SequenceEqual(now.Cells);
 
     private static bool Same(Person a, Person b) =>
         a with { Notable = b.Notable, Wishes = b.Wishes } == b && a.Notable.SequenceEqual(b.Notable) && a.Wishes.SequenceEqual(b.Wishes);
@@ -327,14 +360,14 @@ public sealed class VillageFeed
 
     /// <summary>The modules the feed reads, as they run now; a module that stopped is not there.</summary>
     private sealed record Now(long Tick, PeopleModule? People, DayModule? Day, IJobs? Jobs, BuildingModule? Building, WishesModule? Wishes,
-        HappinessModule? Happiness, TalkModule? Talk)
+        HappinessModule? Happiness, TalkModule? Talk, FireModule? Fire)
     {
         public static Now Of(Engine engine)
         {
             var running = engine.Running;
             return new Now(engine.Tick, running.OfType<PeopleModule>().FirstOrDefault(), running.OfType<DayModule>().FirstOrDefault(),
                 running.OfType<IJobs>().FirstOrDefault(), running.OfType<BuildingModule>().FirstOrDefault(), running.OfType<WishesModule>().FirstOrDefault(),
-                running.OfType<HappinessModule>().FirstOrDefault(), running.OfType<TalkModule>().FirstOrDefault());
+                running.OfType<HappinessModule>().FirstOrDefault(), running.OfType<TalkModule>().FirstOrDefault(), running.OfType<FireModule>().FirstOrDefault());
         }
     }
 

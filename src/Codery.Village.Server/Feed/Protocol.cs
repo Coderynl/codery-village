@@ -9,7 +9,8 @@ namespace Codery.Village.Server.Feed;
 
 /// <summary>
 /// What a page gets when it joins: the whole village as it stands. <see cref="Moves"/> says where everyone is,
-/// or which way he walks; <see cref="Log"/> holds the last lines of the diary, oldest first.
+/// or which way he walks; <see cref="Log"/> holds the last lines of the diary, oldest first. <see cref="Fires"/>
+/// (added to protocol 1) has every fireplace with how strong its fire burns.
 /// </summary>
 public sealed record JoinMessage(
     int Protocol,
@@ -22,12 +23,15 @@ public sealed record JoinMessage(
     TaskView? Task,
     IReadOnlyList<LogLine> Log,
     long Tick,
-    int TicksPerSecond);
+    int TicksPerSecond,
+    IReadOnlyList<FireView> Fires);
 
 /// <summary>
 /// What changed in one tick; what did not change is left out. <see cref="Left"/> and <see cref="Gone"/> are the
 /// residents and the buildings that are no longer there. <see cref="NoTask"/> is true when the open task closed
-/// and no other is open; a new task comes as <see cref="Task"/>.
+/// and no other is open; a new task comes as <see cref="Task"/>. Added to protocol 1: <see cref="Fires"/> has the
+/// fireplaces whose fire burns stronger or weaker than before, <see cref="Paths"/> the tiles that became a path and
+/// <see cref="PathsGone"/> the paths that grew over.
 /// </summary>
 public sealed record TickMessage(
     long Tick,
@@ -41,20 +45,25 @@ public sealed record TickMessage(
     TaskView? Task = null,
     bool? NoTask = null,
     IReadOnlyList<Said>? Said = null,
-    IReadOnlyList<FeedEvent>? Events = null);
+    IReadOnlyList<FeedEvent>? Events = null,
+    IReadOnlyList<FireView>? Fires = null,
+    IReadOnlyList<int>? Paths = null,
+    IReadOnlyList<int>? PathsGone = null);
 
 /// <summary>
 /// Where a resident goes: over <see cref="Cells"/>, the first being where he stands at <see cref="Start"/>, one
 /// tile per <see cref="TicksPerCell"/> ticks. A resident who stands still has one cell. <see cref="Inside"/>: he
-/// is inside a building there, out of sight.
+/// is inside a building there, out of sight. <see cref="Carry"/> (added to protocol 1): the material he carries
+/// on his back while he walks, by id, as on an errand to or from the store; left out when his hands are empty.
 /// </summary>
-public sealed record Move(int Person, IReadOnlyList<int> Cells, long Start, int TicksPerCell, bool Inside);
+public sealed record Move(int Person, IReadOnlyList<int> Cells, long Start, int TicksPerCell, bool Inside, string? Carry = null);
 
 /// <summary>
 /// A resident as a page shows him. <see cref="Sex"/> is <c>man</c> or <c>woman</c>, <see cref="Phase"/> <c>child</c>,
 /// <c>student</c>, <c>working</c> or <c>retired</c>, <see cref="Job"/> a role id of <see cref="MapView.Roles"/>.
 /// <see cref="Happiness"/> is rounded to 5. <see cref="Notable"/> holds the traits that stand out, as
 /// <c>openness-high</c> or <c>thrift-low</c>; <see cref="Wishes"/> the ids of his wishes in <see cref="MapView.Wishes"/>.
+/// <see cref="Home"/> (added to protocol 1) is the tile of the dwelling he lives in, left out when he has none.
 /// </summary>
 public sealed record Person(
     int Id,
@@ -67,13 +76,17 @@ public sealed record Person(
     int Happiness,
     IReadOnlyList<string> Notable,
     IReadOnlyList<string> Wishes,
-    bool Eddie);
+    bool Eddie,
+    int? Home = null);
 
 /// <summary>
 /// Something built, or going up. <see cref="Phase"/> is the index of the phase going on (equal to
 /// <see cref="Phases"/> when it is done); <see cref="Progress"/> goes from 0 to 100 within the phase, in steps of 10.
 /// </summary>
 public sealed record Site(int Id, string Blueprint, IReadOnlyList<int> Cells, int Rotation, int Phase, int Phases, int Progress, bool Done);
+
+/// <summary>The fire of a fireplace (a <see cref="Site"/> by its id) and how strong it burns: 0 is out, 3 is full.</summary>
+public sealed record FireView(int Structure, int Strength);
 
 /// <summary>A loose thing a visitor can move; <see cref="Kind"/> is an id of <see cref="MapView.Things"/>.</summary>
 public sealed record Thing(int Id, string Kind, int Cell);
@@ -99,6 +112,7 @@ public sealed record Said(int A, int? B, IReadOnlyList<string> Nl, IReadOnlyList
 /// <summary>
 /// The ground and what can stand on it. <see cref="Ground"/> has one letter per tile, row after row, as in
 /// <c>map.txt</c>. The names of roles, wishes and things are for what a page shows of a resident or a thing.
+/// <see cref="Paths"/> (added to protocol 1) has the tiles that are worn into a path when the page joins.
 /// </summary>
 public sealed record MapView(
     int Rows,
@@ -108,7 +122,8 @@ public sealed record MapView(
     IReadOnlyList<BlueprintView> Blueprints,
     IReadOnlyList<NameView> Roles,
     IReadOnlyList<NameView> Wishes,
-    IReadOnlyList<NameView> Things);
+    IReadOnlyList<NameView> Things,
+    IReadOnlyList<int>? Paths = null);
 
 /// <summary>An island and its tiles; <see cref="Eddie"/> for Eddie's islet.</summary>
 public sealed record IslandView(int Id, string Name, bool Eddie, IReadOnlyList<int> Cells);

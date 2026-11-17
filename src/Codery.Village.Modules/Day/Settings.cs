@@ -11,7 +11,26 @@ public sealed record DaySettings(
     // what someone does in a "free" block, by weight
     IReadOnlyList<FreeChoice> Free,
     // by name: toddler, pupil, student, day, early, night (the shifts), idle (no job), retired, eddie
-    IReadOnlyDictionary<string, Rhythm> Rhythms);
+    IReadOnlyDictionary<string, Rhythm> Rhythms,
+    // where free time and wandering go, by weight: a place where there is something
+    IReadOnlyList<OutingChoice>? Outings = null,
+    // from this agreeableness up, free time is spent helping at a building site of the island
+    int HelpFrom = 101,
+    // a tile with more than pathThreshold steps in the last pathWindowDays days is a path while it keeps more than pathKeep
+    int PathWindowDays = 3,
+    int PathThreshold = int.MaxValue,
+    int PathKeep = 0,
+    // a walk over a path goes this many times as fast
+    double PathSpeed = 1);
+
+/// <summary>A kind of place to go in free time, and how often it is chosen.</summary>
+public sealed record OutingChoice(Outing To, int Weight);
+
+/// <summary>
+/// A place where there is something: the island's fire, the water's edge, under a tree at the edge of a wood, or by
+/// the home of a neighbour.
+/// </summary>
+public enum Outing { Fire, Water, Tree, Neighbour }
 
 /// <summary>How many residents of an island are at least outside: always, and by day ("HH:mm", from up to).</summary>
 public sealed record OutsideRule(int Always, int ByDay, string DayFrom, string DayTo);
