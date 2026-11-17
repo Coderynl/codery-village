@@ -1,0 +1,57 @@
+{
+  "minMinutesBetween": 30,
+  "answerWithinMinutes": 5,
+  "keep": 20,
+  "maxLineChars": 120,
+  "models": { "conversation": "claude-haiku-5-5", "check": "claude-haiku-5-5" },
+  "maxTokens": { "conversation": 400, "check": 150 },
+  "extraInputTokens": 1000,
+  "prices": {
+    "claude-haiku-5-5": { "inputPerMillion": 0.10, "outputPerMillion": 0.50 }
+  },
+  "prompt": {
+    "conversation": "You write very short conversations between two residents of a village on a website. The village is fictional. It goes through the ages, from prehistory to the future, so keep the lines timeless: no machines, money or places the facts do not name. You get only these facts: the two names, their phase of life, their work, a few traits that stand out, and the topic. Do not invent other people, places or events. Write two to four short lines in Dutch, and the same conversation in two to four short lines in English. Each line starts with the speaker's name and a colon, for example 'Anna: ...'. Each line is at most 100 characters. Keep it friendly, light and everyday. Never write about violence, death, illness, sexual content, religion, discrimination, alcohol or drugs, and never about real politics, real people, real places or real brands. Answer only with JSON: {\"nl\": [lines], \"en\": [lines]}.",
+    "check": "You check a few lines of dialogue for a family-friendly website about a fictional village. Answer 'refuse' when the lines mention or hint at violence, death, illness, sexual content, religion, discrimination, alcohol or drugs, real politics, real people, real places or real brands, or when they are rude, unkind or not about everyday village life. Otherwise answer 'ok'. Give a short reason in English. Answer only with JSON: {\"verdict\": \"ok\" or \"refuse\", \"reason\": \"...\"}."
+  },
+  "words": {
+    "nl": [
+      "dood", "dode", "doden", "sterven", "sterft", "stierf", "moord*", "vermoord*", "doodslaan", "slaan", "sloeg", "vecht*", "gevecht*", "oorlog*", "wapen*", "mes", "messen", "zwaard*", "bloed*", "pijn",
+      "seks*", "sexy", "naakt", "bloot", "kus", "kussen", "verliefd",
+      "god", "goden", "kerk*", "bid", "bidden", "gebed*", "bijbel", "koran", "heilig*", "duivel*", "hel",
+      "dronken", "bier", "wijn", "drugs", "joint",
+      "lelijk", "dom", "stom", "idioot", "haat", "haten",
+      "verkiezing*", "partij", "politiek*", "minister*", "koning*", "president*"
+    ],
+    "en": [
+      "dead", "death", "die", "dies", "died", "dying", "kill*", "murder*", "fight*", "war", "wars", "weapon*", "knife", "knives", "sword*", "blood*", "hurt", "pain",
+      "sex*", "naked", "nude", "kiss*", "lover*",
+      "god", "gods", "church*", "pray*", "bible", "quran", "holy", "devil*", "hell",
+      "drunk", "beer", "wine", "drugs", "weed",
+      "ugly", "stupid", "idiot*", "hate", "hates",
+      "election*", "party", "politic*", "minister*", "king", "kings", "president*"
+    ]
+  },
+  "templates": {
+    "wish": [
+      { "nl": ["{a}: Zou het niet mooi zijn, {topic} hier?", "{b}: Dat zou ik ook wel willen."],
+        "en": ["{a}: Wouldn't {topic} be lovely here?", "{b}: I'd like that too."] },
+      { "nl": ["{b}: Ik dacht net weer aan {topic}.", "{a}: Ik ook. Misschien komt het er nog.", "{b}: Dat hoop ik maar."],
+        "en": ["{b}: I was just thinking about {topic} again.", "{a}: Me too. Maybe it will come.", "{b}: I hope so."] }
+    ],
+    "work": [
+      { "nl": ["{b}: Hoe was het vandaag, als {topic}?", "{a}: Druk, maar goed."],
+        "en": ["{b}: How was your day as {topic}?", "{a}: Busy, but good."] },
+      { "nl": ["{a}: Morgen weer aan de slag als {topic}.", "{b}: Jij doet het graag, hè?", "{a}: Elke dag."],
+        "en": ["{a}: Back to work as {topic} tomorrow.", "{b}: You enjoy it, don't you?", "{a}: Every day."] }
+    ],
+    "interest": [
+      { "nl": ["{b}: Nog tijd gehad voor {topic}?", "{a}: Een beetje. Het blijft leuk."],
+        "en": ["{b}: Had any time for {topic}?", "{a}: A little. It's still fun."] },
+      { "nl": ["{a}: Ik moet je iets vertellen over {topic}.", "{b}: Vertel!"],
+        "en": ["{a}: I have to tell you something about {topic}.", "{b}: Go on!"] }
+    ]
+  },
+  "log": {
+    "talked": { "nl": "{subject} maken een praatje.", "en": "{subject} have a chat." }
+  }
+}

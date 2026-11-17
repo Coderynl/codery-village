@@ -27,7 +27,7 @@ public class DataTests
     {
         var data = Base();
 
-        Assert.Equal(new[] { "building", "catalog", "day", "economy", "life", "people", "wishes" }, data.Names);
+        Assert.Equal(new[] { "building", "catalog", "day", "economy", "life", "people", "talk", "wishes" }, data.Names);
         Assert.Equal(new LifeSettings(2_419_200), data.Section<LifeSettings>("life"));
     }
 

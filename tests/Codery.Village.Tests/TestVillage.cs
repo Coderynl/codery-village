@@ -10,6 +10,7 @@ using Codery.Village.Modules.Happiness;
 using Codery.Village.Modules.People;
 using Codery.Village.Modules.Wishes;
 using Codery.Village.Modules.Work;
+using Talk = Codery.Village.Modules.Talk.Talk;
 
 namespace Codery.Village.Tests;
 
@@ -23,7 +24,7 @@ public static class TestVillage
 
     /// <summary>A fresh list of fresh modules on every call: modules hold state.</summary>
     public static IReadOnlyList<IModule> Modules() =>
-        [new DrawingModule("dice"), new CountingModule("counter"), new ChimingModule("bell"), new HearingModule("ear"), new LoggingModule("scribe"), new People(), new Day(), new Work(), new Building(), new Community(), new Wishes(), new Happiness()];
+        [new DrawingModule("dice"), new CountingModule("counter"), new ChimingModule("bell"), new HearingModule("ear"), new LoggingModule("scribe"), new People(), new Day(), new Work(), new Building(), new Community(), new Wishes(), new Happiness(), new Talk()];
 
     public static IslandMap Map() => MapText.Parse("""
         ~~~~~
@@ -42,6 +43,7 @@ public static class TestVillage
         ["economy"] = Section("economy"),
         ["building"] = Section("building"),
         ["wishes"] = Section("wishes"),
+        ["talk"] = Section("talk"),
     });
 
     private static string Section(string name) => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", name + ".json"));
