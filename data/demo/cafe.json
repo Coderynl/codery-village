@@ -1,4 +1,7 @@
 {
+  "roles": [
+    { "id": "host", "nl": "gastheer", "en": "host" }
+  ],
   "blueprints": [
     {
       "id": "cafe", "nl": "café", "en": "café", "on": ["lot", "land"], "serves": "cafe", "range": 8,

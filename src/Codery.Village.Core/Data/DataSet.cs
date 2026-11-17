@@ -32,25 +32,20 @@ public sealed partial class DataSet
     /// <summary>A data set from sections given as JSON text, by name.</summary>
     public DataSet(IReadOnlyDictionary<string, string> sections) : this(sections, []) { }
 
-    /// <summary>A data set from sections given as JSON text, by name, with releases (JSON text) added to the catalog.</summary>
-    public DataSet(IReadOnlyDictionary<string, string> sections, IEnumerable<string> releases)
+    private DataSet(IReadOnlyDictionary<string, string> sections, IEnumerable<string> extras)
     {
         _sections = sections.ToDictionary(section => section.Key, section => Parse(section.Value));
-        var added = releases.Select(release => JsonNode.Parse(release)).ToList();
+        var added = extras.Select(release => JsonNode.Parse(release)).ToList();
         if (added.Count > 0) AddReleases(added);
         Names = [.. _sections.Keys.Order(StringComparer.Ordinal)];
     }
 
     /// <summary>
-    /// Reads every <c>*.json</c> file in <paramref name="folder"/> as a section named after the file, and adds
-    /// each release in <paramref name="extras"/> to the catalog. The map and subfolders are not sections.
+    /// A data set from sections given as JSON text, by name, with each release in <paramref name="extras"/>
+    /// (JSON text) added to the catalog. The server reads the texts from disk (<c>DataFolder.Load</c>).
     /// </summary>
-    public static DataSet Load(string folder, IEnumerable<string> extras)
-    {
-        var sections = Directory.EnumerateFiles(folder, "*.json", SearchOption.TopDirectoryOnly)
-            .ToDictionary(path => Path.GetFileNameWithoutExtension(path), File.ReadAllText);
-        return new DataSet(sections, extras.Select(File.ReadAllText));
-    }
+    public static DataSet FromTexts(IReadOnlyDictionary<string, string> sections, IEnumerable<string> extras) =>
+        new(sections, extras);
 
     /// <summary>The names of the sections, in ordinal order.</summary>
     public IReadOnlyList<string> Names { get; }

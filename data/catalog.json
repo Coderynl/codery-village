@@ -10,6 +10,18 @@
     { "id": "peat", "nl": "turf", "en": "peat", "satisfies": ["heat"] },
     { "id": "fish", "nl": "vis", "en": "fish", "satisfies": ["food"] }
   ],
+  "roles": [
+    { "id": "woodcutter", "nl": "houthakker", "en": "woodcutter" },
+    { "id": "sawyer", "nl": "zager", "en": "sawyer" },
+    { "id": "farmer", "nl": "boer", "en": "farmer" },
+    { "id": "baker", "nl": "bakker", "en": "baker" },
+    { "id": "fisher", "nl": "visser", "en": "fisher" },
+    { "id": "quarrier", "nl": "steenhouwer", "en": "quarrier" },
+    { "id": "digger", "nl": "kleigraver", "en": "clay digger" },
+    { "id": "peat-cutter", "nl": "turfsteker", "en": "peat cutter" },
+    { "id": "brickmaker", "nl": "steenbakker", "en": "brickmaker" },
+    { "id": "stoker", "nl": "stoker", "en": "stoker" }
+  ],
   "blueprints": [
     {
       "id": "house", "nl": "huis", "en": "house", "on": ["lot"], "homes": 1,

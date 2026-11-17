@@ -6,11 +6,15 @@ namespace Codery.Village.Core.Data;
 /// <summary>What can be made, built and picked up: the section <c>catalog</c>. A release adds to these lists.</summary>
 public sealed record Catalog(
     IReadOnlyList<Material> Materials,
+    IReadOnlyList<Role> Roles,
     IReadOnlyList<Blueprint> Blueprints,
     IReadOnlyList<ThingKind> Things);
 
 /// <summary>A material in the island's stock. <see cref="Satisfies"/> names the needs it meets, such as <c>food</c>.</summary>
 public sealed record Material(string Id, string Nl, string En, IReadOnlyList<string>? Satisfies = null);
+
+/// <summary>A job a resident can have, named as a visitor reads it; <see cref="Job.Role"/> refers to it.</summary>
+public sealed record Role(string Id, string Nl, string En);
 
 /// <summary>A kind of loose object a visitor can pick up and move, such as a bench.</summary>
 public sealed record ThingKind(string Id, string Nl, string En);

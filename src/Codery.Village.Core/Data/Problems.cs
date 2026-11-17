@@ -4,7 +4,7 @@ public sealed partial class DataSet
 {
     /// <summary>
     /// What is wrong with the catalog and the wish list, one sentence each; empty when the data is sound.
-    /// Doubled ids, references to materials or wishes that do not exist, ticks and amounts that are not
+    /// Doubled ids, references to materials, roles or wishes that do not exist, ticks and amounts that are not
     /// positive, a blueprint without phases or look, a shape without its anchor, and a release that adds to a
     /// list the catalog does not have. The server does not start on data with a problem.
     /// </summary>
@@ -18,17 +18,19 @@ public sealed partial class DataSet
         if (catalog is null) return problems;
 
         problems.AddRange(Doubles("The catalog has the material", catalog.Materials.Select(material => material.Id)));
+        problems.AddRange(Doubles("The catalog has the role", catalog.Roles.Select(role => role.Id)));
         problems.AddRange(Doubles("The catalog has the blueprint", catalog.Blueprints.Select(blueprint => blueprint.Id)));
         problems.AddRange(Doubles("The catalog has the thing", catalog.Things.Select(thing => thing.Id)));
 
         var materials = catalog.Materials.Select(material => material.Id).ToHashSet();
+        var roles = catalog.Roles.Select(role => role.Id).ToHashSet();
         var labels = wishes?.Wishes.Select(wish => wish.Label).ToHashSet();
         foreach (var blueprint in catalog.Blueprints)
-            problems.AddRange(ProblemsOf(blueprint, materials, labels));
+            problems.AddRange(ProblemsOf(blueprint, materials, roles, labels));
         return problems;
     }
 
-    private static IEnumerable<string> ProblemsOf(Blueprint blueprint, IReadOnlySet<string> materials, IReadOnlySet<string>? labels)
+    private static IEnumerable<string> ProblemsOf(Blueprint blueprint, IReadOnlySet<string> materials, IReadOnlySet<string> roles, IReadOnlySet<string>? labels)
     {
         var owner = $"Blueprint '{blueprint.Id}'";
         if (blueprint.Phases.Count == 0) yield return $"{owner} has no phases.";
@@ -48,7 +50,10 @@ public sealed partial class DataSet
         }
 
         foreach (var job in blueprint.Jobs ?? [])
+        {
+            if (!roles.Contains(job.Role)) yield return $"{owner} has a job for the unknown role '{job.Role}'.";
             if (job.Count <= 0) yield return $"{owner} has places for {job.Count} {job.Role}; a job has at least 1.";
+        }
         if (blueprint.Homes is <= 0) yield return $"{owner} has {blueprint.Homes} homes; a dwelling has at least 1.";
         if (blueprint.Range is <= 0) yield return $"{owner} has range {blueprint.Range}; a range is at least 1.";
 

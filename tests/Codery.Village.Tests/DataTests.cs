@@ -2,15 +2,16 @@ using System.Text.Json;
 using Codery.Village.Core.Data;
 using Codery.Village.Core.Map;
 using Codery.Village.Core.Time;
+using Codery.Village.Server;
 
 namespace Codery.Village.Tests;
 
 public class DataTests
 {
     private static readonly string Folder = Path.Combine(AppContext.BaseDirectory, "data");
-    private static readonly string Cafe = Path.Combine(Folder, "demo", "cafe.json");
+    private const string Cafe = "demo/cafe.json";
 
-    private static DataSet Base() => DataSet.Load(Folder, []);
+    private static DataSet Base() => DataFolder.Load(Folder, []);
 
     private static Catalog CatalogOf(DataSet data) => data.Section<Catalog>("catalog");
 
@@ -18,7 +19,7 @@ public class DataTests
     public void The_data_has_no_problems()
     {
         Assert.Empty(Base().Problems());
-        Assert.Empty(DataSet.Load(Folder, [Cafe]).Problems());
+        Assert.Empty(DataFolder.Load(Folder, [Cafe]).Problems());
     }
 
     [Fact]
@@ -75,11 +76,12 @@ public class DataTests
     public void A_release_adds_without_changing()
     {
         var before = CatalogOf(Base());
-        var after = CatalogOf(DataSet.Load(Folder, [Cafe]));
+        var after = CatalogOf(DataFolder.Load(Folder, [Cafe]));
 
         var cafe = Assert.Single(after.Blueprints, blueprint => blueprint.Serves == "cafe");
         Assert.DoesNotContain(before.Blueprints, blueprint => blueprint.Id == cafe.Id);
         Assert.Equal(Json(before.Materials), Json(after.Materials.Take(before.Materials.Count)));
+        Assert.Equal(Json(before.Roles), Json(after.Roles.Take(before.Roles.Count)));
         Assert.Equal(Json(before.Blueprints), Json(after.Blueprints.Take(before.Blueprints.Count)));
         Assert.Equal(Json(before.Things), Json(after.Things.Take(before.Things.Count)));
     }
@@ -95,17 +97,20 @@ public class DataTests
     private static string Hut(string phases = $"[{Phase}]", string look = Look, string more = "") =>
         $$"""{ "id": "hut", "nl": "hut", "en": "hut", "on": ["land"], "phases": {{phases}}, "look": {{look}}{{more}} }""";
 
-    private static string Catalog(string? blueprints = null, string materials = Materials, string things = "[]") =>
-        $$"""{ "materials": {{materials}}, "blueprints": {{blueprints ?? $"[{Hut()}]"}}, "things": {{things}} }""";
+    private const string Roles = """[{ "id": "carpenter", "nl": "timmerman", "en": "carpenter" }]""";
+
+    private static string Catalog(string? blueprints = null, string materials = Materials, string things = "[]", string roles = Roles) =>
+        $$"""{ "materials": {{materials}}, "roles": {{roles}}, "blueprints": {{blueprints ?? $"[{Hut()}]"}}, "things": {{things}} }""";
 
     private static DataSet Small(string catalog, string wishes = Wishes, params string[] releases) =>
-        new(new Dictionary<string, string> { ["catalog"] = catalog, ["wishes"] = wishes }, releases);
+        DataSet.FromTexts(new Dictionary<string, string> { ["catalog"] = catalog, ["wishes"] = wishes }, releases);
 
     [Fact]
     public void The_small_catalog_has_no_problems()
     {
         Assert.Empty(Small(Catalog()).Problems());
         Assert.Empty(Small(Catalog($"[{Hut(more: """, "serves": "cafe", "range": 4""")}]")).Problems());
+        Assert.Empty(Small(Catalog($"[{Hut(more: """, "jobs": [{ "role": "carpenter", "count": 1, "shift": "night", "outdoor": false }]""")}]")).Problems());
     }
 
     public static TheoryData<string, string, string> Broken => new()
@@ -114,7 +119,9 @@ public class DataTests
         { Catalog($"[{Hut()}, {Hut()}]"), Wishes, "blueprint 'hut' twice" },
         { Catalog(things: """[{ "id": "bench", "nl": "bank", "en": "bench" }, { "id": "bench", "nl": "bank", "en": "bench" }]"""), Wishes, "thing 'bench' twice" },
         { Catalog(), """{ "wishes": [{ "id": "cafe", "nl": "café", "en": "café", "label": "cafe" }, { "id": "cafe", "nl": "café", "en": "café", "label": "cafe" }] }""", "wish 'cafe' twice" },
+        { Catalog(roles: $"[{Roles[1..^1]}, {Roles[1..^1]}]"), Wishes, "role 'carpenter' twice" },
         { Catalog($"[{Hut($"[{Phase}, {Phase}]")}]"), Wishes, "phase 'frame' twice" },
+        { Catalog($"[{Hut(more: """, "jobs": [{ "role": "juggler", "count": 1, "shift": "day", "outdoor": false }]""")}]"), Wishes, "unknown role 'juggler'" },
         { Catalog($"[{Hut("""[{ "id": "frame", "ticks": 10, "cost": { "gold": 1 } }]""")}]"), Wishes, "unknown material 'gold'" },
         { Catalog($"[{Hut(more: """, "recipe": { "in": { "gold": 1 }, "out": { "wood": 1 }, "ticks": 5 }""")}]"), Wishes, "unknown material 'gold'" },
         { Catalog($"[{Hut(more: """, "recipe": { "in": {}, "out": { "gold": 1 }, "ticks": 5 }""")}]"), Wishes, "unknown material 'gold'" },
@@ -149,7 +156,7 @@ public class DataTests
     [Fact]
     public void Missing_sections_are_problems()
     {
-        var problems = new DataSet(new Dictionary<string, string>()).Problems();
+        var problems = DataSet.FromTexts(new Dictionary<string, string>(), []).Problems();
 
         Assert.Equal(2, problems.Count);
         Assert.Contains(problems, problem => problem.Contains("'catalog'"));
