@@ -1,1 +1,9 @@
-{ "ticksPerLifeYear": 2419200 }
+{
+  "ticksPerLifeYear": 2419200,
+  "schoolFrom": 6,
+  "workFrom": 18,
+  "retireFrom": 67,
+  "studyYears": 3,
+  "retiredYears": 3,
+  "eddieAge": 35
+}

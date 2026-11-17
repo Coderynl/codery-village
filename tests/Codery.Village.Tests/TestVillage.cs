@@ -3,6 +3,7 @@ using Codery.Village.Core;
 using Codery.Village.Core.Data;
 using Codery.Village.Core.Map;
 using Codery.Village.Core.Modules;
+using Codery.Village.Modules.People;
 
 namespace Codery.Village.Tests;
 
@@ -16,7 +17,7 @@ public static class TestVillage
 
     /// <summary>A fresh list of fresh modules on every call: modules hold state.</summary>
     public static IReadOnlyList<IModule> Modules() =>
-        [new DrawingModule("dice"), new CountingModule("counter"), new ChimingModule("bell"), new HearingModule("ear"), new LoggingModule("scribe")];
+        [new DrawingModule("dice"), new CountingModule("counter"), new ChimingModule("bell"), new HearingModule("ear"), new LoggingModule("scribe"), new People()];
 
     public static IslandMap Map() => MapText.Parse("""
         ~~~~~
@@ -25,10 +26,14 @@ public static class TestVillage
         island 1 1 Proef
         """);
 
+    /// <summary>The real sections the modules in <see cref="Modules"/> read.</summary>
     public static DataSet Data() => new(new Dictionary<string, string>
     {
-        ["life"] = """{ "ticksPerLifeYear": 2419200 }""",
+        ["life"] = Section("life"),
+        ["people"] = Section("people"),
     });
+
+    private static string Section(string name) => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", name + ".json"));
 }
 
 /// <summary>Writes its name to a shared list on every tick.</summary>
