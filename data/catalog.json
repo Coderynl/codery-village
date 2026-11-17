@@ -20,7 +20,9 @@
     { "id": "digger", "nl": "kleigraver", "en": "clay digger" },
     { "id": "peat-cutter", "nl": "turfsteker", "en": "peat cutter" },
     { "id": "brickmaker", "nl": "steenbakker", "en": "brickmaker" },
-    { "id": "stoker", "nl": "stoker", "en": "stoker" }
+    { "id": "stoker", "nl": "stoker", "en": "stoker" },
+    { "id": "builder", "nl": "bouwvakker", "en": "builder" },
+    { "id": "developer", "nl": "ontwikkelaar", "en": "developer" }
   ],
   "blueprints": [
     {

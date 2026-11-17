@@ -1,0 +1,41 @@
+{
+  "wagePerHour": 600,
+  "allowancePerDay": 300,
+  "pensionPerDay": 2400,
+  "spendPercent": 20,
+  "upkeepPerDay": 300,
+  "startSubsidy": 20000,
+  "subsidyDamping": 15,
+  "builders": 3,
+  "builderRole": "builder",
+  "builderShift": "day",
+  "eddieRole": "developer",
+  "eddieWorkshop": "eddie-workshop",
+  "forestRegrowTicks": 43200,
+  "forestRange": 3,
+  "needs": {
+    "food": { "perPerson": 1 },
+    "heat": { "perHousehold": 1 }
+  },
+  "prices": { "bread": 1200, "fish": 1200, "wood": 500, "peat": 500 },
+  "fits": {
+    "builder": ["crafts", "technology", "numbers"],
+    "woodcutter": ["nature", "walking"],
+    "sawyer": ["crafts", "technology"],
+    "farmer": ["gardening", "animals", "nature"],
+    "baker": ["cooking"],
+    "fisher": ["fishing"],
+    "quarrier": ["walking", "puzzles"],
+    "digger": ["gardening", "history"],
+    "peat-cutter": ["nature", "history"],
+    "brickmaker": ["crafts", "art"],
+    "stoker": ["stars", "reading"]
+  },
+  "start": {
+    "cash": 100000,
+    "stock": {
+      "West": { "wood": 40, "planks": 40, "bread": 40 },
+      "Oost": { "stone": 45, "bricks": 20, "fish": 40, "peat": 20 }
+    }
+  }
+}
