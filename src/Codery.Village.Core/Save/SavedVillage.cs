@@ -22,8 +22,11 @@ public sealed record SavedVillage(
     public const int CurrentFormat = 1;
 }
 
-/// <summary>A module's part: what its <c>Save</c> gave, at its version, and where its random stream stood.</summary>
-public sealed record SavedModule(string Name, int Version, ulong Random, JsonNode Data);
+/// <summary>
+/// A module's part: what its <c>Save</c> gave, at its version, and where its random stream stood.
+/// <paramref name="Stopped"/>: the module had stopped; it stays stopped after a load until a newer version takes the part up.
+/// </summary>
+public sealed record SavedModule(string Name, int Version, ulong Random, JsonNode Data, bool Stopped = false);
 
 /// <summary>An event waiting for the next tick; <paramref name="Type"/> is the name of its record.</summary>
 public sealed record SavedEvent(string Type, JsonNode Data);

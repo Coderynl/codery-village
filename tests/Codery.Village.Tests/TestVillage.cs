@@ -77,10 +77,10 @@ public sealed class ListeningModule(string name) : IModule
 }
 
 /// <summary>Throws on one tick; counts the ticks it did.</summary>
-public sealed class FailingModule(string name, long failOnTick) : IModule
+public sealed class FailingModule(string name, long failOnTick, int version = 1) : IModule
 {
     public string Name => name;
-    public int Version => 1;
+    public int Version => version;
     public int Steps { get; private set; }
     public void Start(ModuleContext village) { }
     public void Step(ModuleContext village)
@@ -274,4 +274,31 @@ public sealed class UnsaveableModule(string name) : IModule
     public void Step(ModuleContext village) => Steps++;
     public JsonNode Save() => throw new InvalidOperationException("the drawer is stuck");
     public void Load(ModuleContext village, JsonNode data, int version) { }
+}
+
+/// <summary>Saves well until it is told to break; then its Save throws.</summary>
+public sealed class FlakyModule(string name, int version = 1) : IModule
+{
+    public string Name => name;
+    public int Version => version;
+    public bool Broken { get; set; }
+    public bool Started { get; private set; }
+    public int Steps { get; private set; }
+    public void Start(ModuleContext village) => Started = true;
+    public void Step(ModuleContext village) => Steps++;
+    public JsonNode Save() => Broken ? throw new InvalidOperationException("the drawer is stuck") : new JsonObject { ["steps"] = Steps };
+    public void Load(ModuleContext village, JsonNode data, int version) => Steps = (int)data["steps"]!;
+}
+
+/// <summary>Notes how far the counter got, as it finds it when it starts and when it loads.</summary>
+public sealed class GreeterModule(string name) : IModule
+{
+    public string Name => name;
+    public int Version => 1;
+    public long? AtStart { get; private set; } = -1;
+    public long? AtLoad { get; private set; } = -1;
+    public void Start(ModuleContext village) => AtStart = village.Find<CountingModule>()?.Count;
+    public void Step(ModuleContext village) { }
+    public JsonNode Save() => new JsonObject();
+    public void Load(ModuleContext village, JsonNode data, int version) => AtLoad = village.Find<CountingModule>()?.Count;
 }

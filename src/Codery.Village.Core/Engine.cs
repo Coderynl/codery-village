@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Codery.Village.Core.Data;
 using Codery.Village.Core.Map;
 using Codery.Village.Core.Modules;
@@ -30,10 +29,14 @@ public sealed class Engine
     // the events the modules can publish, by the name of their record, in the order of that name
     private readonly SortedDictionary<string, Type> _events;
     private readonly List<LogEntry> _log = [];
-    // parts of a loaded save that no module took up: kept as they were, in every save after
+    // parts of a loaded save without a module: kept as they were, at the end of every save after
     private readonly List<SavedModule> _dormant = [];
-    // modules whose part is dormant: they neither run nor save
-    private readonly HashSet<IModule> _asleep = [];
+    // per module, a part it holds instead of running: its Load threw, or it was saved stopped; saved as it was
+    private readonly SavedModule?[] _held;
+    // per module, the last part it saved or loaded; saved in its place when its Save throws
+    private readonly SavedModule?[] _lastGood;
+    // per module, what its Save last threw, so the log says it once
+    private readonly string?[] _unsaved;
     private IReadOnlyList<VillageEvent> _received = [];
     private List<VillageEvent> _published = [];
 
@@ -49,6 +52,9 @@ public sealed class Engine
         _events = EventTypes(modules);
         _clocks = new Clocks(new Calendar(time), new LifeClock(data.Section<LifeSettings>("life").TicksPerLifeYear));
         _contexts = [.. modules.Select(module => new ModuleContext(this, _clocks, map, data, Rng.For(seed, module.Name)))];
+        _held = new SavedModule?[modules.Count];
+        _lastGood = new SavedModule?[modules.Count];
+        _unsaved = new string?[modules.Count];
     }
 
     /// <summary>The tick the village is at; 0 before the first step.</summary>
@@ -107,8 +113,9 @@ public sealed class Engine
     // ── saving and loading ──
 
     /// <summary>
-    /// The village as it stands. A stopped module keeps its part; a running module that throws while saving
-    /// is stopped and left out, so it starts afresh when the save is loaded.
+    /// The village as it stands. A stopped module keeps its part, marked stopped. A module whose Save throws
+    /// is stopped and its last good part is saved in its place; when it never saved, it is left out, and
+    /// starts afresh when the save is loaded.
     /// </summary>
     public SavedVillage Save()
     {
@@ -116,20 +123,28 @@ public sealed class Engine
         for (var i = 0; i < _modules.Count; i++)
         {
             var module = _modules[i];
-            if (_asleep.Contains(module)) continue;
-            JsonNode data;
+            if (_held[i] is { } held)
+            {
+                parts.Add(Copy(held));
+                continue;
+            }
+            var running = _running.Contains(module);
             try
             {
-                data = module.Save().DeepClone();
+                var part = new SavedModule(module.Name, module.Version, _contexts[i].Random.State, module.Save().DeepClone(), Stopped: !running);
+                _lastGood[i] = part;
+                _unsaved[i] = null;
+                parts.Add(Copy(part));
             }
             catch (Exception e)
             {
-                if (_running.Contains(module)) Stop(module, e);
-                continue;
+                if (_unsaved[i] != e.Message) Note(new LogEntry(Tick, "module-not-saved", module.Name, e.Message));
+                _unsaved[i] = e.Message;
+                if (running) Stop(module, e);
+                if (_lastGood[i] is { } last) parts.Add(Copy(last) with { Stopped = true });
             }
-            parts.Add(new SavedModule(module.Name, module.Version, _contexts[i].Random.State, data));
         }
-        parts.AddRange(_dormant.Select(part => part with { Data = part.Data.DeepClone() }));
+        parts.AddRange(_dormant.Select(Copy));
 
         return new SavedVillage(
             SavedVillage.CurrentFormat,
@@ -142,12 +157,15 @@ public sealed class Engine
             [.. _log]);
     }
 
+    private static SavedModule Copy(SavedModule part) => part with { Data = part.Data.DeepClone() };
+
     /// <summary>
     /// Takes up a saved village. The tick and the log come from the save, the calendar from
-    /// <paramref name="time"/>. Every module with a part gets <see cref="IModule.Load"/> at the part's version
-    /// and its random stream back; a module without a part gets <see cref="IModule.Start"/>. A part that no
-    /// module takes up, because there is none or its <c>Load</c> throws, sleeps: it stays as it was in every
-    /// save after. An event whose record is not known any more is dropped.
+    /// <paramref name="time"/>. First every module with a part gets <see cref="IModule.Load"/> at the part's
+    /// version and its random stream back; then every module without a part gets <see cref="IModule.Start"/>.
+    /// A part saved stopped stays stopped, unless the module is now at a newer version. A part that no module
+    /// takes up, because there is none or its <c>Load</c> throws, sleeps: it stays as it was in every save
+    /// after. An event whose record is not known any more is dropped.
     /// </summary>
     public static Engine Load(SavedVillage saved, IReadOnlyList<IModule> modules, DataSet data, IslandMap map, TimeProvider time)
     {
@@ -172,44 +190,72 @@ public sealed class Engine
             else _published.Add(e);
         }
 
-        var sleeping = new HashSet<string>(saved.Modules.Select(part => part.Name));
+        // a module runs again once it has its part, or has started: no module finds one that has neither
+        _running.Clear();
+        var fresh = new List<int>();
         for (var i = 0; i < _modules.Count; i++)
         {
             var module = _modules[i];
             var part = saved.Modules.FirstOrDefault(part => part.Name == module.Name);
             if (part is null)
             {
-                // a module that is new to this village
-                try
-                {
-                    module.Start(_contexts[i]);
-                }
-                catch (Exception e)
-                {
-                    Stop(module, e);
-                }
+                fresh.Add(i);
                 continue;
             }
 
             _contexts[i].Random = new Rng(part.Random);
+            if (part.Stopped && module.Version <= part.Version)
+            {
+                _held[i] = Copy(part);
+                continue;
+            }
             try
             {
                 module.Load(_contexts[i], part.Data.DeepClone(), part.Version);
-                sleeping.Remove(module.Name);
+                _lastGood[i] = Copy(part) with { Stopped = false };
+                Wake(i);
             }
             catch (Exception e)
             {
-                _running.Remove(module);
-                _asleep.Add(module);
+                _held[i] = Copy(part);
                 Note(new LogEntry(Tick, "module-dormant", module.Name, e.Message));
             }
         }
 
-        foreach (var part in saved.Modules.Where(part => sleeping.Contains(part.Name)))
+        // modules that are new to this village
+        foreach (var i in fresh)
         {
-            _dormant.Add(part with { Data = part.Data.DeepClone() });
-            if (!_modules.Any(module => module.Name == part.Name)) Note(new LogEntry(Tick, "module-dormant", part.Name));
+            Wake(i);
+            try
+            {
+                _modules[i].Start(_contexts[i]);
+            }
+            catch (Exception e)
+            {
+                Stop(_modules[i], e);
+            }
         }
+
+        foreach (var part in saved.Modules.Where(part => !_modules.Any(module => module.Name == part.Name)))
+        {
+            _dormant.Add(Copy(part));
+            Note(new LogEntry(Tick, "module-dormant", part.Name));
+        }
+    }
+
+    // back among the running modules, in the order of the list
+    private void Wake(int index)
+    {
+        var at = 0;
+        while (at < _running.Count && Position(_running[at]) < index) at++;
+        _running.Insert(at, _modules[index]);
+    }
+
+    private int Position(IModule module)
+    {
+        for (var i = 0; i < _modules.Count; i++)
+            if (ReferenceEquals(_modules[i], module)) return i;
+        return -1;
     }
 
     private (VillageEvent? Event, string? Problem) Read(SavedEvent saved)

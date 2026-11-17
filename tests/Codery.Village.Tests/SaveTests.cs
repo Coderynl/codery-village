@@ -147,6 +147,7 @@ public class SaveTests
         Assert.Contains("version 0", line.Detail);
         var again = loaded.Save();
         Assert.Equal(Json(old), Json(Part(again, "ledger")));
+        Assert.Equal(["ledger", "counter"], again.Modules.Select(part => part.Name));
         Assert.Equal(20, (long)Part(again, "counter").Data["count"]!);
     }
 
@@ -195,20 +196,41 @@ public class SaveTests
     }
 
     [Fact]
-    public void A_stopped_module_keeps_its_part_and_runs_again_after_loading()
+    public void A_stopped_module_stays_stopped_after_loading()
     {
-        var engine = Started([new FailingModule("wheel", 3)], 5);
+        var engine = Started([new FailingModule("wheel", 3), new CountingModule("counter")], 5);
+        var saved = engine.Save();
+        Assert.True(Part(saved, "wheel").Stopped);
+        Assert.False(Part(saved, "counter").Stopped);
         var wheel = new FailingModule("wheel", 3);
 
-        var loaded = Load(Written(engine.Save()), [wheel]);
+        var loaded = Load(Written(saved), [wheel, new CountingModule("counter")]);
+        Run(engine, 100);
+        Run(loaded, 100);
+
+        Assert.Equal(0, wheel.Steps);
+        Assert.DoesNotContain(wheel, loaded.Running);
+        Assert.Equal(SaveJson.ToJson(engine.Save()), SaveJson.ToJson(loaded.Save()));
+    }
+
+    [Fact]
+    public void A_stopped_module_wakes_up_in_a_newer_version()
+    {
+        var saved = Started([new FailingModule("wheel", 3)], 5).Save();
+        var wheel = new FailingModule("wheel", 3, version: 2);
+
+        var loaded = Load(Written(saved), [wheel]);
         loaded.Step();
 
         Assert.Equal(3, wheel.Steps);
         Assert.Equal([wheel], loaded.Running);
+        var part = Part(loaded.Save(), "wheel");
+        Assert.False(part.Stopped);
+        Assert.Equal(2, part.Version);
     }
 
     [Fact]
-    public void A_module_that_cannot_save_is_stopped_and_left_out()
+    public void A_module_that_never_saved_is_stopped_and_left_out()
     {
         var stuck = new UnsaveableModule("stuck");
         var engine = Started([stuck, new CountingModule("counter")], 3);
@@ -220,6 +242,59 @@ public class SaveTests
         Assert.Contains(engine.Log, entry => entry is { Kind: "module-stopped", Subject: "stuck" });
         engine.Step();
         Assert.Equal(3, stuck.Steps);
+    }
+
+    [Fact]
+    public void A_module_that_stops_saving_keeps_its_last_good_part()
+    {
+        var flaky = new FlakyModule("flaky");
+        var engine = Started([flaky, new CountingModule("counter")], 3);
+        var good = engine.Save();
+        Run(engine, 2);
+        flaky.Broken = true;
+
+        engine.Save();
+        var saved = engine.Save();
+
+        var part = Part(saved, "flaky");
+        Assert.Equal(3, (int)part.Data["steps"]!);
+        Assert.Equal(Json(Part(good, "flaky") with { Stopped = true }), Json(part));
+        Assert.DoesNotContain(flaky, engine.Running);
+        Assert.Single(engine.Log, entry => entry is { Kind: "module-not-saved", Subject: "flaky", Detail: "the drawer is stuck" });
+
+        // the same version: the part stays as it was, and nothing starts afresh
+        var same = new FlakyModule("flaky");
+        var loaded = Load(Written(saved), [same, new CountingModule("counter")]);
+        Assert.False(same.Started);
+        Assert.Equal(Json(part), Json(Part(loaded.Save(), "flaky")));
+
+        // a newer version takes up the last good part
+        var newer = new FlakyModule("flaky", version: 2);
+        Load(Written(saved), [newer, new CountingModule("counter")]).Step();
+        Assert.False(newer.Started);
+        Assert.Equal(4, newer.Steps);
+    }
+
+    [Fact]
+    public void Every_part_is_loaded_before_a_new_module_starts()
+    {
+        var saved = Started([new GreeterModule("greeter"), new CountingModule("counter")], 10).Save();
+        var newcomer = new GreeterModule("newcomer");
+
+        Load(Written(saved), [newcomer, new GreeterModule("greeter"), new CountingModule("counter")]);
+
+        Assert.Equal(10, newcomer.AtStart);
+    }
+
+    [Fact]
+    public void A_part_does_not_find_a_new_module_that_has_not_started()
+    {
+        var saved = Started([new GreeterModule("greeter")], 10).Save();
+        var greeter = new GreeterModule("greeter");
+
+        Load(Written(saved), [greeter, new CountingModule("counter")]);
+
+        Assert.Null(greeter.AtLoad);
     }
 
     [Fact]
