@@ -19,7 +19,12 @@ Een release mag gebruiken wat een eerdere toevoegt. Laad hem dus op de basis plu
 9. `stone-house.json` — stenen huis. Wens `house`. Na `quarry.json` en `brickworks.json`.
 10. `jetty.json` — vissteiger. Wens `jetty`. Na `quarry.json`.
 11. `cafe.json` — café. Wens `cafe`. Hangt nergens van af.
+12. `grapes.json` — wilde wijnranken (druiven, geplukt op vruchtbare grond). Wens `fruit`. Hangt nergens van af.
 
-Wat een eiland met een release kan, hangt af van zijn grond: Oost heeft geen bos en geen vruchtbare grond, dus geen houthakkerij, boerderij of bakkerij; West heeft geen rots, klei of visgrond.
+Wat een eiland met een release kan, hangt af van zijn grond: Oost heeft geen bos en geen vruchtbare grond, dus geen houthakkerij, boerderij, bakkerij of wijnranken; West heeft geen rots, klei of visgrond.
 
 De test `Every_release_serves_a_wish_and_loads` leidt per release af waar hij van afhangt, laadt hem daarop en controleert dat deze lijst elke release één keer noemt, na wat hij nodig heeft.
+
+## Wensen die op een release wachten
+
+Een wens met `after` telt pas als de geladen data (de basis plus de releases) elk genoemd id kent, een stof of een bouwsel. Zo brengt de ene release de volgende wens: met `grapes.json` kent het dorp druiven, en dan wensen bewoners `wine`. Geen release bedient wijn, dus dat wordt een taak voor Eddie. Een id in `after` dat nog nergens bestaat, is geen fout: een latere release van Eddie kan het brengen. Een lege `after` is wel een fout.

@@ -29,7 +29,8 @@ internal static class Builders
 
     /// <summary>The real data, changed as the test needs.</summary>
     public static DataSet Data(Action<JsonObject>? building = null, Action<JsonObject>? economy = null,
-        Action<JsonObject>? people = null, Action<JsonObject>? catalog = null, IEnumerable<string>? extras = null)
+        Action<JsonObject>? people = null, Action<JsonObject>? catalog = null, IEnumerable<string>? extras = null,
+        Action<JsonObject>? wishes = null, Action<JsonObject>? life = null)
     {
         JsonObject Read(string name) => JsonNode.Parse(File.ReadAllText(Path.Combine(Folder, name + ".json")))!.AsObject();
         var sections = new Dictionary<string, JsonObject>
@@ -40,8 +41,11 @@ internal static class Builders
             ["catalog"] = Read("catalog"),
             ["economy"] = Read("economy"),
             ["building"] = Read("building"),
+            ["wishes"] = Read("wishes"),
         };
         building?.Invoke(sections["building"]);
+        wishes?.Invoke(sections["wishes"]);
+        life?.Invoke(sections["life"]);
         economy?.Invoke(sections["economy"]);
         people?.Invoke(sections["people"]);
         catalog?.Invoke(sections["catalog"]);

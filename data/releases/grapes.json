@@ -1,0 +1,16 @@
+{
+  "materials": [
+    { "id": "grapes", "nl": "druiven", "en": "grapes" }
+  ],
+  "blueprints": [
+    {
+      "id": "wild-vines", "nl": "wilde wijnranken", "en": "wild vines", "on": ["fertile"], "serves": "fruit", "range": 10,
+      "jobs": [{ "role": "gatherer", "count": 2, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "grapes": 2 }, "ticks": 360 },
+      "phases": [
+        { "id": "clearing", "ticks": 200, "cost": {} }
+      ],
+      "look": { "form": "kit", "models": ["berry_bushes"] }
+    }
+  ]
+}

@@ -151,7 +151,7 @@ public class DataTests
         // the wishes for progress are each served by a release
         var served = Ladder.Files().SelectMany(release => CatalogOf(DataFolder.Load(Folder, Ladder.With(release))).Blueprints)
             .Select(blueprint => blueprint.Serves).OfType<string>().ToHashSet();
-        foreach (var label in new[] { "tools", "planks", "fields", "bread", "stone", "bricks", "house", "jetty", "cafe" })
+        foreach (var label in new[] { "tools", "planks", "fields", "bread", "stone", "bricks", "house", "jetty", "cafe", "fruit" })
             Assert.Contains(label, served);
     }
 
@@ -229,6 +229,7 @@ public class DataTests
         { Catalog($"[{Hut(more: """, "jobs": [{ "role": "carpenter", "count": 1, "shift": "evening", "outdoor": false }]""")}]"), Wishes, "catalog" },
         { "{}", Wishes, "catalog" },
         { Catalog(), """{ "wishes": [{ "id": "cafe", "nl": "café", "en": "café" }] }""", "'label'" },
+        { Catalog(), """{ "wishes": [{ "id": "cafe", "nl": "café", "en": "café", "label": "cafe", "after": [] }] }""", "empty 'after'" },
     };
 
     [Theory]
@@ -238,6 +239,15 @@ public class DataTests
         var problem = Assert.Single(Small(catalog, wishes).Problems());
 
         Assert.Contains(expected, problem);
+    }
+
+    [Fact]
+    public void A_wish_may_wait_for_what_no_data_knows_yet()
+    {
+        // a later release of Eddie may bring it
+        const string waiting = """{ "wishes": [{ "id": "cafe", "nl": "café", "en": "café", "label": "cafe", "after": ["something-to-come"] }] }""";
+
+        Assert.Empty(Small(Catalog(), waiting).Problems());
     }
 
     [Fact]

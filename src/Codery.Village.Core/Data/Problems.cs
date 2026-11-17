@@ -5,7 +5,8 @@ public sealed partial class DataSet
     /// <summary>
     /// What is wrong with the catalog and the wish list, one sentence each; empty when the data is sound.
     /// Doubled ids, references to materials, roles or wishes that do not exist, ticks and amounts that are not
-    /// positive, a blueprint without phases or look, a shape without its anchor, and a release that adds to a
+    /// positive, a blueprint without phases or look, a shape without its anchor, a wish with an empty <c>after</c>,
+    /// and a release that adds to a
     /// list the catalog does not have. The server does not start on data with a problem.
     /// </summary>
     public IReadOnlyList<string> Problems()
@@ -14,7 +15,12 @@ public sealed partial class DataSet
         var catalog = TryRead<Catalog>(CatalogName, problems);
         var wishes = TryRead<WishLabels>("wishes", problems);
         if (wishes is not null)
+        {
             problems.AddRange(Doubles("The wishes have the wish", wishes.Wishes.Select(wish => wish.Id)));
+            // an id after names may come with a later release, so only an empty list is wrong
+            problems.AddRange(wishes.Wishes.Where(wish => wish.After is { Count: 0 })
+                .Select(wish => $"The wish '{wish.Id}' has an empty 'after'; leave it out or name what it waits for."));
+        }
         if (catalog is null) return problems;
 
         problems.AddRange(Doubles("The catalog has the material", catalog.Materials.Select(material => material.Id)));
@@ -99,5 +105,5 @@ public sealed partial class DataSet
     // only what the problems need from wishes.json; the wishes module reads the rest
     private sealed record WishLabels(IReadOnlyList<WishLabel> Wishes);
 
-    private sealed record WishLabel(string Id, string Nl, string En, string Label);
+    private sealed record WishLabel(string Id, string Nl, string En, string Label, IReadOnlyList<string>? After = null);
 }
