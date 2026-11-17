@@ -20,6 +20,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\..\data\**\*" LinkBase="data" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Codery.Village.Core\Codery.Village.Core.csproj" />
     <ProjectReference Include="..\..\src\Codery.Village.Modules\Codery.Village.Modules.csproj" />
     <ProjectReference Include="..\..\src\Codery.Village.Server\Codery.Village.Server.csproj" />
