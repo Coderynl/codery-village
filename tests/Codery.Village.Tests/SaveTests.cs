@@ -40,6 +40,22 @@ public class SaveTests
 
     public static TheoryData<string> ModuleNames => [.. TestVillage.Modules().Select(module => module.Name)];
 
+    public static TheoryData<string> TestModuleNames => [.. TestVillage.TestModules().Select(module => module.Name)];
+
+    [Theory]
+    [MemberData(nameof(TestModuleNames))]
+    public void Every_test_module_round_trips(string name)
+    {
+        var original = Started(TestVillage.TestModules(), 2000);
+        var loaded = Load(Written(original.Save()), TestVillage.TestModules());
+
+        Run(original, 2000);
+        Run(loaded, 2000);
+
+        Assert.Equal(Json(Part(original.Save(), name)), Json(Part(loaded.Save(), name)));
+        Assert.Equal(SaveJson.ToJson(original.Save()), SaveJson.ToJson(loaded.Save()));
+    }
+
     [Theory]
     [MemberData(nameof(ModuleNames))]
     public void Every_module_round_trips(string name)

@@ -51,6 +51,7 @@
         "en": ["{a}: I have to tell you something about {topic}.", "{b}: Go on!"] }
     ]
   },
+  "hand": { "nl": "{name}: Hé, wie heeft de {thing} verzet?", "en": "{name}: Hey, who moved the {thing}?", "afterSeconds": 8 },
   "log": {
     "talked": { "nl": "{subject} maken een praatje.", "en": "{subject} have a chat." }
   }

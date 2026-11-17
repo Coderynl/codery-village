@@ -4,6 +4,7 @@
   "fireplace": "campfire",
   "thingsAtStart": 3,
   "thingsPerHouse": 1,
+  "putBackMinutes": 5,
   "school": "school",
   "gathering": "market",
   "community": {
@@ -14,6 +15,7 @@
   "log": {
     "built": { "nl": "Er staat een nieuw bouwsel: {subject}.", "en": "A new building stands: {subject}." },
     "waiting-materials": { "nl": "De bouwplaats ({subject}) wacht op materiaal.", "en": "The site ({subject}) waits for materials." },
-    "waiting-builders": { "nl": "De bouwplaats ({subject}) wacht op bouwers.", "en": "The site ({subject}) waits for builders." }
+    "waiting-builders": { "nl": "De bouwplaats ({subject}) wacht op bouwers.", "en": "The site ({subject}) waits for builders." },
+    "put-back": { "nl": "{subject} zet de {detail} terug.", "en": "{subject} puts the {detail} back." }
   }
 }

@@ -16,7 +16,9 @@ public sealed record BuildingSettings(
     CommunitySettings Community,
     IReadOnlyDictionary<string, Sentence> Log,
     // the blueprint that stands finished on every ordinary island from the start, where it gathers while nothing serves the gathering label
-    string? Fireplace = null);
+    string? Fireplace = null,
+    // a moved thing in someone's way goes back within so many minutes
+    int PutBackMinutes = 5);
 
 /// <summary>How an island decides what to build.</summary>
 public sealed record CommunitySettings(

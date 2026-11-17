@@ -1,0 +1,24 @@
+{
+  "profiles": {
+    "Codery.Village.Server": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "database": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ConnectionStrings__Village": "Host=localhost;Port=5433;Database=village;Username=village;Password=village-dev-only"
+      }
+    },
+    "night": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Village__ClockStart": "2026-06-01T23:00:00+02:00"
+      }
+    }
+  }
+}

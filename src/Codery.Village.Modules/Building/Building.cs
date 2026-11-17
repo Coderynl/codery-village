@@ -6,8 +6,10 @@ using Codery.Village.Core.Data;
 using Codery.Village.Core.Map;
 using Codery.Village.Core.Modules;
 using Codery.Village.Core.Save;
+using Codery.Village.Core.Time;
 using Codery.Village.Modules.Contracts;
 using Codery.Village.Modules.People;
+using Codery.Village.Modules.Day;
 using Activity = Codery.Village.Modules.Day.Activity;
 using DayModule = Codery.Village.Modules.Day.Day;
 using PeopleModule = Codery.Village.Modules.People.People;
@@ -30,12 +32,15 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
 
     private const string Section = "building";
     private const string Built = "built";
-    private static readonly string[] LogKinds = [Built, Waiting(Materials), Waiting(Builders)];
+    private const string PutBackKind = "put-back";
+    private static readonly string[] LogKinds = [Built, Waiting(Materials), Waiting(Builders), PutBackKind];
 
     private readonly List<Structure> _structures = [];
     // the structure on each tile it covers
     private readonly Dictionary<Cell, int> _covered = [];
     private readonly List<LooseThing> _things = [];
+    // per moved thing that stands in someone's way, the tick that was first seen
+    private readonly SortedDictionary<int, long> _inTheWay = [];
     private int _nextStructure;
     private int _nextThing;
     private ModuleContext? _village;
@@ -110,7 +115,11 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
 
     // ── loose things ──
 
-    /// <summary>Puts a loose thing on another free land tile of its island; null when it is moved, else why not.</summary>
+    /// <summary>
+    /// Puts a loose thing on another free land tile of its island; null when it is moved, else why not. A lot and
+    /// the tile where the island gathers count as taken: a visitor does not block a home or the square. A moved
+    /// thing that stands in someone's way goes back within <c>putBackMinutes</c>.
+    /// </summary>
     public Refusal? Move(int thing, Cell to)
     {
         var index = _things.FindIndex(item => item.Id == thing);
@@ -120,10 +129,75 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         if (!map.IsWalkable(to)) return Refusal.Water;
         if (map.IslandOf(to) != map.IslandOf(item.At)) return Refusal.OtherIsland;
         if (to == item.At) return null;
+        if (map.At(to) == Ground.Lot || _squares.ContainsValue(to)) return Refusal.Taken;
         if (_covered.ContainsKey(to) || _things.Any(other => other.At == to)) return Refusal.Taken;
         _things[index] = item with { At = to };
         return null;
     }
+
+    /// <summary>The resident on the tile's island who is awake and stands nearest to it, or null when everyone there sleeps.</summary>
+    public int? NearestAwake(Cell near)
+    {
+        if (_village is not { } village || village.Map.IslandOf(near) is not { } island
+            || village.Find<DayModule>() is not { } day || village.Find<PeopleModule>() is not { } people) return null;
+        var tick = village.Clocks.Tick;
+        int? nearest = null;
+        var best = int.MaxValue;
+        foreach (var resident in people.All)
+        {
+            if (resident.Island != island || Doing(day, resident.Id) is not { } doing || doing.Activity == Activity.Sleep) continue;
+            var distance = Walker.Position(doing, tick).DistanceTo(near);
+            if (distance >= best) continue;
+            best = distance;
+            nearest = resident.Id;
+        }
+        return nearest;
+    }
+
+    // a moved thing in someone's way: on a tile he walks over or goes to. After putBackMinutes the nearest one
+    // awake puts it back where it belongs, or on the nearest free tile when that is taken now
+    private void PutBack(ModuleContext village)
+    {
+        foreach (var id in _inTheWay.Keys.Where(id => _things.Find(thing => thing.Id == id) is not { } thing || thing.At == thing.Home).ToList())
+            _inTheWay.Remove(id);
+        if (_things.All(thing => thing.At == thing.Home) || village.Find<DayModule>() is not { } day || village.Find<PeopleModule>() is not { } people) return;
+
+        var tick = village.Clocks.Tick;
+        var ways = new HashSet<Cell>();
+        foreach (var resident in people.All)
+        {
+            if (Doing(day, resident.Id) is not { } doing) continue;
+            ways.Add(doing.Place);
+            if (doing.Walk is { } walk) ways.UnionWith(walk.Cells);
+        }
+        var after = (long)_settings.PutBackMinutes * 60 * Clocks.TicksPerSecond;
+        for (var i = 0; i < _things.Count; i++)
+        {
+            var thing = _things[i];
+            if (thing.At == thing.Home) continue;
+            if (!_inTheWay.TryGetValue(thing.Id, out var since))
+            {
+                if (ways.Contains(thing.At) || village.Map.At(thing.At) == Ground.Lot) _inTheWay[thing.Id] = tick;
+                continue;
+            }
+            if (tick - since < after || NearestAwake(thing.At) is not { } who) continue;
+            var to = Free(thing.Home, thing.Id) ? thing.Home : Aside(village, thing, ways);
+            _things[i] = thing with { At = to };
+            _inTheWay.Remove(thing.Id);
+            village.Log(new LogEntry(tick, PutBackKind, people.Get(who).Name, thing.Kind));
+        }
+    }
+
+    // the free tile nearest the thing's own place that is in nobody's way
+    private Cell Aside(ModuleContext village, LooseThing thing, HashSet<Cell> ways) =>
+        Land(IslandAt(thing.Home)!.Value)
+            .Where(cell => village.Map.At(cell) != Ground.Lot && !ways.Contains(cell) && Free(cell, thing.Id))
+            .OrderBy(cell => cell.DistanceTo(thing.Home)).ThenBy(cell => cell.Row).ThenBy(cell => cell.Col)
+            .Select(cell => (Cell?)cell).FirstOrDefault() ?? thing.Home;
+
+    // nothing stands on the tile but the thing itself
+    private bool Free(Cell cell, int thing) =>
+        !_covered.ContainsKey(cell) && !_squares.ContainsValue(cell) && _things.All(other => other.Id == thing || other.At != cell);
 
     // ── housing ──
 
@@ -207,6 +281,7 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
     {
         _village = village;
         Vacate(village);
+        PutBack(village);
         var sites = _structures.Where(structure => !structure.Done).ToList();
         if (sites.Count == 0) return;
         var present = Present(village, sites);
@@ -380,6 +455,7 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         _structures.Clear();
         _covered.Clear();
         _things.Clear();
+        _inTheWay.Clear();
         _nextStructure = 0;
         _nextThing = 0;
     }
@@ -394,7 +470,7 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         _kinds = [.. catalog.Things.Select(thing => thing.Id)];
 
         var community = _settings.Community;
-        if (_crew.Crew <= 0 || _settings.MaxStartHuts < 0 || _settings.ThingsAtStart < 0 || _settings.ThingsPerHouse < 0
+        if (_crew.Crew <= 0 || _settings.PutBackMinutes < 1 || _settings.MaxStartHuts < 0 || _settings.ThingsAtStart < 0 || _settings.ThingsPerHouse < 0
             || community.MaxSites < 0 || community.LowStockDays < 0 || community.DecideTicks <= 0)
             throw new InvalidDataException($"The data section '{Section}' or the crew in 'economy' has a number out of range.");
         foreach (var blueprint in _settings.Eddie.Where(blueprint => !_blueprints.ContainsKey(blueprint)))
@@ -439,7 +515,8 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
             _nextThing,
             [.. _structures.Select(structure => new SavedStructure(structure.Id, structure.Blueprint, structure.Anchor, structure.Rotation,
                 structure.Phase, structure.Units, structure.Paid, [.. structure.Living], [.. structure.Told], structure.Waiting))],
-            [.. _things]), SaveJson.Options)!;
+            [.. _things],
+            _inTheWay.Count > 0 ? _inTheWay : null), SaveJson.Options)!;
 
     public void Load(ModuleContext village, JsonNode data, int version)
     {
@@ -460,11 +537,13 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
             foreach (var reason in part.Told) structure.Told.Add(reason);
         }
         _things.AddRange(saved.Things);
+        foreach (var (thing, since) in saved.InTheWay ?? new Dictionary<int, long>()) _inTheWay[thing] = since;
         _nextStructure = saved.NextStructure;
         _nextThing = saved.NextThing;
     }
 
-    private sealed record SavedBuilding(int NextStructure, int NextThing, IReadOnlyList<SavedStructure> Structures, IReadOnlyList<LooseThing> Things);
+    private sealed record SavedBuilding(int NextStructure, int NextThing, IReadOnlyList<SavedStructure> Structures, IReadOnlyList<LooseThing> Things,
+        IReadOnlyDictionary<int, long>? InTheWay = null);
 
     private sealed record SavedStructure(int Id, string Blueprint, Cell Anchor, int Rotation, int Phase, int Units, bool Paid,
         IReadOnlyList<int> Households, IReadOnlyList<string> Told, string? Waiting = null);

@@ -139,4 +139,19 @@ public class StoreTests(PostgresFixture postgres)
         Assert.Equal(0, await PostgresFixture.Count(database, "SELECT count(*) FROM village_log"));
         Assert.Equal(1, await PostgresFixture.Count(database, "SELECT count(*) FROM village_save"));
     }
+
+    [Fact]
+    public async Task What_the_conversations_cost_is_kept_per_day_and_never_goes_down()
+    {
+        await using var store = await Store();
+        var monday = new DateOnly(2026, 6, 1);
+
+        Assert.Equal(0m, await store.TalkSpent(monday, CancellationToken.None));
+        await store.SaveTalkSpent(monday, 1.25m, CancellationToken.None);
+        await store.SaveTalkSpent(monday.AddDays(1), 0.5m, CancellationToken.None);
+        await store.SaveTalkSpent(monday, 1m, CancellationToken.None);
+
+        Assert.Equal(1.25m, await store.TalkSpent(monday, CancellationToken.None));
+        Assert.Equal(0.5m, await store.TalkSpent(monday.AddDays(1), CancellationToken.None));
+    }
 }

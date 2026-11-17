@@ -29,6 +29,29 @@ public sealed class TalkBudget(decimal dailyUsd, TimeProvider time)
         }
     }
 
+    /// <summary>Today, and what today's calls cost so far: to keep across a restart.</summary>
+    public (DateOnly Day, decimal Spent) Today
+    {
+        get
+        {
+            lock (_lock)
+            {
+                Roll();
+                return (_day, _spent);
+            }
+        }
+    }
+
+    /// <summary>Takes up what the calls of a day cost before a restart. Another day than today is let go.</summary>
+    public void Restore(DateOnly day, decimal spent)
+    {
+        lock (_lock)
+        {
+            Roll();
+            if (day == _day) _spent = Math.Max(_spent, spent);
+        }
+    }
+
     /// <summary>Holds <paramref name="usd"/> for a call, or says no when it does not fit in what is left today.</summary>
     public bool TryReserve(decimal usd, out Reservation reservation)
     {

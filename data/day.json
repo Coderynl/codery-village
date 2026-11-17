@@ -2,6 +2,7 @@
   "ticksPerCell": 8,
   "lateMinutes": 60,
   "outside": { "always": 1, "byDay": 3, "dayFrom": "08:00", "dayTo": "18:00" },
+  "night": { "from": "22:00", "to": "06:00" },
   "evening": { "chance": 0.35, "perExtraversion": 0.4, "visit": 0.4 },
   "free": [
     { "do": "leisure", "weight": 3 },

@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using Microsoft.Extensions.Configuration;
 
 namespace Codery.Village.Server.Talk;
@@ -17,6 +19,13 @@ public sealed record TalkOptions(string? ApiKey = null, decimal DailyUsd = 5, do
             string.IsNullOrWhiteSpace(talk["ApiKey"]) ? null : talk["ApiKey"],
             talk.GetValue("DailyUsd", defaults.DailyUsd),
             talk.GetValue("TimeoutSeconds", defaults.TimeoutSeconds));
+    }
+
+    // the key never shows up in a log or an error: only whether there is one
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append(CultureInfo.InvariantCulture, $"ApiKey = {(ApiKey is null ? "none" : "set")}, DailyUsd = {DailyUsd}, TimeoutSeconds = {TimeoutSeconds}");
+        return true;
     }
 }
 

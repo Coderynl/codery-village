@@ -3,28 +3,24 @@ using Codery.Village.Core;
 using Codery.Village.Core.Data;
 using Codery.Village.Core.Map;
 using Codery.Village.Core.Modules;
-using Codery.Village.Modules.Building;
-using Codery.Village.Modules.Community;
-using Codery.Village.Modules.Day;
-using Codery.Village.Modules.Happiness;
-using Codery.Village.Modules.People;
-using Codery.Village.Modules.Wishes;
-using Codery.Village.Modules.Work;
-using Talk = Codery.Village.Modules.Talk.Talk;
+using Codery.Village.Server;
 
 namespace Codery.Village.Tests;
 
 /// <summary>
 /// A small village for the tests: a map, the data the engine needs, and the modules that every module test
-/// runs over. <see cref="Modules"/> grows with each task until <c>VillageSetup.Modules</c> takes its place.
+/// runs over: those of the village itself, and the modules of the tests.
 /// </summary>
 public static class TestVillage
 {
     public static readonly DateTimeOffset Start = new(2026, 6, 1, 10, 0, 0, TimeSpan.Zero);
 
-    /// <summary>A fresh list of fresh modules on every call: modules hold state.</summary>
-    public static IReadOnlyList<IModule> Modules() =>
-        [new DrawingModule("dice"), new CountingModule("counter"), new ChimingModule("bell"), new HearingModule("ear"), new LoggingModule("scribe"), new People(), new Day(), new Work(), new Building(), new Community(), new Wishes(), new Happiness(), new Talk()];
+    /// <summary>The modules of the village, fresh on every call: modules hold state.</summary>
+    public static IReadOnlyList<IModule> Modules() => VillageSetup.Modules();
+
+    /// <summary>The modules the tests made to try the engine with, fresh on every call.</summary>
+    public static IReadOnlyList<IModule> TestModules() =>
+        [new DrawingModule("dice"), new CountingModule("counter"), new ChimingModule("bell"), new HearingModule("ear"), new LoggingModule("scribe")];
 
     public static IslandMap Map() => MapText.Parse("""
         ~~~~~

@@ -379,6 +379,106 @@ public class BuildingTests
     }
 
     [Fact]
+    public void A_thing_is_not_put_on_a_lot_or_where_the_island_gathers()
+    {
+        // without a fireplace, the island gathers on a fixed tile of its own
+        var village = Builders.Start(1, June(1, 9), Builders.Data(building: b => b.Remove("fireplace")));
+        var map = Builders.RealMap;
+        var thing = village.Building.Things.First(thing => map.IslandOf(thing.At) == West);
+        var square = village.Building.GatheringOn(West)!.Value;
+        Assert.DoesNotContain(village.Building.All, structure => structure.Cells.Contains(square));
+        var lot = map.Islands.Single(island => island.Id == West).Cells
+            .First(cell => map.At(cell) == Ground.Lot && village.Building.All.All(structure => !structure.Cells.Contains(cell)));
+
+        Assert.Equal(Refusal.Taken, village.Building.Move(thing.Id, lot));
+        Assert.Equal(Refusal.Taken, village.Building.Move(thing.Id, square));
+        Assert.Equal(thing, village.Building.Things.Single(t => t.Id == thing.Id));
+    }
+
+    [Fact]
+    public void Hand_things_come_back()
+    {
+        var village = Builders.Start(1, June(1, 7, 50));
+        var map = Builders.RealMap;
+        var minutes = (int)JsonNode.Parse(File.ReadAllText(Path.Combine(Builders.Folder, "building.json")))!["putBackMinutes"]!;
+        var ticks = minutes * 60 * Clocks.TicksPerSecond;
+
+        // someone sets off on West: the thing goes on a free tile halfway his walk, in his way
+        var thing = village.Building.Things.First(thing => map.IslandOf(thing.At) == West);
+        var way = IntoTheWay(village, thing);
+        // and one more, on a tile of its island that may or may not be in anybody's way
+        var other = village.Building.Things.First(other => other.Id != thing.Id && map.IslandOf(other.At) == West);
+        var aside = map.Islands.Single(island => island.Id == West).Cells
+            .Where(cell => cell != way && cell != thing.Home && map.At(cell) is Ground.Land or Ground.Forest or Ground.Fertile)
+            .First(cell => village.Building.Move(other.Id, cell) is null);
+        var lines = village.Engine.LogEnd;
+
+        var crossed = false;
+        for (var i = 0; i <= ticks + 1; i++)
+        {
+            village.Run(1);
+            crossed |= village.People.All.Any(resident => village.Day.Of(resident.Id) is var doing
+                && (doing.Place == aside || doing.Walk?.Cells.Contains(aside) == true));
+        }
+
+        var back = village.Building.Things.Single(t => t.Id == thing.Id);
+        Assert.Equal(thing.Home, back.At);
+        var put = village.Engine.LogFrom(lines).Select(line => line.Entry).Where(entry => entry.Kind == "put-back" && entry.Detail == thing.Kind).ToList();
+        Assert.NotEmpty(put);
+        Assert.All(put, entry => Assert.Contains(village.People.All, resident => resident.Name == entry.Subject));
+        // what is in nobody's way stays where it was put
+        if (!crossed) Assert.Equal(aside, village.Building.Things.Single(t => t.Id == other.Id).At);
+    }
+
+    [Fact]
+    public void The_nearest_awake_resident_is_on_the_island_and_not_asleep()
+    {
+        var village = Builders.Start(1, June(1, 3));
+        village.Run(1);
+        var map = Builders.RealMap;
+        var thing = village.Building.Things.First(thing => map.IslandOf(thing.At) == West);
+
+        var who = village.Building.NearestAwake(thing.At);
+
+        Assert.NotNull(who);
+        var resident = village.People.Get(who!.Value);
+        Assert.Equal(West, resident.Island);
+        Assert.NotEqual(Activity.Sleep, village.Day.Of(resident.Id).Activity);
+    }
+
+    [Fact]
+    public void A_thing_on_its_way_back_is_kept_in_the_save()
+    {
+        var original = Builders.Start(1, June(1, 7, 50));
+        var thing = original.Building.Things.First(thing => Builders.RealMap.IslandOf(thing.At) == West);
+        IntoTheWay(original, thing);
+        original.Run(10);
+
+        var loaded = Builders.Load(original.Engine.Save(), Builders.Data());
+        original.Run(4000);
+        loaded.Run(4000);
+
+        Assert.Equal(SaveJson.ToJson(original.Engine.Save()), SaveJson.ToJson(loaded.Engine.Save()));
+    }
+
+    /// <summary>Runs until someone on the thing's island sets off on a longer walk, and moves the thing onto it, halfway.</summary>
+    private static Cell IntoTheWay(Builders.Village village, LooseThing thing)
+    {
+        var island = Builders.RealMap.IslandOf(thing.At);
+        for (var i = 0; i < 4 * 3600; i++)
+        {
+            village.Run(1);
+            var cells = village.People.All.Where(resident => resident.Island == island)
+                .Select(resident => village.Day.Of(resident.Id).Walk)
+                .Where(walk => walk is { Cells.Count: >= 4 })
+                .SelectMany(walk => walk!.Cells.Skip(2).Take(walk.Cells.Count - 3));
+            foreach (var cell in cells)
+                if (cell != thing.At && village.Building.Move(thing.Id, cell) is null) return cell;
+        }
+        throw new InvalidOperationException("Nobody set off.");
+    }
+
+    [Fact]
     public void A_saved_site_goes_on_as_if_it_never_stopped()
     {
         var original = Builders.Start(4, June(1, 9));

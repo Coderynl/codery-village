@@ -24,9 +24,15 @@ public interface IVillageStore
 
     /// <summary>Writes a save and the lines of its log together: both or neither. A line that is there already stays as it is.</summary>
     Task Save(long village, SavedVillage save, CancellationToken cancellation);
+
+    /// <summary>What the conversations cost on a Dutch calendar day, in dollars; 0 for a day without any.</summary>
+    Task<decimal> TalkSpent(DateOnly day, CancellationToken cancellation);
+
+    /// <summary>Keeps what the conversations of a day cost; what is kept never goes down.</summary>
+    Task SaveTalkSpent(DateOnly day, decimal spent, CancellationToken cancellation);
 }
 
-/// <summary>The village in Postgres: three tables, made by the store itself when they are not there.</summary>
+/// <summary>The village in Postgres: four tables, made by the store itself when they are not there.</summary>
 public sealed class PostgresVillageStore(string connectionString) : IVillageStore, IAsyncDisposable, IDisposable
 {
     /// <summary>How many saves of a village are kept: the latest.</summary>
@@ -59,6 +65,10 @@ public sealed class PostgresVillageStore(string connectionString) : IVillageStor
                 subject text NOT NULL,
                 detail  text,
                 PRIMARY KEY (village, seq)
+            );
+            CREATE TABLE IF NOT EXISTS talk_budget (
+                day   date PRIMARY KEY,
+                spent numeric NOT NULL
             );
             """);
         await command.ExecuteNonQueryAsync(cancellation);
@@ -144,6 +154,24 @@ public sealed class PostgresVillageStore(string connectionString) : IVillageStor
             },
         };
         await batch.ExecuteNonQueryAsync(cancellation);
+    }
+
+    public async Task<decimal> TalkSpent(DateOnly day, CancellationToken cancellation)
+    {
+        await using var command = _source.CreateCommand("SELECT spent FROM talk_budget WHERE day = $1");
+        command.Parameters.Add(new NpgsqlParameter { Value = day });
+        return await command.ExecuteScalarAsync(cancellation) is decimal spent ? spent : 0m;
+    }
+
+    public async Task SaveTalkSpent(DateOnly day, decimal spent, CancellationToken cancellation)
+    {
+        await using var command = _source.CreateCommand("""
+            INSERT INTO talk_budget (day, spent) VALUES ($1, $2)
+            ON CONFLICT (day) DO UPDATE SET spent = GREATEST(talk_budget.spent, EXCLUDED.spent)
+            """);
+        command.Parameters.Add(new NpgsqlParameter { Value = day });
+        command.Parameters.Add(new NpgsqlParameter { Value = spent });
+        await command.ExecuteNonQueryAsync(cancellation);
     }
 
     public ValueTask DisposeAsync() => _source.DisposeAsync();
