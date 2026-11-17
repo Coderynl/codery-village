@@ -1,0 +1,20 @@
+{
+  "materials": [
+    { "id": "stone", "nl": "behouwen steen", "en": "cut stone" }
+  ],
+  "roles": [
+    { "id": "quarrier", "nl": "steenhouwer", "en": "quarrier" }
+  ],
+  "blueprints": [
+    {
+      "id": "quarry", "nl": "steengroeve", "en": "quarry", "on": ["rock"], "serves": "stone",
+      "jobs": [{ "role": "quarrier", "count": 2, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "stone": 2 }, "ticks": 300 },
+      "phases": [
+        { "id": "foundation", "ticks": 300, "cost": { "stones": 2 } },
+        { "id": "frame", "ticks": 300, "cost": { "stones": 2 } }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "stone", "roof": "flat", "extras": ["crates"] }
+    }
+  ]
+}

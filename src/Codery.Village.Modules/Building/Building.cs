@@ -18,8 +18,8 @@ namespace Codery.Village.Modules.Building;
 /// What stands and what goes up. A building is placed on free tiles of one island that its blueprint may stand
 /// on, and goes up in the phases of its blueprint: a phase starts when the island's stock holds its cost, which
 /// is taken in one go, and goes on while builders are at the site, each builder a crew-th of a tick per tick.
-/// A site that stands still says why, once per reason. Each ordinary island starts with a hut per household,
-/// Eddie with his house and workshop; all finished. Building gives the homes, as People moves households in and
+/// A site that stands still says why, once per reason. Each ordinary island starts with its fireplace and a hut
+/// per household, Eddie with his house and workshop; all finished. Building gives the homes, as People moves households in and
 /// out of them, the places of the day, and the buildings Work staffs. It also keeps the loose things a visitor
 /// can move: a few at the start, and one by every house that is finished.
 /// </summary>
@@ -153,8 +153,14 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
 
     public Cell? SchoolOn(int island) => Serving(island, _settings?.School);
 
+    /// <summary>What serves the gathering label, else the island's fireplace, else a fixed tile of the island.</summary>
     public Cell? GatheringOn(int island) =>
-        Serving(island, _settings?.Gathering) ?? (_squares.TryGetValue(island, out var square) ? square : null);
+        Serving(island, _settings?.Gathering) ?? Fireplace(island) ?? (_squares.TryGetValue(island, out var square) ? square : null);
+
+    private Cell? Fireplace(int island) =>
+        _settings?.Fireplace is { } fireplace
+            ? _structures.Find(structure => structure.Island == island && structure.Done && structure.Blueprint == fireplace)?.Anchor
+            : null;
 
     private Cell? Serving(int island, string? label) =>
         label is null ? null : _structures.Find(structure => structure.Island == island && structure.Done
@@ -184,6 +190,8 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
                     if (FindPlace(blueprint, island.Id) is { } place) Finish(Add(blueprint, place.Anchor, place.Rotation));
                 continue;
             }
+            if (_settings.Fireplace is { } fireplace && FindPlace(fireplace, island.Id) is { } hearth)
+                Finish(Add(fireplace, hearth.Anchor, hearth.Rotation));
             var households = people?.On(island.Id).Where(resident => resident.Household is not null).Select(resident => resident.Household).Distinct().Count() ?? 0;
             if (StartDwelling(island.Id, stock) is { } dwelling)
                 for (var hut = 0; hut < Math.Min(households, _settings.MaxStartHuts); hut++)
@@ -391,6 +399,8 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
             throw new InvalidDataException($"The data section '{Section}' or the crew in 'economy' has a number out of range.");
         foreach (var blueprint in _settings.Eddie.Where(blueprint => !_blueprints.ContainsKey(blueprint)))
             throw new InvalidDataException($"The data section '{Section}' gives Eddie the unknown blueprint '{blueprint}'.");
+        if (_settings.Fireplace is { } fireplace && !_blueprints.ContainsKey(fireplace))
+            throw new InvalidDataException($"The data section '{Section}' has the unknown fireplace '{fireplace}'.");
         var missing = LogKinds.Where(kind => !_settings.Log.ContainsKey(kind)).ToList();
         if (missing.Count > 0)
             throw new InvalidDataException($"The data section '{Section}' has no log sentence for {string.Join(", ", missing)}.");

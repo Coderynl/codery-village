@@ -23,7 +23,7 @@ public class WorkTests
     /// <summary>A Dutch summer time on a day of June 2026; the first of June is a Monday.</summary>
     private static DateTimeOffset June(int day, int hour, int minute = 0) => new(2026, 6, day, hour, minute, 0, TimeSpan.FromHours(2));
 
-    /// <summary>The real data, changed as the test needs.</summary>
+    /// <summary>The real data with the whole ladder of releases, changed as the test needs.</summary>
     private static DataSet Data(Action<JsonObject>? economy = null, Action<JsonObject>? people = null, Action<JsonObject>? life = null)
     {
         JsonObject Read(string name) => JsonNode.Parse(File.ReadAllText(Path.Combine(Folder, name + ".json")))!.AsObject();
@@ -33,14 +33,14 @@ public class WorkTests
         life?.Invoke(lifeJson);
         economy?.Invoke(economyJson);
         people?.Invoke(peopleJson);
-        return new DataSet(new Dictionary<string, string>
+        return DataSet.FromTexts(new Dictionary<string, string>
         {
             ["life"] = lifeJson.ToJsonString(),
             ["people"] = peopleJson.ToJsonString(),
             ["day"] = Read("day").ToJsonString(),
             ["catalog"] = Read("catalog").ToJsonString(),
             ["economy"] = economyJson.ToJsonString(),
-        });
+        }, Ladder.All());
     }
 
     private static StructureView Built(int id, string blueprint, int island, int row, int col)
@@ -452,16 +452,16 @@ public class WorkTests
         var village = Start(1, June(1, 10));
         IStock stock = village.Work;
 
-        Assert.Equal(40, stock.Count(West, "wood"));
-        Assert.Equal(0, stock.Count(West, "stone"));
-        Assert.Equal(45, stock.Count(Oost, "stone"));
+        var (branches, reed, stones) = (stock.Count(West, "branches"), stock.Count(West, "reed"), stock.Count(Oost, "stones"));
+        Assert.True(branches >= 2 && reed >= 3 && stones > 0);
+        Assert.Equal(0, stock.Count(West, "stones"));
 
-        Assert.False(stock.TryTake(West, new Dictionary<string, int> { ["wood"] = 2, ["stone"] = 1 }));
-        Assert.Equal(40, stock.Count(West, "wood"));
-        Assert.True(stock.TryTake(West, new Dictionary<string, int> { ["wood"] = 2, ["planks"] = 3 }));
-        Assert.Equal(38, stock.Count(West, "wood"));
-        Assert.Equal(37, village.Work.Stock(West)["planks"]);
-        Assert.Equal(45, stock.Count(Oost, "stone"));
+        Assert.False(stock.TryTake(West, new Dictionary<string, int> { ["branches"] = 2, ["stones"] = 1 }));
+        Assert.Equal(branches, stock.Count(West, "branches"));
+        Assert.True(stock.TryTake(West, new Dictionary<string, int> { ["branches"] = 2, ["reed"] = 3 }));
+        Assert.Equal(branches - 2, stock.Count(West, "branches"));
+        Assert.Equal(reed - 3, village.Work.Stock(West)["reed"]);
+        Assert.Equal(stones, stock.Count(Oost, "stones"));
     }
 
     [Fact]
@@ -502,9 +502,9 @@ public class WorkTests
             Assert.Equal(300L * residents.Count(resident => resident.Phase is LifePhase.Child or LifePhase.Student), paid.Allowances);
             Assert.Equal(2400L * residents.Count(resident => resident.Phase == LifePhase.Retired), paid.Pensions);
 
-            // one food each and one heat per household, from the island's own stock
-            var food = island == West ? "bread" : "fish";
-            var heat = island == West ? "wood" : "peat";
+            // one food each and one heat per household, from the island's own stock: what its ground gives
+            var food = island == West ? "berries" : "fish";
+            var heat = island == West ? "branches" : "driftwood";
             Assert.Equal(residents.Count, Used(food));
             Assert.Equal(households, Used(heat));
             var bought = residents.Count * prices[food] + households * prices[heat];

@@ -471,6 +471,29 @@ public class DayTests
     }
 
     [Fact]
+    public void A_worker_whose_place_moves_walks_to_the_new_place_in_the_same_block()
+    {
+        var village = Start(1, June(1, 10));
+        var workers = village.People.All.Where(resident => village.Day.Of(resident.Id).Activity == Activity.Work && village.Jobs!.JobOf(resident.Id) is { Shift: Shift.Day }).ToList();
+        Assert.NotEmpty(workers);
+        Assert.All(workers, worker => Assert.Equal(village.Jobs!.JobOf(worker.Id)!.Place, village.Day.Of(worker.Id).Place));
+
+        // in the middle of the work block, the work is somewhere else
+        village.Jobs!.Moved = 1;
+        village.StepIntoNextQuarter();
+
+        foreach (var worker in workers)
+        {
+            var doing = village.Day.Of(worker.Id);
+            var job = village.Jobs.JobOf(worker.Id)!;
+            if (doing.Activity != Activity.Work) continue;
+            Assert.Equal(job.Place, doing.Place);
+            Assert.NotNull(doing.Walk);
+        }
+        Assert.Contains(workers, worker => village.Day.Of(worker.Id).Activity == Activity.Work);
+    }
+
+    [Fact]
     public void Of_someone_who_does_not_live_here_throws()
     {
         var village = Start(1, June(1, 11));
@@ -499,6 +522,8 @@ public sealed class Probe : IModule
 public sealed class FakeJobs(bool abroad = false) : IModule, IJobs
 {
     private People _people = null!;
+    /// <summary>Moves every job this many lots on, as when a builder is sent to another site.</summary>
+    public int Moved { get; set; }
     private IslandMap _map = null!;
     public string Name => "fake-jobs";
     public int Version => 1;
@@ -519,7 +544,7 @@ public sealed class FakeJobs(bool abroad = false) : IModule, IJobs
         if (who is not { Phase: LifePhase.Working, IsEddie: false }) return null;
         var lots = FakePlaces.Lots(_map, abroad ? FakePlaces.Other(_map, who.Island) : who.Island);
         var shift = (resident % 7) switch { 0 => Shift.Night, 1 => Shift.Early, _ => Shift.Day };
-        return new JobPlace(0, lots[resident * 3 % lots.Count], "worker", shift, resident % 4 == 0);
+        return new JobPlace(0, lots[(resident * 3 + Moved) % lots.Count], "worker", shift, resident % 4 == 0);
     }
 }
 

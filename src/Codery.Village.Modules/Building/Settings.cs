@@ -14,7 +14,9 @@ public sealed record BuildingSettings(
     string School,
     string Gathering,
     CommunitySettings Community,
-    IReadOnlyDictionary<string, Sentence> Log);
+    IReadOnlyDictionary<string, Sentence> Log,
+    // the blueprint that stands finished on every ordinary island from the start, where it gathers while nothing serves the gathering label
+    string? Fireplace = null);
 
 /// <summary>How an island decides what to build.</summary>
 public sealed record CommunitySettings(

@@ -1,4 +1,5 @@
 {
+  "currency": { "nl": "schelpen", "en": "shells" },
   "wagePerHour": 600,
   "allowancePerDay": 300,
   "pensionPerDay": 2400,
@@ -18,14 +19,22 @@
     "food": { "perPerson": 1 },
     "heat": { "perHousehold": 1 }
   },
-  "prices": { "bread": 1200, "fish": 1200, "wood": 500, "peat": 500 },
+  "prices": {
+    "berries": 1200, "roots": 1200, "fish": 1200, "branches": 500, "driftwood": 500,
+    "bread": 1200, "wood": 500, "peat": 500
+  },
   "fits": {
     "builder": ["crafts", "technology", "numbers"],
+    "gatherer": ["nature", "walking", "gardening"],
+    "fisher": ["fishing"],
+    "reed-cutter": ["nature", "crafts"],
+    "loam-digger": ["gardening", "history"],
+    "beachcomber": ["walking", "fishing"],
+    "fire-keeper": ["stars", "reading"],
     "woodcutter": ["nature", "walking"],
     "sawyer": ["crafts", "technology"],
     "farmer": ["gardening", "animals", "nature"],
     "baker": ["cooking"],
-    "fisher": ["fishing"],
     "quarrier": ["walking", "puzzles"],
     "digger": ["gardening", "history"],
     "peat-cutter": ["nature", "history"],
@@ -35,8 +44,8 @@
   "start": {
     "cash": 100000,
     "stock": {
-      "West": { "wood": 40, "planks": 40, "bread": 40 },
-      "Oost": { "stone": 45, "bricks": 20, "fish": 40, "peat": 20 }
+      "West": { "branches": 40, "reed": 20, "berries": 40 },
+      "Oost": { "stones": 30, "loam": 20, "reed": 20, "fish": 40, "driftwood": 30 }
     }
   }
 }

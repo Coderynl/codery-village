@@ -1,0 +1,37 @@
+{
+  "materials": [
+    { "id": "clay", "nl": "klei", "en": "clay" },
+    { "id": "bricks", "nl": "bakstenen", "en": "bricks" }
+  ],
+  "roles": [
+    { "id": "digger", "nl": "kleigraver", "en": "clay digger" },
+    { "id": "brickmaker", "nl": "steenbakker", "en": "brickmaker" },
+    { "id": "stoker", "nl": "stoker", "en": "stoker" }
+  ],
+  "blueprints": [
+    {
+      "id": "claypit", "nl": "kleiput", "en": "clay pit", "on": ["clay"],
+      "jobs": [{ "role": "digger", "count": 2, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "clay": 2 }, "ticks": 240 },
+      "phases": [
+        { "id": "foundation", "ticks": 300, "cost": { "stones": 2 } }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "open", "roof": "flat", "extras": ["crates"] }
+    },
+    {
+      "id": "brickworks", "nl": "steenbakkerij", "en": "brickworks", "on": ["land"], "serves": "bricks",
+      "jobs": [
+        { "role": "brickmaker", "count": 2, "shift": "day", "outdoor": false },
+        { "role": "stoker", "count": 1, "shift": "night", "outdoor": false }
+      ],
+      "recipe": { "in": { "clay": 2 }, "out": { "bricks": 2 }, "ticks": 360 },
+      "phases": [
+        { "id": "foundation", "ticks": 300, "cost": { "stone": 3 } },
+        { "id": "frame", "ticks": 400, "cost": { "stone": 3 } },
+        { "id": "roof", "ticks": 300, "cost": { "stone": 2 } },
+        { "id": "walls", "ticks": 300, "cost": { "stone": 3 } }
+      ],
+      "look": { "form": "building", "size": "medium", "walls": "bricks", "roof": "flat", "extras": ["door", "chimney"] }
+    }
+  ]
+}

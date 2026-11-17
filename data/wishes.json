@@ -11,6 +11,15 @@
     { "id": "pool", "nl": "zwembad", "en": "swimming pool", "label": "pool" },
     { "id": "stage", "nl": "podium", "en": "stage", "label": "stage" },
     { "id": "doctor", "nl": "huisarts", "en": "doctor's practice", "label": "doctor" },
-    { "id": "workshop", "nl": "open werkplaats", "en": "open workshop", "label": "workshop" }
+    { "id": "workshop", "nl": "open werkplaats", "en": "open workshop", "label": "workshop" },
+    { "id": "tools", "nl": "werktuigen", "en": "tools", "label": "tools" },
+    { "id": "planks", "nl": "rechte planken", "en": "straight planks", "label": "planks" },
+    { "id": "fields", "nl": "akkers met graan", "en": "fields of grain", "label": "fields" },
+    { "id": "bread", "nl": "brood in plaats van bessen", "en": "bread instead of berries", "label": "bread" },
+    { "id": "stone", "nl": "behouwen steen", "en": "cut stone", "label": "stone" },
+    { "id": "bricks", "nl": "bakstenen", "en": "bricks", "label": "bricks" },
+    { "id": "peat", "nl": "turf die lang brandt", "en": "peat that burns long", "label": "peat" },
+    { "id": "house", "nl": "een stevig huis", "en": "a sturdy house", "label": "house" },
+    { "id": "jetty", "nl": "een vissteiger", "en": "a fishing jetty", "label": "jetty" }
   ]
 }

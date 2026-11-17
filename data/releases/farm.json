@@ -1,0 +1,21 @@
+{
+  "materials": [
+    { "id": "grain", "nl": "graan", "en": "grain" }
+  ],
+  "roles": [
+    { "id": "farmer", "nl": "boer", "en": "farmer" }
+  ],
+  "blueprints": [
+    {
+      "id": "farm", "nl": "boerderij", "en": "farm", "on": ["fertile"], "serves": "fields",
+      "jobs": [{ "role": "farmer", "count": 3, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "grain": 3 }, "ticks": 480 },
+      "phases": [
+        { "id": "foundation", "ticks": 300, "cost": { "branches": 2 } },
+        { "id": "frame", "ticks": 400, "cost": { "branches": 3 } },
+        { "id": "roof", "ticks": 300, "cost": { "reed": 2 } }
+      ],
+      "look": { "form": "building", "size": "medium", "walls": "wood", "roof": "thatch", "extras": ["door", "crates"] }
+    }
+  ]
+}

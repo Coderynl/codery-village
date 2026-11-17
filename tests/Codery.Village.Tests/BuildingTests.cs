@@ -117,13 +117,13 @@ public class BuildingTests
     private static DateTimeOffset June(int day, int hour, int minute = 0) => Builders.June(day, hour, minute);
 
     [Fact]
-    public void A_house_goes_through_five_phases_in_order()
+    public void A_hut_goes_through_five_phases_in_order()
     {
         var village = Builders.Start(1, June(1, 9));
         village.Run(1);
-        var (wood, planks) = (village.Work.Count(West, "wood"), village.Work.Count(West, "planks"));
+        var (branches, reed) = (village.Work.Count(West, "branches"), village.Work.Count(West, "reed"));
         var things = village.Building.Things.Count;
-        var id = village.PlaceNearHeart("house", West);
+        var id = village.PlaceNearHeart("hut", West);
         var site = village.Get(id);
         Assert.Equal((0, 0, false), (site.Phase, site.Progress, site.Done));
         Assert.Contains(((IStructures)village.Building).Sites(), view => view.Id == id && view.Island == West && view.Place == site.Anchor);
@@ -134,7 +134,7 @@ public class BuildingTests
         Assert.Equal(3, village.BuildersAt(site));
         Assert.Equal((0, 1), (site.Phase, site.Progress));
         // the foundation is paid in one go when it starts
-        Assert.Equal((wood - 2, planks), (village.Work.Count(West, "wood"), village.Work.Count(West, "planks")));
+        Assert.Equal((branches - 2, reed), (village.Work.Count(West, "branches"), village.Work.Count(West, "reed")));
 
         var ticks = 1;
         while (!site.Done && ticks < 5000)
@@ -149,11 +149,11 @@ public class BuildingTests
         Assert.Equal(["foundation", "frame", "roof", "walls", "garden"],
             village.Heard<PhaseStarted>().Where(e => e.Structure == id).Select(e => e.Phase));
         Assert.Single(village.Heard<StructureDone>(), e => e.Structure == id);
-        Assert.Equal((wood - 2, planks - 11), (village.Work.Count(West, "wood"), village.Work.Count(West, "planks")));
+        Assert.Equal((branches - 10, reed - 3), (village.Work.Count(West, "branches"), village.Work.Count(West, "reed")));
         Assert.Contains(((IStructures)village.Building).Standing(), view => view.Id == id);
         Assert.DoesNotContain(((IStructures)village.Building).Sites(), view => view.Id == id);
-        Assert.Contains(village.Engine.Log, line => line.Kind == "built" && line.Subject == "house");
-        // a finished house is a home to move into, and puts something loose by the door
+        Assert.Contains(village.Engine.Log, line => line.Kind == "built" && line.Subject == "hut");
+        // a finished hut is a home to move into, and puts something loose by the door
         Assert.True(village.Building.Things.Count > things);
         Assert.Empty(village.Engine.Stopped);
     }
@@ -171,8 +171,8 @@ public class BuildingTests
         });
         var village = Builders.Start(3, June(1, 9), data);
         village.Run(1);
-        var west = village.PlaceNearHeart("house", West);
-        var oost = village.PlaceNearHeart("stone-house", Oost);
+        var west = village.PlaceNearHeart("hut", West);
+        var oost = village.PlaceNearHeart("stone-hut", Oost);
 
         // Oost becomes an island of a child and the retired, who move to the coast in a moment
         var saved = village.Engine.Save();
@@ -228,9 +228,13 @@ public class BuildingTests
             island 1 1 Proef
             island 6 6 Klein
             """);
-        var data = Builders.Data(building: building => building["thingsAtStart"] = 0, catalog: catalog =>
+        var data = Builders.Data(building: building =>
         {
-            var pair = catalog["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "sawmill")!.DeepClone().AsObject();
+            building["thingsAtStart"] = 0;
+            building["fireplace"] = null;
+        }, catalog: catalog =>
+        {
+            var pair = catalog["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "campfire")!.DeepClone().AsObject();
             pair["id"] = "pair";
             pair["shape"] = new JsonArray(new JsonArray(0, 0), new JsonArray(0, 1));
             catalog["blueprints"]!.AsArray().Add(pair);
@@ -246,12 +250,12 @@ public class BuildingTests
             Assert.True(village.Building.CanPlace("pair", anchor, rotation), $"rotation {rotation}");
             var id = village.Building.Place("pair", anchor, rotation);
             Assert.Equal(cells, village.Get(id).Cells);
-            Assert.False(village.Building.CanPlace("sawmill", cells[1], 0));
+            Assert.False(village.Building.CanPlace("campfire", cells[1], 0));
             Assert.Throws<InvalidOperationException>(() => village.Building.Place("pair", anchor, rotation));
 
             // one of the two taken
             village = Builders.Start(1, June(1, 9), data, map: map);
-            village.Building.Place("sawmill", cells[1], 0);
+            village.Building.Place("campfire", cells[1], 0);
             Assert.False(village.Building.CanPlace("pair", anchor, rotation), $"rotation {rotation}");
 
             // one of the two on the water, or on the other island
@@ -277,24 +281,30 @@ public class BuildingTests
             Assert.NotNull(home);
             Assert.Equal(resident.Island, Builders.RealMap.IslandOf(home!.Value));
         }
-        // finished from the start, not sites; the dwelling the island can pay for
+        // finished from the start, not sites; the dwelling the island can pay for, and a campfire
         Assert.All(village.Building.All, structure => Assert.True(structure.Done));
-        Assert.All(village.Building.All.Where(structure => structure.Island == West), hut => Assert.Equal("house", hut.Blueprint));
-        Assert.All(village.Building.All.Where(structure => structure.Island == Oost), hut => Assert.Equal("stone-house", hut.Blueprint));
-        Assert.All(village.Building.All.Where(structure => structure.Island != Islet), hut => Assert.Equal(Ground.Lot, Builders.RealMap.At(hut.Anchor)));
+        var huts = village.Building.All.Where(structure => structure.Island != Islet && structure.Blueprint != "campfire").ToList();
+        Assert.All(huts.Where(structure => structure.Island == West), hut => Assert.Equal("hut", hut.Blueprint));
+        Assert.All(huts.Where(structure => structure.Island == Oost), hut => Assert.Equal("stone-hut", hut.Blueprint));
+        Assert.All(huts, hut => Assert.Equal(Ground.Lot, Builders.RealMap.At(hut.Anchor)));
 
         var eddie = village.People.All.Single(resident => resident.IsEddie);
         var own = village.Building.All.Where(structure => structure.Island == Islet).Select(structure => structure.Blueprint).Order();
         Assert.Equal(["eddie-house", "eddie-workshop"], own);
         Assert.Equal(village.Building.All.Single(structure => structure.Blueprint == "eddie-house").Anchor, ((IPlaces)village.Building).HomeOf(eddie.Id));
         Assert.Equal("eddie-workshop", village.Building.All.Single(structure => structure.Id == village.Work.JobOf(eddie.Id)!.Building).Blueprint);
-        // the islands gather at a fixed tile of their own; there is no school yet
+        // the islands gather at their campfire, Eddie at a fixed tile of his own; there is no school yet
         foreach (var island in Builders.RealMap.Islands)
         {
             var gathering = ((IPlaces)village.Building).GatheringOn(island.Id);
             Assert.Equal(island.Id, Builders.RealMap.IslandOf(gathering!.Value));
             Assert.Null(((IPlaces)village.Building).SchoolOn(island.Id));
+            var fires = village.Building.All.Where(structure => structure.Island == island.Id && structure.Blueprint == "campfire").ToList();
+            if (island.Eddie) Assert.Empty(fires);
+            else Assert.Equal(Assert.Single(fires).Anchor, gathering);
         }
+        // someone keeps the fire at night
+        Assert.Contains(village.People.All, resident => village.Work.JobOf(resident.Id) is { Role: "fire-keeper", Shift: Shift.Night });
     }
 
     [Fact]
@@ -331,7 +341,7 @@ public class BuildingTests
     {
         var village = Builders.Start(1, June(1, 9));
         var map = Builders.RealMap;
-        var kinds = new[] { "bench", "crate", "sapling", "barrow" };
+        var kinds = new[] { "log", "basket", "sapling", "boulder" };
         Assert.NotEmpty(village.Building.Things);
         Assert.All(village.Building.Things, thing =>
         {
@@ -347,7 +357,7 @@ public class BuildingTests
         var hut = village.Building.All.First(structure => structure.Island == West);
         var water = map.Islands.Single(island => island.Id == West).Cells.SelectMany(cell => cell.Neighbours()).First(cell => !map.IsWalkable(cell));
         var free = map.Islands.Single(island => island.Id == West).Cells
-            .First(cell => map.At(cell) == Ground.Land && village.Building.CanPlace("sawmill", cell, 0));
+            .First(cell => map.At(cell) == Ground.Land && village.Building.CanPlace("campfire", cell, 0));
         var oost = map.Islands.Single(island => island.Id == Oost).Cells.First(cell => map.At(cell) == Ground.Land);
 
         Assert.Equal(Refusal.NotFound, village.Building.Move(9999, free));
@@ -361,7 +371,7 @@ public class BuildingTests
         var moved = village.Building.Things.Single(t => t.Id == thing.Id);
         Assert.Equal((free, thing.Home), (moved.At, moved.Home));
         // a thing takes its tile: nothing is built on it
-        Assert.False(village.Building.CanPlace("sawmill", free, 0));
+        Assert.False(village.Building.CanPlace("campfire", free, 0));
     }
 
     [Fact]
@@ -369,8 +379,8 @@ public class BuildingTests
     {
         var original = Builders.Start(4, June(1, 9));
         original.Run(1);
-        original.PlaceNearHeart("house", West);
-        original.PlaceNearHeart("stone-house", Oost);
+        original.PlaceNearHeart("hut", West);
+        original.PlaceNearHeart("stone-hut", Oost);
         original.JumpTo(June(1, 10));
         original.Run(700);
         Assert.Contains(original.Building.All, structure => !structure.Done && structure.Phase > 0);

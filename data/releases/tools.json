@@ -1,0 +1,21 @@
+{
+  "materials": [
+    { "id": "wood", "nl": "hout", "en": "wood", "satisfies": ["heat"] }
+  ],
+  "roles": [
+    { "id": "woodcutter", "nl": "houthakker", "en": "woodcutter" }
+  ],
+  "blueprints": [
+    {
+      "id": "woodcutter", "nl": "houthakkerij", "en": "woodcutter's hut", "on": ["forest"], "serves": "tools",
+      "jobs": [{ "role": "woodcutter", "count": 2, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "wood": 2 }, "ticks": 240 },
+      "phases": [
+        { "id": "foundation", "ticks": 200, "cost": { "branches": 2 } },
+        { "id": "frame", "ticks": 300, "cost": { "branches": 3 } },
+        { "id": "roof", "ticks": 200, "cost": { "reed": 2 } }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "wood", "roof": "thatch", "extras": ["door", "crates"] }
+    }
+  ]
+}

@@ -9,7 +9,7 @@ namespace Codery.Village.Tests;
 public class DataTests
 {
     private static readonly string Folder = Path.Combine(AppContext.BaseDirectory, "data");
-    private const string Cafe = "demo/cafe.json";
+    private const string Cafe = "releases/cafe.json";
 
     private static DataSet Base() => DataFolder.Load(Folder, []);
 
@@ -19,7 +19,7 @@ public class DataTests
     public void The_data_has_no_problems()
     {
         Assert.Empty(Base().Problems());
-        Assert.Empty(DataFolder.Load(Folder, [Cafe]).Problems());
+        Assert.Empty(DataFolder.Load(Folder, Ladder.InOrder()).Problems());
     }
 
     [Fact]
@@ -34,11 +34,15 @@ public class DataTests
     [Fact]
     public void A_house_takes_about_ten_minutes()
     {
-        var house = CatalogOf(Base()).Blueprints.Single(blueprint => blueprint.Id == "house");
+        var huts = CatalogOf(Base()).Blueprints.Where(blueprint => blueprint.Id is "hut" or "stone-hut").ToList();
 
-        Assert.Equal(new[] { "foundation", "frame", "roof", "walls", "garden" }, house.Phases.Select(phase => phase.Id));
-        Assert.Equal(2400, house.Phases.Sum(phase => phase.Ticks));
-        Assert.True(house.Homes > 0);
+        Assert.Equal(2, huts.Count);
+        foreach (var hut in huts)
+        {
+            Assert.Equal(new[] { "foundation", "frame", "roof", "walls", "garden" }, hut.Phases.Select(phase => phase.Id));
+            Assert.Equal(2400, hut.Phases.Sum(phase => phase.Ticks));
+            Assert.True(hut.Homes > 0);
+        }
     }
 
     [Fact]
@@ -64,13 +68,96 @@ public class DataTests
     }
 
     [Fact]
-    public void The_base_catalog_fulfils_no_wish()
+    public void The_base_is_prehistoric()
     {
         var catalog = CatalogOf(Base());
 
+        // nothing in the base fulfils a wish: every step forward is a release
         Assert.All(catalog.Blueprints, blueprint => Assert.Null(blueprint.Serves));
         Assert.NotEmpty(catalog.Things);
+        // what came later is not there yet
+        Assert.DoesNotContain(catalog.Materials, material => material.Id is "wood" or "planks" or "grain" or "bread" or "bricks");
+        Assert.DoesNotContain(catalog.Blueprints, blueprint => blueprint.Id is "house" or "stone-house" or "sawmill" or "bakery" or "farm");
+        // a fire, where someone sits at night
+        var fire = catalog.Blueprints.Single(blueprint => blueprint.Id == "campfire");
+        Assert.Contains(fire.Jobs!, job => job.Shift == Shift.Night);
+        // gathering and fishing: no hunting
+        Assert.DoesNotContain(catalog.Roles, role => role.Id.Contains("hunt", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void Money_is_counted_in_shells()
+    {
+        var currency = JsonDocument.Parse(File.ReadAllText(Path.Combine(Folder, "economy.json"))).RootElement.GetProperty("currency");
+
+        Assert.Equal("schelpen", currency.GetProperty("nl").GetString());
+        Assert.Equal("shells", currency.GetProperty("en").GetString());
+    }
+
+    [Fact]
+    public void Both_islands_can_live_on_their_own_ground()
+    {
+        var map = MapText.Parse(File.ReadAllText(Path.Combine(Folder, "map.txt")));
+        var catalog = CatalogOf(Base());
+        var satisfies = catalog.Materials.ToDictionary(material => material.Id, material => material.Satisfies ?? []);
+
+        foreach (var island in map.Islands.Where(island => !island.Eddie))
+        {
+            // the grounds of the island, and the fishing ground off its shore
+            var grounds = island.Cells.Select(map.At)
+                .Concat(island.Cells.SelectMany(cell => cell.Neighbours()).Where(cell => map.At(cell) == Ground.Fishing).Select(map.At))
+                .ToHashSet();
+            var fits = catalog.Blueprints.Where(blueprint => blueprint.On.Any(grounds.Contains)).ToList();
+
+            // what it can make from nothing: a place that fits and that it can pay for, making what its recipe gives
+            var made = new HashSet<string>();
+            bool Affords(Blueprint blueprint) => blueprint.Phases.All(phase => phase.Cost.Keys.All(made.Contains));
+            for (var grew = true; grew;)
+            {
+                grew = false;
+                foreach (var blueprint in fits.Where(blueprint => blueprint.Recipe is { } recipe && Affords(blueprint) && recipe.In.Keys.All(made.Contains)))
+                    foreach (var material in blueprint.Recipe!.Out.Keys)
+                        grew |= made.Add(material);
+            }
+
+            Assert.True(made.Any(material => satisfies[material].Contains("food")), $"{island.Name} makes no food from {string.Join(", ", made)}");
+            Assert.True(made.Any(material => satisfies[material].Contains("heat")), $"{island.Name} makes no warmth from {string.Join(", ", made)}");
+            Assert.True(fits.Any(blueprint => blueprint.Homes > 0 && Affords(blueprint)), $"{island.Name} builds no hut from {string.Join(", ", made)}");
+            Assert.Contains(fits, blueprint => blueprint.Id == "campfire");
+        }
+    }
+
+    [Fact]
+    public void Every_release_serves_a_wish_and_loads()
+    {
+        var labels = WishLabels();
+        var files = Ladder.Files();
+        Assert.NotEmpty(files);
+        // the README names each release once, in an order that loads
+        Assert.Equal(files, Ladder.InOrder().Order(StringComparer.Ordinal));
+
+        foreach (var release in files)
+        {
+            var with = Ladder.With(release);
+            var order = Ladder.InOrder().ToList();
+            Assert.All(with.SkipLast(1), before => Assert.True(order.IndexOf(before) < order.IndexOf(release), $"{before} comes after {release} in the README"));
+            var data = DataFolder.Load(Folder, with);
+            Assert.True(data.Problems().Count == 0, $"{release}: {string.Join(" ", data.Problems())}");
+
+            var added = JsonDocument.Parse(Ladder.Text(release)).RootElement.GetProperty("blueprints").EnumerateArray()
+                .Select(blueprint => blueprint.TryGetProperty("serves", out var serves) ? serves.GetString() : null).ToList();
+            Assert.Contains(added, label => label is not null && labels.Contains(label));
+        }
+        // the wishes for progress are each served by a release
+        var served = Ladder.Files().SelectMany(release => CatalogOf(DataFolder.Load(Folder, Ladder.With(release))).Blueprints)
+            .Select(blueprint => blueprint.Serves).OfType<string>().ToHashSet();
+        foreach (var label in new[] { "tools", "planks", "fields", "bread", "stone", "bricks", "house", "jetty", "cafe" })
+            Assert.Contains(label, served);
+    }
+
+    private static HashSet<string> WishLabels() =>
+        JsonDocument.Parse(File.ReadAllText(Path.Combine(Folder, "wishes.json"))).RootElement.GetProperty("wishes").EnumerateArray()
+            .Select(wish => wish.GetProperty("label").GetString()!).ToHashSet();
 
     [Fact]
     public void A_release_adds_without_changing()

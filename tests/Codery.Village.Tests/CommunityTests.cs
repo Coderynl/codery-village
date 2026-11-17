@@ -36,10 +36,10 @@ public class CommunityTests
                 building["community"]!["maxSites"] = 1;
             },
             economy: economy => Stock(economy,
-                new JsonObject { ["wood"] = 40, ["planks"] = 40 },
-                new JsonObject { ["stone"] = 45, ["bricks"] = 20 }));
+                new JsonObject { ["branches"] = 40, ["reed"] = 20 },
+                new JsonObject { ["stones"] = 45, ["loam"] = 20, ["reed"] = 20 }));
         var village = Builders.Start(1, June(1, 9), data, community: true);
-        Assert.DoesNotContain(village.Building.All, structure => structure.Island == West || structure.Island == Oost);
+        Assert.DoesNotContain(village.Building.All, structure => (structure.Island == West || structure.Island == Oost) && structure.Blueprint != "campfire");
         var decide = (int)JsonNode.Parse(File.ReadAllText(Path.Combine(Builders.Folder, "building.json")))!["community"]!["decideTicks"]!;
 
         village.Run(decide - 1);
@@ -48,8 +48,8 @@ public class CommunityTests
 
         // each island the dwelling it can pay for, as near the heart of the island as there is a free lot
         var sites = Sites(village);
-        Assert.Equal(["house"], sites[West]);
-        Assert.Equal(["stone-house"], sites[Oost]);
+        Assert.Equal(["hut"], sites[West]);
+        Assert.Equal(["stone-hut"], sites[Oost]);
         foreach (var island in new[] { West, Oost })
         {
             var site = village.Building.All.Single(structure => structure.Island == island && !structure.Done);
@@ -78,23 +78,24 @@ public class CommunityTests
     [Fact]
     public void Low_stock_brings_a_workshop_and_what_it_needs_first()
     {
-        // housed, but without food or heat in stock
+        // housed, but without food or heat in stock; Oost has reed for one hut
         var data = Builders.Data(
             economy: economy => Stock(economy,
-                new JsonObject { ["wood"] = 40, ["planks"] = 40 },
-                new JsonObject { ["stone"] = 45, ["bricks"] = 20 }));
+                new JsonObject { ["branches"] = 40, ["reed"] = 20 },
+                new JsonObject { ["stones"] = 45, ["loam"] = 20, ["reed"] = 3 }));
         var village = Builders.Start(1, June(1, 9), data, community: true);
         var decide = (int)JsonNode.Parse(File.ReadAllText(Path.Combine(Builders.Folder, "building.json")))!["community"]!["decideTicks"]!;
 
         village.Run(2 * decide);
 
-        // first a house for the newcomers; then food: on West bread wants grain, so the farm comes before the bakery
+        // first a hut for the newcomers; then food: on West berries; on Oost the fish trap wants the reed the hut
+        // takes, so the reed bed comes first
         var sites = Sites(village);
-        Assert.Equal(["house", "farm"], sites[West]);
-        Assert.Equal(["stone-house", "fisher"], sites[Oost]);
-        var jetty = village.Building.All.Single(structure => structure.Blueprint == "fisher");
-        Assert.Equal(Ground.Fishing, Builders.RealMap.At(jetty.Anchor));
-        Assert.Equal(Oost, jetty.Island);
+        Assert.Equal(["hut", "berry-patch"], sites[West]);
+        Assert.Equal(["stone-hut", "reed-bed"], sites[Oost]);
+        var reeds = village.Building.All.Single(structure => structure.Blueprint == "reed-bed");
+        Assert.Equal(Ground.Clay, Builders.RealMap.At(reeds.Anchor));
+        Assert.Equal(Oost, reeds.Island);
 
         // two at a time
         village.Run(3 * decide);
@@ -103,62 +104,63 @@ public class CommunityTests
         Assert.Empty(village.Engine.Stopped);
     }
 
-    [Fact]
-    public void Open_sites_keep_what_they_still_need()
+    [Theory]
+    [InlineData(5, "fishing-spot")]
+    [InlineData(4, "reed-bed")]
+    public void Open_sites_keep_what_they_still_need(int reed, string second)
     {
-        // twelve planks: the house takes eleven of them, so a bakery cannot count on them
+        // the stone hut takes three reed, so the fish trap (two reed) can count only on what is left
         var data = Builders.Data(
             economy: economy => Stock(economy,
-                new JsonObject { ["wood"] = 40, ["planks"] = 12 },
-                new JsonObject { ["stone"] = 45, ["bricks"] = 20 }));
+                new JsonObject { ["branches"] = 40, ["reed"] = 20, ["berries"] = 40 },
+                new JsonObject { ["stones"] = 45, ["loam"] = 20, ["reed"] = reed, ["driftwood"] = 40 }));
         var village = Builders.Start(1, June(1, 9), data, community: true);
         var decide = (int)JsonNode.Parse(File.ReadAllText(Path.Combine(Builders.Folder, "building.json")))!["community"]!["decideTicks"]!;
 
         village.Run(2 * decide);
 
-        // not the farm for the bakery, which would wait for planks with the house, but what makes planks
-        Assert.Equal(["house", "sawmill"], Sites(village)[West]);
+        Assert.Equal(["stone-hut", second], Sites(village)[Oost]);
         Assert.Empty(village.Engine.Stopped);
     }
 
     [Fact]
     public void Sites_that_wait_for_each_other_get_their_maker_beyond_maxSites()
     {
-        // two sites need sixteen planks of the twelve there are, and fill the two places for sites
+        // two sites need five reed of the four there are, and fill the two places for sites
         var data = Builders.Data(
             building: building => building["community"]!["maxSites"] = 2,
             economy: economy => Stock(economy,
-                new JsonObject { ["wood"] = 40, ["planks"] = 12, ["bread"] = 40 },
-                new JsonObject { ["stone"] = 45, ["bricks"] = 20, ["fish"] = 40, ["peat"] = 20 }));
+                new JsonObject { ["branches"] = 40, ["reed"] = 20, ["berries"] = 40 },
+                new JsonObject { ["stones"] = 45, ["loam"] = 20, ["reed"] = 4, ["fish"] = 40, ["driftwood"] = 40 }));
         var village = Builders.Start(1, June(1, 9), data, community: true);
         var decide = (int)JsonNode.Parse(File.ReadAllText(Path.Combine(Builders.Folder, "building.json")))!["community"]!["decideTicks"]!;
         village.Run(1);
-        var house = village.Get(village.PlaceNearHeart("house", West));
-        var farm = village.Get(village.PlaceNearHeart("farm", West));
+        var hut = village.Get(village.PlaceNearHeart("stone-hut", Oost));
+        var trap = village.Get(village.PlaceNearHeart("fishing-spot", Oost));
 
         village.Run(decide);
 
         // one site more than maxSites, for the maker, and no more than that
-        Assert.Equal(["house", "farm", "sawmill"], Sites(village)[West]);
+        Assert.Equal(["stone-hut", "fishing-spot", "reed-bed"], Sites(village)[Oost]);
         village.Run(3 * decide);
-        Assert.Equal(3, Sites(village)[West].Length);
+        Assert.Equal(3, Sites(village)[Oost].Length);
 
-        // it goes up, the sawyers make planks, and the site that waited is finished
-        for (var day = 2; day <= 8 && !house.Done; day++)
+        // it goes up, the reed cutters cut reed, and the sites that waited are finished
+        for (var day = 2; day <= 8 && !(hut.Done && trap.Done); day++)
         {
             village.JumpTo(June(day, 9));
             village.Run(8 * 3600 * 4);
         }
-        Assert.True(village.Building.All.Single(structure => structure.Blueprint == "sawmill").Done);
-        Assert.True(house.Done);
-        Assert.True(farm.Done);
+        Assert.True(village.Building.All.Single(structure => structure.Blueprint == "reed-bed").Done);
+        Assert.True(hut.Done);
+        Assert.True(trap.Done);
         Assert.Empty(village.Engine.Stopped);
     }
 
     [Fact]
     public void The_heaviest_wish_the_data_can_fulfil_is_built()
     {
-        var extras = new[] { File.ReadAllText(Path.Combine(Builders.Folder, "demo", "cafe.json")) };
+        var extras = new[] { File.ReadAllText(Path.Combine(Builders.Folder, "releases", "cafe.json")) };
         var data = Builders.Data(building: building => building["community"]!["maxSites"] = 3, extras: extras);
         // a playground weighs more, but nothing in the data makes one
         var wishes = new FakeWishes(("playground", 9), ("cafe", 5), ("library", 2));
@@ -167,8 +169,8 @@ public class CommunityTests
 
         village.Run(3 * decide);
 
-        Assert.Equal(["house", "cafe"], Sites(village)[West]);
-        Assert.Equal(["stone-house", "cafe"], Sites(village)[Oost]);
+        Assert.Equal(["hut", "cafe"], Sites(village)[West]);
+        Assert.Equal(["stone-hut", "cafe"], Sites(village)[Oost]);
         Assert.Empty(village.Engine.Stopped);
     }
 }

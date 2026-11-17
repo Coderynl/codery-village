@@ -107,9 +107,12 @@ public sealed class Day : IModule
 
         if (plan is not null && plan.Block == key)
         {
-            // the same block goes on; a wanderer wanders on to another tile each quarter
+            // the same block goes on; a wanderer wanders on to another tile each quarter, and a worker whose work
+            // moved, such as a builder sent to a new site, goes to where it is now
             var doing = plan.Doing;
             if (doing.Activity == Activity.Wander && newQuarter) Go(now, resident, key, Activity.Wander, RandomTile(now, resident.Island, coast: false), inside: false);
+            else if (doing.Activity == Activity.Work && PlaceOf(now, resident, Activity.Work, job) is var (_, moved, indoors) && moved != doing.Place)
+                Go(now, resident, key, Activity.Work, moved, indoors);
             else Go(now, resident, key, doing.Activity, doing.Place, plan.InsideThere);
             return;
         }

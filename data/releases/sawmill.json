@@ -1,0 +1,22 @@
+{
+  "materials": [
+    { "id": "planks", "nl": "planken", "en": "planks" }
+  ],
+  "roles": [
+    { "id": "sawyer", "nl": "zager", "en": "sawyer" }
+  ],
+  "blueprints": [
+    {
+      "id": "sawmill", "nl": "zagerij", "en": "sawmill", "on": ["land"], "serves": "planks",
+      "jobs": [{ "role": "sawyer", "count": 2, "shift": "day", "outdoor": false }],
+      "recipe": { "in": { "wood": 2 }, "out": { "planks": 3 }, "ticks": 240 },
+      "phases": [
+        { "id": "foundation", "ticks": 300, "cost": { "wood": 3 } },
+        { "id": "frame", "ticks": 400, "cost": { "wood": 4 } },
+        { "id": "roof", "ticks": 300, "cost": { "wood": 2 } },
+        { "id": "walls", "ticks": 300, "cost": { "wood": 3 } }
+      ],
+      "look": { "form": "building", "size": "medium", "walls": "planks", "roof": "gable", "extras": ["door", "crates"] }
+    }
+  ]
+}
