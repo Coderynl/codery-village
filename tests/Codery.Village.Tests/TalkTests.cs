@@ -270,6 +270,8 @@ public class TalkTests
     [Fact]
     public void Talk_changes_nothing_else()
     {
+        // one village is answered by a model at once; the other is never answered and falls back to templates
+        // minutes later: other words, at another time
         var model = Start(June(1, 12));
         var templates = Start(June(1, 12));
         var said = 0;
@@ -283,12 +285,20 @@ public class TalkTests
                 Talk(model).Answer(request.Id, Written(request));
                 said++;
             }
-            foreach (var request in Talk(templates).TakeRequests())
-                Talk(templates).Answer(request.Id, Settings.Templates.Fill(request));
+            Talk(templates).TakeRequests();
         }
 
         Assert.True(said > 0, "nobody talked");
-        Assert.NotEqual(Json(Talk(model).Recent), Json(Talk(templates).Recent));
+        var late = Talk(templates).Recent.ToDictionary(conversation => conversation.Id);
+        var shared = Talk(model).Recent.Where(conversation => late.ContainsKey(conversation.Id)).ToList();
+        Assert.NotEmpty(shared);
+        Assert.All(shared, conversation =>
+        {
+            Assert.False(conversation.Lines.FromTemplate);
+            Assert.True(late[conversation.Id].Lines.FromTemplate);
+            Assert.True(late[conversation.Id].Tick - conversation.Tick >= Settings.AnswerWithinMinutes * 60 * 4 - 1,
+                $"answered at {conversation.Tick} and {late[conversation.Id].Tick}");
+        });
         var a = model.Engine.Save();
         var b = templates.Engine.Save();
         Assert.Equal(
