@@ -7,3 +7,6 @@ public sealed class LifeClock(long ticksPerLifeYear)
 
     public long TickOfAge(double years) => (long)Math.Round(years * ticksPerLifeYear);
 }
+
+/// <summary>The section "life" of the data.</summary>
+public sealed record LifeSettings(long TicksPerLifeYear);
