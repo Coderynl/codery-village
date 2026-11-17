@@ -7,5 +7,8 @@ public sealed record ResidentArrived(long Tick, int Resident) : VillageEvent(Tic
 
 public sealed record ResidentPhaseChanged(long Tick, int Resident, LifePhase Phase) : VillageEvent(Tick);
 
-/// <summary>Someone left the village. <paramref name="Reason"/> is a short key: "coast".</summary>
-public sealed record ResidentLeft(long Tick, int Resident, string Reason) : VillageEvent(Tick);
+/// <summary>
+/// Someone left the village. <paramref name="Reason"/> is a short key: "coast". He takes his
+/// <paramref name="Money"/> (cents) with him, out of the village.
+/// </summary>
+public sealed record ResidentLeft(long Tick, int Resident, string Reason, int? Household, int Island, long Money) : VillageEvent(Tick);

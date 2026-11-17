@@ -19,7 +19,8 @@ namespace Codery.Village.Modules.Work;
 /// into the island's stock; a woodcutter fells a tree nearby, which grows back. The treasury of the island pays
 /// a wage for every tick on the job, and once a calendar day, at 00:00, the island settles its day: the start
 /// subsidy comes in, the upkeep of its buildings goes out, children, students and the retired get their money,
-/// every household buys food and heat from the stock, and every resident spends after his thrift. Eddie works
+/// every household buys food and heat from the stock, and every resident spends after his thrift. Who leaves the
+/// village takes his money with him; the island books it the tick after. Eddie works
 /// in his workshop for nothing: he is outside the economy.
 /// </summary>
 public sealed class Work : IModule, IJobs, IStock
@@ -106,6 +107,9 @@ public sealed class Work : IModule, IJobs, IStock
     public void Step(ModuleContext village)
     {
         _village = village;
+        // who left in the last tick took his money out of the village
+        foreach (var left in village.Received.OfType<ResidentLeft>())
+            if (_treasuries.TryGetValue(left.Island, out var treasury)) treasury.Departed += left.Money;
         var world = See(village);
         var today = Today(village);
         if (today != _day)
@@ -476,7 +480,7 @@ public sealed class Work : IModule, IJobs, IStock
         JsonSerializer.SerializeToNode(new SavedWork(
             _day,
             [.. _treasuries.OrderBy(item => item.Key).Select(item => new SavedIsland(item.Key, item.Value.Cash, item.Value.Subsidy, item.Value.Upkeep,
-                item.Value.Spent, _wages.GetValueOrDefault(item.Key), Stock(item.Key)))],
+                item.Value.Spent, _wages.GetValueOrDefault(item.Key), Stock(item.Key), item.Value.Departed))],
             [.. _jobs.Select(job => new SavedJob(job.Key, job.Value, _owed.GetValueOrDefault(job.Key)))],
             [.. _vacant.OrderBy(item => (item.Key.Island, item.Key.Structure, item.Key.Job, item.Key.Index)).Select(item => new SavedVacancy(item.Key, item.Value))],
             [.. _batches.Select(batch => new SavedBatch(batch.Key, batch.Value))],
@@ -502,7 +506,7 @@ public sealed class Work : IModule, IJobs, IStock
         }
         foreach (var island in saved.Islands)
         {
-            _treasuries[island.Id] = new Treasury { Cash = island.Cash, Subsidy = island.Subsidy, Upkeep = island.Upkeep, Spent = island.Spent };
+            _treasuries[island.Id] = new Treasury { Cash = island.Cash, Subsidy = island.Subsidy, Upkeep = island.Upkeep, Spent = island.Spent, Departed = island.Departed };
             _wages[island.Id] = island.Wages;
             _stock[island.Id] = new SortedDictionary<string, int>(island.Stock.ToDictionary(), StringComparer.Ordinal);
         }
@@ -532,7 +536,7 @@ public sealed class Work : IModule, IJobs, IStock
     private sealed record SavedWork(DateOnly Day, IReadOnlyList<SavedIsland> Islands, IReadOnlyList<SavedJob> Jobs,
         IReadOnlyList<SavedVacancy> Vacant, IReadOnlyList<SavedBatch> Batches, IReadOnlyList<SavedFelled> Felled);
 
-    private sealed record SavedIsland(int Id, long Cash, long Subsidy, long Upkeep, long Spent, long Wages, IReadOnlyDictionary<string, int> Stock);
+    private sealed record SavedIsland(int Id, long Cash, long Subsidy, long Upkeep, long Spent, long Wages, IReadOnlyDictionary<string, int> Stock, long Departed = 0);
 
     private sealed record SavedJob(int Resident, Seat Seat, long Owed);
 

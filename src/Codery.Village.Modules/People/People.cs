@@ -104,7 +104,7 @@ public sealed class People : IModule
         foreach (var resident in leaving)
         {
             _residents.Remove(resident);
-            village.Publish(new ResidentLeft(tick, resident.Id, Coast));
+            village.Publish(new ResidentLeft(tick, resident.Id, Coast, resident.Household, resident.Island, resident.Money));
             village.Log(new LogEntry(tick, LeftCoast, resident.Name));
         }
     }

@@ -16,4 +16,7 @@ public sealed class Treasury
 
     /// <summary>All the residents of the island have spent: money that left the village.</summary>
     public long Spent { get; internal set; }
+
+    /// <summary>All the residents of the island took with them when they left: money that left the village.</summary>
+    public long Departed { get; internal set; }
 }

@@ -24,16 +24,18 @@ public class WorkTests
     private static DateTimeOffset June(int day, int hour, int minute = 0) => new(2026, 6, day, hour, minute, 0, TimeSpan.FromHours(2));
 
     /// <summary>The real data, changed as the test needs.</summary>
-    private static DataSet Data(Action<JsonObject>? economy = null, Action<JsonObject>? people = null)
+    private static DataSet Data(Action<JsonObject>? economy = null, Action<JsonObject>? people = null, Action<JsonObject>? life = null)
     {
         JsonObject Read(string name) => JsonNode.Parse(File.ReadAllText(Path.Combine(Folder, name + ".json")))!.AsObject();
         var economyJson = Read("economy");
         var peopleJson = Read("people");
+        var lifeJson = Read("life");
+        life?.Invoke(lifeJson);
         economy?.Invoke(economyJson);
         people?.Invoke(peopleJson);
         return new DataSet(new Dictionary<string, string>
         {
-            ["life"] = Read("life").ToJsonString(),
+            ["life"] = lifeJson.ToJsonString(),
             ["people"] = peopleJson.ToJsonString(),
             ["day"] = Read("day").ToJsonString(),
             ["catalog"] = Read("catalog").ToJsonString(),
@@ -216,18 +218,46 @@ public class WorkTests
             village.Run(40);
         }
 
-        var (subsidy, upkeep, spent) = Books(village);
-        Assert.Equal(before + (subsidy - books.Subsidy) - (upkeep - books.Upkeep) - (spent - books.Spent), village.Money);
+        var (subsidy, upkeep, spent, departed) = Books(village);
+        Assert.Equal(before + (subsidy - books.Subsidy) - (upkeep - books.Upkeep) - (spent - books.Spent) - (departed - books.Departed), village.Money);
         // and it did move
         Assert.True(subsidy > books.Subsidy && upkeep > books.Upkeep && spent > books.Spent);
         Assert.True(village.Ear.Heard.OfType<Paid>().Sum(paid => paid.Wages) > 0);
         Assert.True(village.Ear.Heard.OfType<Paid>().Sum(paid => paid.Pensions + paid.Allowances) > 0);
     }
 
-    private static (long Subsidy, long Upkeep, long Spent) Books(Village village)
+    private static (long Subsidy, long Upkeep, long Spent, long Departed) Books(Village village)
     {
         var treasuries = RealMap.Islands.Select(island => village.Work.Of(island.Id)).ToList();
-        return (treasuries.Sum(t => t.Subsidy), treasuries.Sum(t => t.Upkeep), treasuries.Sum(t => t.Spent));
+        return (treasuries.Sum(t => t.Subsidy), treasuries.Sum(t => t.Upkeep), treasuries.Sum(t => t.Spent), treasuries.Sum(t => t.Departed));
+    }
+
+    [Fact]
+    public void Who_leaves_takes_his_money_out_of_the_village()
+    {
+        // singles of 69 in a fast life: they move to the coast within a life year, around midnight
+        var data = Data(
+            people: p =>
+            {
+                p["households"] = new JsonArray(new JsonObject { ["adults"] = 1, ["children"] = 0, ["weight"] = 1 });
+                p["adultAges"] = new JsonArray(new JsonObject { ["from"] = 69, ["to"] = 69, ["weight"] = 1 });
+            },
+            life: l => l["ticksPerLifeYear"] = 4000);
+        var village = Start(1, June(1, 23, 50), data, Economy());
+        foreach (var resident in village.People.All.Where(resident => !resident.IsEddie)) resident.Money = 10_000 + resident.Id;
+        var leaving = village.People.All.Count(resident => !resident.IsEddie);
+        var before = village.Money;
+        var books = Books(village);
+
+        village.Run(4100);
+
+        Assert.Equal(leaving, village.Ear.Heard.OfType<ResidentLeft>().Count());
+        var left = village.Ear.Heard.OfType<ResidentLeft>().ToList();
+        Assert.Contains(left, e => e.Money > 0);
+        var (subsidy, upkeep, spent, departed) = Books(village);
+        Assert.Equal(left.Sum(e => e.Money), departed - books.Departed);
+        Assert.Equal(before + (subsidy - books.Subsidy) - (upkeep - books.Upkeep) - (spent - books.Spent) - (departed - books.Departed), village.Money);
+        Assert.True(subsidy > books.Subsidy && spent > books.Spent);
     }
 
     [Theory]

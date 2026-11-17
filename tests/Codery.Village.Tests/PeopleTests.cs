@@ -245,6 +245,11 @@ public class PeopleTests
         var left = Heard<ResidentLeft>(ear).ToList();
         Assert.Equal(retired.Select(resident => resident.Id).Order(), left.Select(e => e.Resident).Order());
         Assert.All(left, e => Assert.Equal("coast", e.Reason));
+        Assert.All(left, e =>
+        {
+            var who = retired.Single(resident => resident.Id == e.Resident);
+            Assert.Equal((who.Household, who.Island, who.Money), (e.Household, e.Island, e.Money));
+        });
         // nobody leaves before seventy
         Assert.All(left, e => Assert.True(e.Tick - retired.Single(resident => resident.Id == e.Resident).BornTick >= 70 * FastYear));
         Assert.Equal(retired.Select(resident => resident.Name).Order(),
