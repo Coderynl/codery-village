@@ -257,7 +257,8 @@ public sealed class Work : IModule, IJobs, IStock
             if (PlaceOf(world, seat) is not { } job) continue;
             if (!AtWork(day, resident, job.Place))
             {
-                if (day.TripOf(resident) is { Errand.Kind: Activity.Fetch or Activity.Bring } trip && trip.Home == job.Place) Pay(world.Residents[resident], seat.Island);
+                if (day.TripOf(resident) is { Errand.Kind: Activity.Fetch or Activity.Bring, Was: Activity.Work } trip && trip.Home == job.Place)
+                    Pay(world.Residents[resident], seat.Island);
                 continue;
             }
             if (seat.Structure >= 0)

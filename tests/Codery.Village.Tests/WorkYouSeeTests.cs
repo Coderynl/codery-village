@@ -3,6 +3,7 @@ using Codery.Village.Core.Map;
 using Codery.Village.Modules.Building;
 using Codery.Village.Modules.Contracts;
 using Codery.Village.Modules.Day;
+using Codery.Village.Modules.People;
 using Codery.Village.Modules.Work;
 using FireModule = Codery.Village.Modules.Fire.Fire;
 
@@ -49,9 +50,9 @@ public class WorkYouSeeTests
         // back with the branches on their backs; the phase grows only once they are back
         var carried = false;
         var ticks = 0;
-        while (builders.Any(builder => village.Day.Of(builder.Id).Activity == Activity.Fetch) && ticks++ < 2000)
+        while (site.Progress == 0 && ticks++ < 2000)
         {
-            Assert.Equal((0, 0), (site.Phase, site.Progress));
+            Assert.Equal(0, site.Phase);
             village.Run(1);
             foreach (var builder in builders)
                 if (village.Day.Of(builder.Id) is { Activity: Activity.Fetch, Walk: not null } doing && doing.Place == site.Anchor)
@@ -61,8 +62,12 @@ public class WorkYouSeeTests
                 }
         }
         Assert.True(carried, "nobody carried the branches back");
-        Assert.Contains(village.Heard<Reached>(), e => e.Errand == Activity.Fetch && e.At == store);
         Assert.Equal(3, village.BuildersAt(site));
+        // the tick they are back, the phase grows: each fetched once, and the site never waited for builders
+        village.Run(1);
+        Assert.All(builders, builder => Assert.Single(village.Heard<Reached>(), e => e.Resident == builder.Id && e.Errand == Activity.Fetch && e.At == store));
+        Assert.DoesNotContain(village.Heard<ConstructionWaiting>(), e => e.Structure == id);
+        Assert.DoesNotContain(village.Engine.Log, line => line.Kind == "waiting-builders" && line.Detail == id.ToString());
         village.Run(10);
         Assert.Equal(0, site.Phase);
         Assert.True(site.Progress > 0);
@@ -323,6 +328,51 @@ public class WorkYouSeeTests
         // never faster than a full crew: a hut is 2400 ticks of a full crew
         Assert.True(helped >= 2400, $"with help {helped} ticks");
         Assert.True(crewTicks >= 2400 - 5, $"{crewTicks} ticks of progress");
+    }
+
+    [Fact]
+    public void Children_do_not_help_build()
+    {
+        // everyone is friendly enough and spends free time helping; on a weekday at 10:00 toddlers have free time too
+        var village = Builders.Start(2, June(1, 9), Builders.Data(day: day =>
+        {
+            day["helpFrom"] = 0;
+            day["free"] = new JsonArray(new JsonObject { ["do"] = "leisure", ["weight"] = 1 });
+        }));
+        village.Run(1);
+        village.PlaceNearHeart("hut", West);
+        village.JumpTo(June(1, 10, 30));
+        var free = village.People.All.Where(resident => village.Day.Of(resident.Id).Activity is Activity.Help or Activity.Leisure or Activity.Fetch).ToList();
+        Assert.Contains(free, resident => resident.Phase == LifePhase.Child);
+        // the grown-ups help, and fetch what the phase costs; the children have their free time elsewhere
+        Assert.Contains(free, resident => resident.Phase != LifePhase.Child && village.Day.Of(resident.Id).Activity is Activity.Help or Activity.Fetch);
+        Assert.DoesNotContain(free, resident => resident.Phase == LifePhase.Child && village.Day.Of(resident.Id).Activity is Activity.Help or Activity.Fetch);
+        village.Run(600);
+        Assert.DoesNotContain(village.People.All, resident => resident.Phase == LifePhase.Child && village.Day.Of(resident.Id).Activity is Activity.Help or Activity.Fetch);
+    }
+
+    [Fact]
+    public void A_site_saved_before_builders_counted_in_hundredths_keeps_its_progress()
+    {
+        var village = Builders.Start(4, June(1, 9));
+        village.Run(1);
+        var id = village.PlaceNearHeart("hut", West);
+        village.JumpTo(June(1, 10));
+        var site = village.Get(id);
+        for (var tick = 0; tick < 3000 && site.Progress < 100; tick++) village.Run(1);
+        Assert.True(site.Progress >= 100);
+        var (phase, progress) = (site.Phase, site.Progress);
+
+        // as version 1 wrote it: the work in builder ticks, not in hundredths of them
+        var saved = village.Engine.Save();
+        var part = saved.Modules.Single(module => module.Name == "building");
+        Assert.Equal(2, part.Version);
+        var data = part.Data.DeepClone();
+        foreach (var structure in data["structures"]!.AsArray()) structure!["units"] = (int)structure["units"]! / 100;
+        var old = saved with { Modules = [.. saved.Modules.Select(module => module.Name == "building" ? module with { Version = 1, Data = data } : module)] };
+
+        var loaded = Builders.Load(old, Builders.Data());
+        Assert.Equal((phase, progress), (loaded.Get(id).Phase, loaded.Get(id).Progress));
     }
 
     [Fact]

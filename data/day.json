@@ -16,6 +16,7 @@
     { "to": "neighbour", "weight": 2 }
   ],
   "helpFrom": 70,
+  "helpPhases": ["student", "working", "retired"],
   "pathWindowDays": 3,
   "pathThreshold": 60,
   "pathKeep": 20,

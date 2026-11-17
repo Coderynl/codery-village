@@ -1,3 +1,5 @@
+using Codery.Village.Modules.People;
+
 namespace Codery.Village.Modules.Day;
 
 /// <summary>The section "day" of the data: the rhythm of the day for each kind of resident.</summary>
@@ -14,14 +16,16 @@ public sealed record DaySettings(
     IReadOnlyDictionary<string, Rhythm> Rhythms,
     // where free time and wandering go, by weight: a place where there is something
     IReadOnlyList<OutingChoice>? Outings = null,
-    // from this agreeableness up, free time is spent helping at a building site of the island
+    // from this agreeableness up, free time is spent helping at a building site of the island, by who is in one of HelpPhases
     int HelpFrom = 101,
     // a tile with more than pathThreshold steps in the last pathWindowDays days is a path while it keeps more than pathKeep
     int PathWindowDays = 3,
     int PathThreshold = int.MaxValue,
     int PathKeep = 0,
     // a walk over a path goes this many times as fast
-    double PathSpeed = 1);
+    double PathSpeed = 1,
+    // the phases of life that help build; children do not
+    IReadOnlyList<LifePhase>? HelpPhases = null);
 
 /// <summary>A kind of place to go in free time, and how often it is chosen.</summary>
 public sealed record OutingChoice(Outing To, int Weight);

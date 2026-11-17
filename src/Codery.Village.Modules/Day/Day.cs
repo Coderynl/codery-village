@@ -29,9 +29,12 @@ public sealed class Day : IModule
     private static readonly string[] RhythmNames = ["toddler", "pupil", "student", "day", "early", "night", Idle, "retired", "eddie"];
     private static readonly TimeSpan Quarter = TimeSpan.FromMinutes(15);
     private static readonly IReadOnlyList<OutingChoice> AtTheWater = [new(Outing.Water, 1)];
+    private static readonly IReadOnlyList<LifePhase> Grown = [LifePhase.Working, LifePhase.Retired];
 
     private readonly Dictionary<int, Plan> _plans = [];
     private readonly Wear _wear = new();
+    // who came back from an errand in this tick, with the errand; not saved, it is gone at the next tick
+    private readonly Dictionary<int, Errand> _back = [];
     private ModuleContext? _village;
     // the quarter the activities belong to
     private DateTimeOffset _quarter;
@@ -52,6 +55,12 @@ public sealed class Day : IModule
 
     /// <summary>The errand the resident is on, or null.</summary>
     public Trip? TripOf(int resident) => _plans.TryGetValue(resident, out var plan) ? plan.Trip : null;
+
+    /// <summary>
+    /// The errand the resident came back from in this tick, or null. A module that steps after Day sees it in the
+    /// same tick, before the <see cref="Returned"/> event reaches it in the next.
+    /// </summary>
+    public Errand? BackFrom(int resident) => _back.GetValueOrDefault(resident);
 
     /// <summary>The tiles that are paths now.</summary>
     public IReadOnlyCollection<Cell> Paths => _wear.Paths;
@@ -86,6 +95,7 @@ public sealed class Day : IModule
     public void Step(ModuleContext village)
     {
         _village = village;
+        _back.Clear();
         var tick = village.Clocks.Tick;
         var today = DateOnly.FromDateTime(village.Clocks.Calendar.Now.DateTime);
         _wear.Turn(today, _settings.PathWindowDays, _settings.PathKeep);
@@ -264,7 +274,8 @@ public sealed class Day : IModule
             Activity.Shop => (activity, Gathering(now, island), true),
             Activity.Visit => VisitFrom(now, resident) is { } host ? (activity, host, true) : (Activity.Home, home, true),
             // free time: a friendly one helps where the island builds, the others go where there is something
-            Activity.Leisure or Activity.Help => resident.Traits.Agreeableness >= _settings.HelpFrom && now.Places?.HelpOn(island) is { } site
+            Activity.Leisure or Activity.Help => resident.Traits.Agreeableness >= _settings.HelpFrom && (_settings.HelpPhases ?? Grown).Contains(resident.Phase)
+                && now.Places?.HelpOn(island) is { } site
                 ? (Activity.Help, site, false)
                 : (Activity.Leisure, PlaceToGo(now, resident), false),
             _ => (activity, PlaceToGo(now, resident), false),
@@ -379,9 +390,10 @@ public sealed class Day : IModule
     }
 
     // back from his errand: he goes on with what he was doing
-    private static void Finish(ModuleContext village, int resident, Plan plan, long tick)
+    private void Finish(ModuleContext village, int resident, Plan plan, long tick)
     {
         var trip = plan.Trip!;
+        _back[resident] = trip.Errand;
         village.Publish(new Returned(tick, resident, trip.Errand.Kind, trip.Home, trip.Errand.Back));
         plan.Trip = null;
         plan.Doing = new Doing(trip.Was, trip.Home, trip.Home, null, plan.InsideThere);

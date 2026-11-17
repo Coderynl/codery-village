@@ -60,7 +60,8 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
 
     public string Name => Section;
 
-    public int Version => 1;
+    // 2: the work of a site in hundredths of a builder
+    public int Version => 2;
 
     /// <summary>Everything that stands or goes up, by id.</summary>
     public IReadOnlyList<Structure> All => _structures.AsReadOnly();
@@ -379,6 +380,9 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
             site.Delivered = phase.Cost.Count == 0;
             village.Publish(new PhaseStarted(tick, site.Id, phase.Id));
         }
+        // who is back from fetching it, in this very tick, has brought it
+        if (!site.Delivered && village.Find<DayModule>() is { } day
+            && crew.Any(member => day.BackFrom(member.Resident) is { Kind: Activity.Fetch })) site.Delivered = true;
         if (!site.Delivered)
         {
             if (Fetch(village, site, phase, crew)) return;
@@ -584,8 +588,9 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
                 throw new InvalidDataException($"The save has a {part.Blueprint} at {part.Anchor} that the data or the map does not know.");
             var structure = Add(part.Blueprint, part.Anchor, part.Rotation, part.Id);
             structure.Phase = part.Phase;
-            structure.Units = part.Units;
-            structure.Progress = part.Units / (_crew.Crew * Full);
+            // version 1 counted the work in builder ticks
+            structure.Units = version < 2 ? part.Units * Full : part.Units;
+            structure.Progress = structure.Units / (_crew.Crew * Full);
             structure.Paid = part.Paid;
             structure.Delivered = part.Delivered;
             structure.Waiting = part.Waiting;
