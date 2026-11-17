@@ -375,6 +375,53 @@ public class DayTests
     }
 
     [Fact]
+    public void After_midnight_the_last_block_of_the_day_before_goes_on()
+    {
+        // weekdays: home from seven, asleep from ten; weekends: asleep from two, free from ten
+        var data = Data(day =>
+        {
+            day["lateMinutes"] = 0;
+            foreach (var (_, rhythm) in day["rhythms"]!.AsObject())
+            {
+                rhythm!["weekday"] = new JsonArray(
+                    new JsonObject { ["from"] = "07:00", ["do"] = "home" },
+                    new JsonObject { ["from"] = "22:00", ["do"] = "sleep" });
+                rhythm["weekend"] = new JsonArray(
+                    new JsonObject { ["from"] = "02:00", ["do"] = "sleep" },
+                    new JsonObject { ["from"] = "10:00", ["do"] = "free" });
+            }
+        });
+        var village = Start(1, June(5, 23), fakes: true, data);
+        Dictionary<int, Doing> sunday = [];
+        var awake = 0;
+
+        // from Friday night to Monday night
+        while (village.Now < June(8, 2))
+        {
+            village.SettleNextQuarter();
+            var now = village.Now;
+            if (now.DayOfWeek == DayOfWeek.Sunday && now.Hour == 23 && now.Minute == 45)
+                sunday = village.People.All.ToDictionary(resident => resident.Id, resident => village.Day.Of(resident.Id));
+            if (now.Hour >= 2) continue;
+            foreach (var resident in village.People.All)
+            {
+                var doing = village.Day.Of(resident.Id);
+                // Saturday night is still Friday's sleep, not the weekend's free time
+                if (now.DayOfWeek == DayOfWeek.Saturday)
+                    Assert.True(doing.Activity is Activity.Sleep or Activity.Wander, $"{now:ddd HH:mm} {resident.Name} {doing.Activity}");
+                // Monday night is still Sunday's free choice, not the weekday's sleep
+                if (now.DayOfWeek == DayOfWeek.Monday && doing.Activity != Activity.Wander)
+                {
+                    Assert.Equal(sunday[resident.Id].Activity, doing.Activity);
+                    Assert.Equal(sunday[resident.Id].Place, doing.Place);
+                    if (doing.Activity != Activity.Sleep) awake++;
+                }
+            }
+        }
+        Assert.True(awake > 0, "nobody was awake on Sunday night");
+    }
+
+    [Fact]
     public void Children_go_to_school_from_six()
     {
         int little = 0, pupils = 0;

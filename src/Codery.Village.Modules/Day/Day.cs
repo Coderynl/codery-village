@@ -155,16 +155,25 @@ public sealed class Day : IModule
         // the careless live a little later: they get up later and go to bed later
         var late = _settings.LateMinutes * Math.Max(0, 50 - resident.Traits.Conscientiousness) / 50.0;
         var moment = _quarter.DateTime - TimeSpan.FromMinutes(late);
-        var weekend = moment.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday && schedule.Weekend is not null;
-        var blocks = weekend ? schedule.Weekend! : schedule.Weekday;
-
+        var date = moment.Date;
+        var (weekend, blocks) = BlocksOn(schedule, date);
         var time = TimeOnly.FromDateTime(moment);
         var at = blocks.FindLastIndex(block => block.From <= time);
-        // before the first block of the day, the last one of the day before goes on
-        var started = at < 0 ? moment.Date.AddDays(-1) + blocks[^1].From.ToTimeSpan() : moment.Date + blocks[at].From.ToTimeSpan();
-        var block = blocks[at < 0 ? blocks.Count - 1 : at].Block;
-        return (block, string.Create(CultureInfo.InvariantCulture, $"{name} {(weekend ? "weekend" : "weekday")} {started:yyyy-MM-dd HH:mm}"));
+        if (at < 0)
+        {
+            // before the first block of the day, the last block of the day before goes on, from that day's list
+            date = date.AddDays(-1);
+            (weekend, blocks) = BlocksOn(schedule, date);
+            at = blocks.Count - 1;
+        }
+        var started = date + blocks[at].From.ToTimeSpan();
+        return (blocks[at].Block, string.Create(CultureInfo.InvariantCulture, $"{name} {(weekend ? "weekend" : "weekday")} {started:yyyy-MM-dd HH:mm}"));
     }
+
+    private static (bool Weekend, List<Timed> Blocks) BlocksOn(Schedule schedule, DateTime date) =>
+        date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday && schedule.Weekend is { } weekend
+            ? (true, weekend)
+            : (false, schedule.Weekday);
 
     private string RhythmOf(People.People people, Resident resident, JobPlace? job)
     {
