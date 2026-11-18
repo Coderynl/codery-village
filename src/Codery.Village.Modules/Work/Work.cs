@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Codery.Village.Core;
 using Codery.Village.Core.Data;
 using Codery.Village.Core.Map;
 using Codery.Village.Core.Modules;
@@ -19,7 +20,9 @@ namespace Codery.Village.Modules.Work;
 /// his island that fits his interests best. A workplace makes its recipe while someone works there, from and
 /// into the island's stock; a recipe that fells takes a tree nearby, which grows back. After every batch the
 /// workers there bring it to the store where the island gathers, and come back. The treasury of the island pays
-/// a wage for every tick on the job, and once a calendar day, at 00:00, the island settles its day: the start
+/// a wage for every tick on the job; an outdoor job with a recipe is done out on its work area, the ground of its blueprint
+/// around the workplace (for one on the water, the shore by it), each worker on a tile of his own for a few quarters,
+/// and walking from one tile to the next is work too. Once a calendar day, at 00:00, the island settles its day: the start
 /// subsidy comes in, the upkeep of its buildings goes out, children, students and the retired get their money, and who is
 /// of working age the support, less what he earned that day (so a new worker who has had no wage yet, or one whose job
 /// rests at the weekend, is not left without),
@@ -31,6 +34,7 @@ public sealed class Work : IModule, IJobs, IStock
 {
     private const string Section = "economy";
     private const long TicksPerHour = Clocks.TicksPerSecond * 3600L;
+    private const long QuarterSeconds = 15 * 60;
 
     private readonly Dictionary<int, Treasury> _treasuries = [];
     private readonly Dictionary<int, SortedDictionary<string, int>> _stock = [];
@@ -58,6 +62,10 @@ public sealed class Work : IModule, IJobs, IStock
     // per need, the materials that meet it with their price, in the order of the catalog
     private List<(string Need, Need Amount, List<(string Material, int Price)> Goods)> _needs = [];
     private Dictionary<int, Cell> _centres = [];
+    // who was at work, or on an errand for it, in the last tick: a walk over his work area is work only for him
+    private SortedSet<int> _working = [];
+    // per structure, its work area; it follows from the map and the data, so it is not saved
+    private readonly Dictionary<int, (Cell Place, IReadOnlyList<Cell> Cells)> _areas = [];
 
     public string Name => "work";
 
@@ -75,8 +83,18 @@ public sealed class Work : IModule, IJobs, IStock
         // Day may ask before this module has started
         if (_village is null) return null;
         var world = See(_village);
-        if (_jobs.TryGetValue(resident, out var seat)) return PlaceOf(world, seat);
+        if (_jobs.TryGetValue(resident, out var seat)) return PlaceOf(world, resident, seat);
         return world.Residents.TryGetValue(resident, out var who) && who.IsEddie ? EddieJob(world, who) : null;
+    }
+
+    /// <summary>The tiles where the outdoor jobs of the structure are done; empty when they are done at the structure.</summary>
+    public IReadOnlyList<Cell> WorkAreaOf(int structure)
+    {
+        if (_village is null) return [];
+        var world = See(_village);
+        return world.Standing.FirstOrDefault(standing => standing.Id == structure) is { } found && _blueprints.TryGetValue(found.Blueprint, out var blueprint)
+            ? AreaOf(found, blueprint)
+            : [];
     }
 
     /// <summary>The purse of the island. Throws <see cref="KeyNotFoundException"/> for an island that is not on the map.</summary>
@@ -203,7 +221,7 @@ public sealed class Work : IModule, IJobs, IStock
     private int Fit(Resident resident, string role) =>
         _settings.Fits.TryGetValue(role, out var interests) ? resident.Interests.Count(interests.Contains) : 0;
 
-    private JobPlace? PlaceOf(World world, Seat seat)
+    private JobPlace? PlaceOf(World world, int resident, Seat seat, Dictionary<int, Dictionary<int, Cell>>? picked = null)
     {
         if (seat.Structure < 0)
         {
@@ -216,7 +234,79 @@ public sealed class Work : IModule, IJobs, IStock
         var structure = world.Standing.FirstOrDefault(standing => standing.Id == seat.Structure);
         if (structure is null || !_blueprints.TryGetValue(structure.Blueprint, out var blueprint) || blueprint.Jobs is not { } jobs || seat.Job >= jobs.Count) return null;
         var job = jobs[seat.Job];
-        return new JobPlace(structure.Id, Spot(structure), job.Role, job.Shift, job.Outdoor);
+        var place = Spot(structure);
+        if (job.Outdoor && AreaOf(structure, blueprint) is { Count: > 0 } area)
+        {
+            Dictionary<int, Cell>? picks = null;
+            if (picked?.TryGetValue(structure.Id, out picks) != true)
+            {
+                picks = Picks(world, structure, blueprint, area);
+                picked?.Add(structure.Id, picks);
+            }
+            if (picks!.TryGetValue(resident, out var tile)) place = tile;
+        }
+        return new JobPlace(structure.Id, place, job.Role, job.Shift, job.Outdoor);
+    }
+
+    /// <summary>
+    /// Where the outdoor jobs of the structure are done: the walkable tiles of its island within <c>workRange</c> whose
+    /// ground is one it stands on, and those beside such ground that is water (for a fishing spot: the shore). A
+    /// woodcutter's is the forest within <c>forestRange</c>, where he fells. Empty for a structure without a recipe, or
+    /// with <c>workRange</c> 0: its jobs are done at it.
+    /// </summary>
+    private IReadOnlyList<Cell> AreaOf(StructureView structure, Blueprint blueprint)
+    {
+        if (_settings.WorkRange <= 0 || blueprint.Recipe is null || blueprint.Jobs?.Any(job => job.Outdoor) != true) return [];
+        if (_areas.TryGetValue(structure.Id, out var known) && known.Place == structure.Place) return known.Cells;
+        var map = _village!.Map;
+        var on = blueprint.On.ToHashSet();
+        bool Ours(Cell cell) => on.Contains(map.At(cell));
+        var cells = map.Islands.FirstOrDefault(island => island.Id == structure.Island)?.Cells ?? [];
+        IReadOnlyList<Cell> area = [.. (Fells(blueprint)
+                ? cells.Where(cell => map.At(cell) == Ground.Forest && cell.DistanceTo(structure.Place) <= _settings.ForestRange)
+                : cells.Where(cell => map.IsWalkable(cell) && cell.DistanceTo(structure.Place) <= _settings.WorkRange
+                    && (Ours(cell) || cell.Neighbours().Any(next => !map.IsWalkable(next) && Ours(next)))))
+            .OrderBy(cell => cell.Row).ThenBy(cell => cell.Col)];
+        _areas[structure.Id] = (structure.Place, area);
+        return area;
+    }
+
+    private IReadOnlyList<Cell> AreaOf(World world, Seat seat) =>
+        world.Standing.FirstOrDefault(standing => standing.Id == seat.Structure) is { } structure && _blueprints.TryGetValue(structure.Blueprint, out var blueprint)
+            ? AreaOf(structure, blueprint)
+            : [];
+
+    /// <summary>
+    /// The tile of the area each outdoor worker of the structure works on now. A worker out on an errand for his work
+    /// keeps the tile he left; the others each get one from a hash of who he is, the structure and the stretch of
+    /// <c>stayQuarters</c> quarters it is now, so it is the same all through the stretch, and take the next free one
+    /// when it is taken, so they spread out while the area has room.
+    /// </summary>
+    private Dictionary<int, Cell> Picks(World world, StructureView structure, Blueprint blueprint, IReadOnlyList<Cell> area)
+    {
+        var workers = _jobs.Where(job => job.Value.Structure == structure.Id && blueprint.Jobs![job.Value.Job].Outdoor).Select(job => job.Key).ToList();
+        var picks = new Dictionary<int, Cell>();
+        var taken = new HashSet<Cell>();
+        foreach (var worker in workers)
+            if (world.Day?.TripOf(worker) is { Was: Activity.Work } trip)
+            {
+                picks[worker] = trip.Home;
+                taken.Add(trip.Home);
+            }
+        // the tiles there is work on now: all of the area
+        var candidates = area;
+        var stretch = _village!.Clocks.Calendar.Now.ToUnixTimeSeconds() / QuarterSeconds / _settings.StayQuarters;
+        foreach (var worker in workers)
+        {
+            if (picks.ContainsKey(worker)) continue;
+            if (candidates.All(taken.Contains)) taken.Clear();
+            var key = unchecked((ulong)worker * 0x9E3779B97F4A7C15UL ^ (ulong)structure.Id * 0xC2B2AE3D27D4EB4FUL ^ (ulong)stretch);
+            var at = Rng.For(key, "work area").Next(candidates.Count);
+            while (taken.Contains(candidates[at])) at = (at + 1) % candidates.Count;
+            picks[worker] = candidates[at];
+            taken.Add(candidates[at]);
+        }
+        return picks;
     }
 
     private JobPlace? EddieJob(World world, Resident eddie) =>
@@ -252,15 +342,21 @@ public sealed class Work : IModule, IJobs, IStock
     {
         var staffed = new Dictionary<int, List<int>>();
         if (world.Day is not { } day) return staffed;
+        var picked = new Dictionary<int, Dictionary<int, Cell>>();
+        var working = new SortedSet<int>();
         foreach (var (resident, seat) in _jobs)
         {
-            if (PlaceOf(world, seat) is not { } job) continue;
-            if (!AtWork(day, resident, job.Place))
+            if (PlaceOf(world, resident, seat, picked) is not { } job) continue;
+            if (!AtWork(day, resident, job.Place, job.Outdoor ? AreaOf(world, seat) : [], _working.Contains(resident)))
             {
                 if (day.TripOf(resident) is { Errand.Kind: Activity.Fetch or Activity.Bring, Was: Activity.Work } trip && trip.Home == job.Place)
+                {
                     Pay(world.Residents[resident], seat.Island);
+                    working.Add(resident);
+                }
                 continue;
             }
+            working.Add(resident);
             if (seat.Structure >= 0)
             {
                 if (!staffed.TryGetValue(seat.Structure, out var workers)) staffed[seat.Structure] = workers = [];
@@ -268,16 +364,21 @@ public sealed class Work : IModule, IJobs, IStock
             }
             Pay(world.Residents[resident], seat.Island);
         }
+        _working = working;
         return staffed;
     }
 
-    // working, and there: not on the way
-    private static bool AtWork(DayModule day, int resident, Cell place)
+    // working, and there: not on the way, unless he was at work and goes on from one tile of his work area to another (not
+    // on his way to work); standing on another tile of it, as when he is back from an errand and his tile has moved on, is
+    // work too
+    private static bool AtWork(DayModule day, int resident, Cell place, IReadOnlyList<Cell> area, bool wasWorking)
     {
         try
         {
             var doing = day.Of(resident);
-            return doing.Activity == Activity.Work && doing.Walk is null && doing.Place == place;
+            if (doing.Activity != Activity.Work) return false;
+            if (doing.Walk is null) return doing.Place == place || area.Contains(doing.Place);
+            return wasWorking && area.Contains(doing.Place) && area.Contains(doing.At);
         }
         catch (KeyNotFoundException)
         {
@@ -491,6 +592,7 @@ public sealed class Work : IModule, IJobs, IStock
         var materials = catalog.Materials.Select(material => material.Id).ToHashSet();
 
         if (_settings.Builders < 0 || _settings.ForestRegrowTicks <= 0 || _settings.ForestRange < 0 || _settings.SubsidyDamping <= 0
+            || _settings.WorkRange < 0 || _settings.StayQuarters < 1
             || _settings.SpendPercent is < 0 or > 100 || _settings.WagePerHour < 0 || _settings.SupportPerDay < 0)
             throw new InvalidDataException($"The data section '{Section}' has a number out of range.");
         foreach (var (island, stock) in _settings.Start.Stock)
@@ -532,7 +634,8 @@ public sealed class Work : IModule, IJobs, IStock
             [.. _vacant.OrderBy(item => (item.Key.Island, item.Key.Structure, item.Key.Job, item.Key.Index)).Select(item => new SavedVacancy(item.Key, item.Value))],
             [.. _batches.Select(batch => new SavedBatch(batch.Key, batch.Value))],
             [.. _felled.OrderBy(item => (item.Key.Row, item.Key.Col)).Select(item => new SavedFelled(item.Key, item.Value))],
-            _earned.Count > 0 ? [.. _earned.Select(item => new SavedEarned(item.Key, item.Value))] : null), SaveJson.Options)!;
+            _earned.Count > 0 ? [.. _earned.Select(item => new SavedEarned(item.Key, item.Value))] : null,
+            _working.Count > 0 ? [.. _working] : null), SaveJson.Options)!;
 
     public void Load(ModuleContext village, JsonNode data, int version)
     {
@@ -570,6 +673,7 @@ public sealed class Work : IModule, IJobs, IStock
         foreach (var batch in saved.Batches) _batches[batch.Structure] = batch.Worked;
         foreach (var felled in saved.Felled) _felled[felled.Cell] = felled.Until;
         foreach (var earned in saved.Earned ?? []) _earned[earned.Resident] = earned.Cents;
+        _working = [.. saved.Working ?? []];
     }
 
     /// <summary>A place to work: a builder's of the island (<see cref="Structure"/> −1), or one of a building's jobs.</summary>
@@ -586,7 +690,8 @@ public sealed class Work : IModule, IJobs, IStock
         IReadOnlyList<StructureView> Sites);
 
     private sealed record SavedWork(DateOnly Day, IReadOnlyList<SavedIsland> Islands, IReadOnlyList<SavedJob> Jobs,
-        IReadOnlyList<SavedVacancy> Vacant, IReadOnlyList<SavedBatch> Batches, IReadOnlyList<SavedFelled> Felled, IReadOnlyList<SavedEarned>? Earned = null);
+        IReadOnlyList<SavedVacancy> Vacant, IReadOnlyList<SavedBatch> Batches, IReadOnlyList<SavedFelled> Felled, IReadOnlyList<SavedEarned>? Earned = null,
+        IReadOnlyList<int>? Working = null);
 
     private sealed record SavedEarned(int Resident, long Cents);
 

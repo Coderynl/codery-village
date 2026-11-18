@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Codery.Village.Core.Data;
 using Codery.Village.Core.Map;
 using Codery.Village.Modules.Building;
 using Codery.Village.Modules.Contracts;
@@ -16,6 +17,7 @@ namespace Codery.Village.Tests;
 public class WorkYouSeeTests
 {
     private static readonly int West = Builders.West;
+    private static readonly int Oost = Builders.Oost;
 
     private static DateTimeOffset June(int day, int hour, int minute = 0) => Builders.June(day, hour, minute);
 
@@ -90,12 +92,12 @@ public class WorkYouSeeTests
         var patch = village.Get(id);
         Assert.True(patch.Done);
 
-        // after a stop the gatherers are at their place at once
+        // after a stop the gatherers are at their place at once, each on his own tile
         village.JumpTo(June(1, 10, 45));
         var gatherers = village.People.All.Where(resident => village.Work.JobOf(resident.Id) is { } job && job.Building == id).ToList();
         Assert.NotEmpty(gatherers);
-        var spot = village.Work.JobOf(gatherers[0].Id)!.Place;
-        Assert.All(gatherers, gatherer => Assert.Equal(new Doing(Activity.Work, spot, spot), village.Day.Of(gatherer.Id)));
+        var spots = gatherers.ToDictionary(gatherer => gatherer.Id, gatherer => village.Work.JobOf(gatherer.Id)!.Place);
+        Assert.All(gatherers, gatherer => Assert.Equal(new Doing(Activity.Work, spots[gatherer.Id], spots[gatherer.Id]), village.Day.Of(gatherer.Id)));
 
         var ticks = 0;
         while (!village.Heard<Produced>().Any(e => e.Material == "berries") && ticks++ < 100) village.Run(1);
@@ -112,9 +114,148 @@ public class WorkYouSeeTests
         ticks = 0;
         while (gatherers.Any(gatherer => village.Day.Of(gatherer.Id).Activity == Activity.Bring) && ticks++ < 2000) village.Run(1);
         village.Run(1);
-        Assert.All(gatherers, gatherer => Assert.Equal(new Doing(Activity.Work, spot, spot), village.Day.Of(gatherer.Id)));
+        Assert.All(gatherers, gatherer => Assert.Equal(new Doing(Activity.Work, spots[gatherer.Id], spots[gatherer.Id]), village.Day.Of(gatherer.Id)));
         Assert.Equal(gatherers.Count, village.Heard<Reached>().Count(e => e.Errand == Activity.Bring && e.At == store && e.Carry == "berries"));
-        Assert.Equal(gatherers.Count, village.Heard<Returned>().Count(e => e.Errand == Activity.Bring && e.At == spot));
+        Assert.All(gatherers, gatherer =>
+            Assert.Single(village.Heard<Returned>(), e => e.Resident == gatherer.Id && e.Errand == Activity.Bring && e.At == spots[gatherer.Id]));
+    }
+
+    // a berry patch near the heart of West, standing, on Monday the first of June just after ten
+    private static (Builders.Village Village, int Patch) BerryPatch(DataSet? data = null)
+    {
+        var village = Builders.Start(1, June(1, 9), data);
+        village.Run(1);
+        var id = village.PlaceNearHeart("berry-patch", West);
+        village.JumpTo(June(1, 10));
+        village.Run(400);
+        Assert.True(village.Get(id).Done);
+        return (village, id);
+    }
+
+    private static List<int> WorkersOf(Builders.Village village, int structure) =>
+        [.. village.People.All.Where(resident => village.Work.JobOf(resident.Id) is { } job && job.Building == structure).Select(resident => resident.Id)];
+
+    private static JsonNode Economy(string key) => JsonNode.Parse(File.ReadAllText(Path.Combine(Builders.Folder, "economy.json")))![key]!;
+
+    [Fact]
+    public void Gatherers_work_out_on_the_ground_of_their_area()
+    {
+        var (village, id) = BerryPatch();
+        village.JumpTo(June(1, 10, 45));
+        var anchor = village.Get(id).Anchor;
+        var area = village.Work.WorkAreaOf(id);
+        var gatherers = WorkersOf(village, id);
+        Assert.NotEmpty(gatherers);
+        Assert.True(area.Count >= gatherers.Count, $"an area of {area.Count} tiles");
+        Assert.All(area, cell => Assert.Equal((Ground.Fertile, (int?)West), (Builders.RealMap.At(cell), Builders.RealMap.IslandOf(cell))));
+
+        // each at work on a tile of the area, standing, where his job says
+        Assert.All(gatherers, gatherer =>
+        {
+            var doing = village.Day.Of(gatherer);
+            Assert.Equal((Activity.Work, (Walk?)null), (doing.Activity, doing.Walk));
+            Assert.Contains(doing.Place, area);
+            Assert.Equal(village.Work.JobOf(gatherer)!.Place, doing.Place);
+        });
+        // spread out over the area, not all on the patch's own tile
+        Assert.Equal(gatherers.Count, gatherers.Select(gatherer => village.Day.Of(gatherer).Place).Distinct().Count());
+        Assert.Contains(gatherers, gatherer => village.Day.Of(gatherer).Place != anchor);
+    }
+
+    [Fact]
+    public void A_fisher_works_on_the_shore()
+    {
+        var map = Builders.RealMap;
+        var village = Builders.Start(1, June(1, 9));
+        village.Run(1);
+        var id = village.PlaceNearHeart("fishing-spot", Oost);
+        village.JumpTo(June(1, 10));
+        for (var tick = 0; tick < 5000 && !village.Get(id).Done; tick++) village.Run(1);
+        Assert.True(village.Get(id).Done);
+        Assert.Equal(Ground.Fishing, map.At(village.Get(id).Anchor));
+        // the fishers are hired in the tick after it stands
+        village.Run(1);
+
+        // the early shift, the next morning
+        village.JumpTo(June(2, 6));
+        var area = village.Work.WorkAreaOf(id);
+        var fishers = WorkersOf(village, id);
+        Assert.Equal(3, fishers.Count);
+        Assert.All(fishers, fisher =>
+        {
+            var doing = village.Day.Of(fisher);
+            Assert.Equal((Activity.Work, (Walk?)null), (doing.Activity, doing.Walk));
+            Assert.Contains(doing.Place, area);
+            Assert.True(map.IsWalkable(doing.Place));
+            Assert.Equal(Oost, map.IslandOf(doing.Place));
+            Assert.Contains(doing.Place.Neighbours(), cell => map.At(cell) == Ground.Fishing);
+        });
+        Assert.Equal(fishers.Count, fishers.Select(fisher => village.Day.Of(fisher).Place).Distinct().Count());
+    }
+
+    [Fact]
+    public void A_worker_keeps_his_tile_for_a_while_and_is_paid_while_he_moves()
+    {
+        // slow walkers, so a walk from one tile to the next takes long enough to show in the wage
+        var (village, id) = BerryPatch(Builders.Data(day: day => day["ticksPerCell"] = 200));
+        var stay = (int)Economy("stayQuarters");
+        var wage = (long)Economy("wagePerHour");
+        const int Quarter = 15 * 60 * 4;
+
+        // after a stop they are at work at once: from here on the walk to work is behind them
+        village.JumpTo(June(1, 10, 45));
+        var gatherers = WorkersOf(village, id);
+        Assert.NotEmpty(gatherers);
+        var money = gatherers.ToDictionary(gatherer => gatherer, gatherer => village.People.Get(gatherer).Money);
+
+        // three hours, looked at in the middle of every quarter
+        var places = gatherers.ToDictionary(gatherer => gatherer, _ => new List<Cell>());
+        village.Run(Quarter / 2);
+        for (var quarter = 0; quarter < 12; quarter++)
+        {
+            foreach (var gatherer in gatherers) places[gatherer].Add(village.Work.JobOf(gatherer)!.Place);
+            village.Run(quarter < 11 ? Quarter : Quarter / 2);
+        }
+
+        // he keeps his tile for stayQuarters quarters; after that it may change
+        foreach (var gatherer in gatherers)
+        {
+            var changes = Enumerable.Range(1, 11).Where(quarter => places[gatherer][quarter] != places[gatherer][quarter - 1]).ToList();
+            for (var i = 1; i < changes.Count; i++)
+                Assert.True(changes[i] - changes[i - 1] >= stay, $"moved after {changes[i] - changes[i - 1]} quarters");
+        }
+        Assert.Contains(gatherers, gatherer => places[gatherer].Distinct().Count() > 1);
+        // paid every tick of the three hours, walking from tile to tile too: as much as a worker who never moved
+        Assert.All(gatherers, gatherer => Assert.Equal(3 * wage, village.People.Get(gatherer).Money - money[gatherer]));
+    }
+
+    [Fact]
+    public void The_workplace_does_not_move_during_an_errand()
+    {
+        // a new tile every quarter, so the errand crosses a moment his workplace would move
+        var (village, id) = BerryPatch(Builders.Data(economy: economy => economy["stayQuarters"] = 1));
+        var boundary = June(1, 11);
+        village.JumpTo(boundary.AddSeconds(-10));
+        var gatherers = WorkersOf(village, id);
+        Assert.NotEmpty(gatherers);
+        var left = gatherers.ToDictionary(gatherer => gatherer, gatherer => village.Day.Of(gatherer).Place);
+        var anchor = village.Get(id).Anchor;
+        var far = Builders.RealMap.Islands.Single(island => island.Id == West).Cells
+            .Where(Builders.RealMap.IsWalkable).OrderByDescending(cell => cell.DistanceTo(anchor)).ThenBy(cell => cell.Row).ThenBy(cell => cell.Col).First();
+        foreach (var gatherer in gatherers) Assert.True(village.Day.Send(gatherer, new Errand(Activity.Bring, far, "berries")));
+
+        var ticks = 0;
+        while (gatherers.Any(gatherer => village.Day.TripOf(gatherer) is not null) && ticks++ < 5000)
+        {
+            village.Run(1);
+            foreach (var gatherer in gatherers.Where(gatherer => village.Day.TripOf(gatherer) is not null))
+                Assert.Equal(left[gatherer], village.Work.JobOf(gatherer)!.Place);
+        }
+        Assert.True(village.Time.GetUtcNow() > boundary, "the errands ended before the quarter turned");
+        // back on the tile he left, within the quarter; only now does his workplace move on
+        Assert.True(village.Time.GetUtcNow() < boundary.AddMinutes(15));
+        Assert.All(gatherers, gatherer => Assert.Equal(new Doing(Activity.Work, left[gatherer], left[gatherer]), village.Day.Of(gatherer)));
+        Assert.Contains(gatherers, gatherer => village.Work.JobOf(gatherer)!.Place != left[gatherer]);
     }
 
     private static Action<JsonObject> Paths(int window, int threshold, int keep, double speed) => day =>

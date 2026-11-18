@@ -16,6 +16,8 @@
   "eddieWorkshop": "eddie-workshop",
   "forestRegrowTicks": 43200,
   "forestRange": 3,
+  "workRange": 3,
+  "stayQuarters": 6,
   "needs": {
     "food": { "perPerson": 1 },
     "heat": { "perHousehold": 1 }

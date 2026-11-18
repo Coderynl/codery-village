@@ -34,7 +34,11 @@ public sealed record EconomySettings(
     IReadOnlyDictionary<string, IReadOnlyList<string>> Fits,
     StartHoldings Start,
     // a day, to who is of working age, less the wage he earned that day: in full to who has no job
-    int SupportPerDay = 0);
+    int SupportPerDay = 0,
+    // how far from its workplace an outdoor job with a recipe is done, in tiles; 0 keeps every job at its workplace
+    int WorkRange = 0,
+    // how many quarters of an hour a worker keeps his tile of the work area
+    int StayQuarters = 1);
 
 /// <summary>How much of a need a household buys a day: so much per member and so much for the household.</summary>
 public sealed record Need(int PerPerson = 0, int PerHousehold = 0);
