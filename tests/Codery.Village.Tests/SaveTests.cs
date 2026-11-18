@@ -346,4 +346,29 @@ public class SaveTests
             twins.Unload();
         }
     }
+
+    [Fact]
+    public void Bare_tiles_survive_a_save_and_an_older_save_has_none()
+    {
+        var data = WorkYouSeeTests.QuickBerries();
+        var (village, patch) = WorkYouSeeTests.PatchFrom(Builders.June(1, 9), data);
+        WorkYouSeeTests.WorkUntilBare(village, patch);
+        var area = village.Work.WorkAreaOf(patch);
+        var yields = area.Select(village.Work.YieldOf).ToList();
+        Assert.Contains(yields, yield => yield < 100);
+        static IEnumerable<(int, int)> Sorted(IEnumerable<Codery.Village.Core.Map.Cell> cells) => cells.Select(cell => (cell.Row, cell.Col)).Order();
+
+        // saved and loaded, every tile of the area has the yield it had
+        var saved = Written(village.Engine.Save());
+        var loaded = Builders.Load(saved, data);
+        Assert.Equal(yields, area.Select(loaded.Work.YieldOf));
+        Assert.Equal(Sorted(village.Work.Bare), Sorted(loaded.Work.Bare));
+
+        // a save from before nature ran out loads with everything at full
+        var older = Written(village.Engine.Save());
+        Assert.True(Part(older, "work").Data.AsObject().Remove("nature"));
+        var old = Builders.Load(older, data);
+        Assert.All(area, cell => Assert.Equal(100, old.Work.YieldOf(cell)));
+        Assert.Empty(old.Work.Bare);
+    }
 }

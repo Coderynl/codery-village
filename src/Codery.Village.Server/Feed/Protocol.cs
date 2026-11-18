@@ -32,7 +32,8 @@ public sealed record JoinMessage(
 /// residents and the buildings that are no longer there. <see cref="NoTask"/> is true when the open task closed
 /// and no other is open; a new task comes as <see cref="Task"/>. Added to protocol 1: <see cref="Fires"/> has the
 /// fireplaces whose fire burns stronger or weaker than before, <see cref="Paths"/> the tiles that became a path and
-/// <see cref="PathsGone"/> the paths that grew over.
+/// <see cref="PathsGone"/> the paths that grew over. Added to protocol 2: <see cref="Bare"/> the tiles that were worked
+/// bare (or felled) and <see cref="BareGone"/> the bare tiles that grew back.
 /// </summary>
 public sealed record TickMessage(
     long Tick,
@@ -49,7 +50,9 @@ public sealed record TickMessage(
     IReadOnlyList<FeedEvent>? Events = null,
     IReadOnlyList<FireView>? Fires = null,
     IReadOnlyList<int>? Paths = null,
-    IReadOnlyList<int>? PathsGone = null);
+    IReadOnlyList<int>? PathsGone = null,
+    IReadOnlyList<int>? Bare = null,
+    IReadOnlyList<int>? BareGone = null);
 
 /// <summary>
 /// Where a resident goes: over <see cref="Cells"/>, the first being where he stands at <see cref="Start"/>, one
@@ -116,7 +119,8 @@ public sealed record Said(int A, int? B, IReadOnlyList<string> Nl, IReadOnlyList
 /// <summary>
 /// The ground and what can stand on it. <see cref="Ground"/> has one letter per tile, row after row, as in
 /// <c>map.txt</c>. The names of roles, wishes and things are for what a page shows of a resident or a thing.
-/// <see cref="Paths"/> (added to protocol 1) has the tiles that are worn into a path when the page joins.
+/// <see cref="Paths"/> (added to protocol 1) has the tiles that are worn into a path when the page joins, <see cref="Bare"/>
+/// (added to protocol 2) the tiles that are worked bare or felled then.
 /// </summary>
 public sealed record MapView(
     int Rows,
@@ -127,7 +131,8 @@ public sealed record MapView(
     IReadOnlyList<NameView> Roles,
     IReadOnlyList<NameView> Wishes,
     IReadOnlyList<NameView> Things,
-    IReadOnlyList<int>? Paths = null);
+    IReadOnlyList<int>? Paths = null,
+    IReadOnlyList<int>? Bare = null);
 
 /// <summary>An island and its tiles; <see cref="Eddie"/> for Eddie's islet.</summary>
 public sealed record IslandView(int Id, string Name, bool Eddie, IReadOnlyList<int> Cells);

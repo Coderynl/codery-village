@@ -17,6 +17,7 @@ using HappinessModule = Codery.Village.Modules.Happiness.Happiness;
 using PeopleModule = Codery.Village.Modules.People.People;
 using TalkModule = Codery.Village.Modules.Talk.Talk;
 using WishesModule = Codery.Village.Modules.Wishes.Wishes;
+using WorkModule = Codery.Village.Modules.Work.Work;
 
 namespace Codery.Village.Server.Feed;
 
@@ -48,6 +49,7 @@ public sealed class VillageFeed
     private readonly Dictionary<int, int> _things = [];
     private readonly Dictionary<int, int> _fires = [];
     private readonly HashSet<int> _paths = [];
+    private readonly HashSet<int> _bare = [];
     private CalendarView? _calendarSent;
     private TaskView? _task;
     // the number of the first log line not passed on yet, and the last conversation passed on
@@ -77,7 +79,7 @@ public sealed class VillageFeed
         var now = Now.Of(engine);
         return new JoinMessage(
             Protocol.Version,
-            _view with { Paths = [.. Paths(now).Order()] },
+            _view with { Paths = [.. Paths(now).Order()], Bare = [.. Bare(now).Order()] },
             [.. People(now).Select(item => item.Person)],
             [.. Moves(now)],
             [.. Sites(now)],
@@ -166,6 +168,17 @@ public sealed class VillageFeed
             _paths.UnionWith(worn);
         }
 
+        List<int>? bare = null;
+        List<int>? bareGone = null;
+        var spent = Bare(now).ToHashSet();
+        if (!spent.SetEquals(_bare))
+        {
+            bare = [.. spent.Where(cell => !_bare.Contains(cell)).Order()];
+            bareGone = [.. _bare.Where(cell => !spent.Contains(cell)).Order()];
+            _bare.Clear();
+            _bare.UnionWith(spent);
+        }
+
         var calendar = Calendar();
         var newQuarter = calendar != _calendarSent;
         _calendarSent = calendar;
@@ -192,7 +205,8 @@ public sealed class VillageFeed
 
         return new TickMessage(engine.Tick, moves, people, left, sites, gone, things,
             newQuarter ? calendar : null, newTask ? task : null, noTask ? true : null, spoken, events,
-            fires, paths is { Count: > 0 } ? paths : null, pathsGone is { Count: > 0 } ? pathsGone : null);
+            fires, paths is { Count: > 0 } ? paths : null, pathsGone is { Count: > 0 } ? pathsGone : null,
+            bare is { Count: > 0 } ? bare : null, bareGone is { Count: > 0 } ? bareGone : null);
     }
 
     /// <summary>Takes the village as it is as the starting point: what is there now is not news.</summary>
@@ -206,6 +220,7 @@ public sealed class VillageFeed
         foreach (var thing in Things(now)) _things[thing.Id] = thing.Cell;
         foreach (var fire in Fires(now)) _fires[fire.Structure] = fire.Strength;
         _paths.UnionWith(Paths(now));
+        _bare.UnionWith(Bare(now));
         _calendarSent = Calendar();
         _task = Task(now);
         _talked = now.Talk?.Recent.Select(conversation => conversation.Id).DefaultIfEmpty(0).Max() ?? 0;
@@ -282,6 +297,8 @@ public sealed class VillageFeed
         now.Fire?.All.Select(fire => new FireView(fire.Structure, fire.Strength)) ?? [];
 
     private IEnumerable<int> Paths(Now now) => now.Day?.Paths.Select(Flat) ?? [];
+
+    private IEnumerable<int> Bare(Now now) => now.Work?.Bare.Select(Flat) ?? [];
 
     private IEnumerable<Thing> Things(Now now) =>
         now.Building?.Things.Select(thing => new Thing(thing.Id, thing.Kind, Flat(thing.At))) ?? [];
@@ -361,14 +378,15 @@ public sealed class VillageFeed
 
     /// <summary>The modules the feed reads, as they run now; a module that stopped is not there.</summary>
     private sealed record Now(long Tick, PeopleModule? People, DayModule? Day, IJobs? Jobs, BuildingModule? Building, WishesModule? Wishes,
-        HappinessModule? Happiness, TalkModule? Talk, FireModule? Fire)
+        HappinessModule? Happiness, TalkModule? Talk, FireModule? Fire, WorkModule? Work)
     {
         public static Now Of(Engine engine)
         {
             var running = engine.Running;
             return new Now(engine.Tick, running.OfType<PeopleModule>().FirstOrDefault(), running.OfType<DayModule>().FirstOrDefault(),
                 running.OfType<IJobs>().FirstOrDefault(), running.OfType<BuildingModule>().FirstOrDefault(), running.OfType<WishesModule>().FirstOrDefault(),
-                running.OfType<HappinessModule>().FirstOrDefault(), running.OfType<TalkModule>().FirstOrDefault(), running.OfType<FireModule>().FirstOrDefault());
+                running.OfType<HappinessModule>().FirstOrDefault(), running.OfType<TalkModule>().FirstOrDefault(), running.OfType<FireModule>().FirstOrDefault(),
+                running.OfType<WorkModule>().FirstOrDefault());
         }
     }
 

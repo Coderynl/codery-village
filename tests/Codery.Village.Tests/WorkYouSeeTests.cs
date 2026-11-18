@@ -332,6 +332,117 @@ public class WorkYouSeeTests
         Assert.All(gatherers, gatherer => Assert.Equal(3 * wage, village.People.Get(gatherer).Money - money[gatherer]));
     }
 
+    // ── nature runs out ──
+
+    private const int Low = 20;
+
+    /// <summary>The real data with a berry patch that makes a batch in 30 ticks, and the economy changed as the test needs.</summary>
+    internal static DataSet QuickBerries(Action<JsonObject>? economy = null) => Builders.Data(
+        economy: economy,
+        catalog: catalog => catalog["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "berry-patch")!["recipe"]!["ticks"] = 30);
+
+    /// <summary>A berry patch near the heart of West, placed at nine on <paramref name="nine"/> and standing an hour later.</summary>
+    internal static (Builders.Village Village, int Patch) PatchFrom(DateTimeOffset nine, DataSet data)
+    {
+        var village = Builders.Start(1, nine, data);
+        village.Run(1);
+        var id = village.PlaceNearHeart("berry-patch", West);
+        village.JumpTo(nine.AddHours(1));
+        village.Run(400);
+        Assert.True(village.Get(id).Done);
+        // the gatherers are hired in the tick after it stands; after a stop they are at work at once
+        village.Run(1);
+        village.JumpTo(nine.AddHours(1).AddMinutes(45));
+        return (village, id);
+    }
+
+    /// <summary>Works the patch until a tile of its area runs low, and gives that tile.</summary>
+    internal static Cell WorkUntilBare(Builders.Village village, int patch)
+    {
+        var area = village.Work.WorkAreaOf(patch);
+        for (var tick = 0; tick < 20_000; tick++)
+        {
+            foreach (var cell in area)
+                if (village.Work.YieldOf(cell) < Low) return cell;
+            village.Run(1);
+        }
+        throw new Xunit.Sdk.XunitException("no tile of the area ran low");
+    }
+
+    private static long QuarterOf(Builders.Village village) => village.Time.GetUtcNow().ToUnixTimeSeconds() / (15 * 60);
+
+    [Fact]
+    public void A_worked_tile_runs_out_and_the_worker_moves_on()
+    {
+        var (village, id) = PatchFrom(June(1, 9), QuickBerries());
+        var tile = WorkUntilBare(village, id);
+        Assert.Contains(tile, village.Work.Bare);
+
+        // the quarter it ran out in, who works it keeps it
+        var holders = WorkersOf(village, id).Where(worker => village.Work.JobOf(worker)!.Place == tile).ToList();
+        Assert.NotEmpty(holders);
+        var quarter = QuarterOf(village);
+        while (QuarterOf(village) == quarter)
+        {
+            Assert.All(holders, holder => Assert.Equal(tile, village.Work.JobOf(holder)!.Place));
+            village.Run(1);
+        }
+
+        // the next quarter nobody is placed on it (but who is still out on an errand from it)
+        var workers = WorkersOf(village, id);
+        Assert.Contains(workers, worker => village.Day.TripOf(worker) is null);
+        Assert.All(workers.Where(worker => village.Day.TripOf(worker) is null), worker => Assert.NotEqual(tile, village.Work.JobOf(worker)!.Place));
+        Assert.True(village.Work.YieldOf(tile) < Low);
+    }
+
+    [Fact]
+    public void A_bare_area_stands_still_until_it_grows_back()
+    {
+        // a tiny area, so the gatherers soon work all of it bare
+        var (village, id) = PatchFrom(June(1, 9), QuickBerries(economy => economy["workRange"] = 1));
+        var area = village.Work.WorkAreaOf(id);
+        var anchor = village.Get(id).Anchor;
+        for (var tick = 0; tick < 50_000 && area.Any(cell => village.Work.YieldOf(cell) >= Low); tick++) village.Run(1);
+        Assert.All(area, cell => Assert.Contains(cell, village.Work.Bare));
+
+        // from the next quarter on, and once back from their errands, they stand at the patch and make nothing
+        var quarter = QuarterOf(village);
+        while (QuarterOf(village) == quarter) village.Run(1);
+        var gatherers = WorkersOf(village, id);
+        for (var tick = 0; tick < 5000 && gatherers.Any(gatherer => village.Day.TripOf(gatherer) is not null); tick++) village.Run(1);
+        var made = village.Heard<Produced>().Count();
+        village.Run(15 * 60 * 4);
+        Assert.All(gatherers, gatherer => Assert.Equal(anchor, village.Work.JobOf(gatherer)!.Place));
+        Assert.Equal(made, village.Heard<Produced>().Count());
+
+        // after regrowDays it grows back, and the patch makes berries again
+        var regrow = (int)Economy("nature")!["fertile"]!["regrowDays"]!;
+        village.JumpTo(June(1 + regrow, 10, 45));
+        Assert.Contains(area, cell => village.Work.YieldOf(cell) >= Low);
+        for (var tick = 0; tick < 5000 && village.Heard<Produced>().Count() == made; tick++) village.Run(1);
+        Assert.True(village.Heard<Produced>().Count() > made, "the patch made nothing after it grew back");
+    }
+
+    [Fact]
+    public void Berries_do_not_grow_back_in_winter()
+    {
+        // worked bare on the first of December, it is as bare a fortnight later
+        var winter = new DateTimeOffset(2026, 12, 1, 9, 0, 0, TimeSpan.FromHours(1));
+        var (cold, coldPatch) = PatchFrom(winter, QuickBerries());
+        var frozen = WorkUntilBare(cold, coldPatch);
+        var left = cold.Work.YieldOf(frozen);
+        cold.JumpTo(new DateTimeOffset(2026, 12, 15, 1, 0, 0, TimeSpan.FromHours(1)));
+        Assert.Equal(left, cold.Work.YieldOf(frozen));
+        Assert.Contains(frozen, cold.Work.Bare);
+
+        // worked bare on the first of June, it is back by the third
+        var (summer, summerPatch) = PatchFrom(June(1, 9), QuickBerries());
+        var grown = WorkUntilBare(summer, summerPatch);
+        summer.JumpTo(June(3, 1));
+        Assert.True(summer.Work.YieldOf(grown) >= Low, $"a yield of {summer.Work.YieldOf(grown)}");
+        Assert.DoesNotContain(grown, summer.Work.Bare);
+    }
+
     private static Action<JsonObject> Paths(int window, int threshold, int keep, double speed) => day =>
     {
         day["pathWindowDays"] = window;

@@ -14,6 +14,7 @@ using BuildingModule = Codery.Village.Modules.Building.Building;
 using DayModule = Codery.Village.Modules.Day.Day;
 using FireModule = Codery.Village.Modules.Fire.Fire;
 using PeopleModule = Codery.Village.Modules.People.People;
+using WorkModule = Codery.Village.Modules.Work.Work;
 
 namespace Codery.Village.Tests;
 
@@ -46,12 +47,15 @@ public class FeedTests(ITestOutputHelper output)
     }
 
     /// <summary>The real data with the section "day" changed as the test needs.</summary>
-    private static DataSet WithDay(Action<JsonObject> change)
+    private static DataSet WithDay(Action<JsonObject> change) => With("day", change);
+
+    /// <summary>The real data with one section changed as the test needs.</summary>
+    private static DataSet With(string name, Action<JsonObject> change)
     {
         var sections = Directory.GetFiles(VillageSetup.Folder, "*.json").ToDictionary(file => Path.GetFileNameWithoutExtension(file), File.ReadAllText);
-        var day = JsonNode.Parse(sections["day"])!.AsObject();
-        change(day);
-        sections["day"] = day.ToJsonString();
+        var section = JsonNode.Parse(sections[name])!.AsObject();
+        change(section);
+        sections[name] = section.ToJsonString();
         return DataSet.FromTexts(sections, []);
     }
 
@@ -221,6 +225,51 @@ public class FeedTests(ITestOutputHelper output)
         Follow(village.Feed.Next(village.Engine));
         Assert.Equal(day.Paths.Select(Flat).Order(), paths.Order());
         Assert.True(paths.Count < now.Map.Paths!.Count);
+    }
+
+    [Fact]
+    public void Bare_tiles_reach_the_page()
+    {
+        // a berry patch that makes a batch in 30 ticks works its tiles bare within the hour
+        var data = With("catalog", catalog => catalog["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "berry-patch")!["recipe"]!["ticks"] = 30);
+        var village = Start(Builders.June(1, 9), data: data);
+        village.Run(1);
+        var building = village.Module<BuildingModule>();
+        var work = village.Module<WorkModule>();
+        var (anchor, rotation) = building.FindPlace("berry-patch", Builders.West)!.Value;
+        var patch = building.Place("berry-patch", anchor, rotation);
+        village.Time.Advance(TimeSpan.FromHours(1));
+        village.Run(1000);
+        Assert.True(building.All.Single(structure => structure.Id == patch).Done);
+        int Flat(Cell cell) => cell.Row * Map.Cols + cell.Col;
+
+        var join = village.Feed.Join(village.Engine);
+        Assert.Empty(join.Map.Bare ?? []);
+        var bare = new HashSet<int>(join.Map.Bare ?? []);
+        void Follow(TickMessage message)
+        {
+            foreach (var cell in message.Bare ?? []) Assert.True(bare.Add(cell));
+            foreach (var cell in message.BareGone ?? []) Assert.True(bare.Remove(cell));
+        }
+        for (var tick = 0; tick < 20_000 && work.Bare.Count == 0; tick++)
+        {
+            village.Run(1);
+            Follow(village.Feed.Next(village.Engine));
+        }
+        Assert.NotEmpty(work.Bare);
+        Assert.Equal(work.Bare.Select(Flat).Order(), bare.Order());
+
+        // a page that joins now gets them
+        var now = village.Feed.Join(village.Engine);
+        Assert.Equal(work.Bare.Select(Flat).Order(), now.Map.Bare!.Order());
+
+        // days later it has grown back
+        village.Time.Advance(TimeSpan.FromDays(3));
+        village.Run(1);
+        var grown = village.Feed.Next(village.Engine);
+        Follow(grown);
+        Assert.NotEmpty(grown.BareGone ?? []);
+        Assert.Equal(work.Bare.Select(Flat).Order(), bare.Order());
     }
 
     /// <summary>Where a move has someone at a tick, and whether he is inside then.</summary>

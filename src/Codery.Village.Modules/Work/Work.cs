@@ -22,7 +22,10 @@ namespace Codery.Village.Modules.Work;
 /// workers there bring it to the store where the island gathers, and come back. The treasury of the island pays
 /// a wage for every tick on the job; an outdoor job with a recipe is done out on its work area, the ground of its blueprint
 /// around the workplace (for one on the water, the shore by it), each worker on a tile of his own for a few quarters,
-/// and walking from one tile to the next is work too. Once a calendar day, at 00:00, the island settles its day: the start
+/// and walking from one tile to the next is work too. Such an area runs out where it is worked: every batch takes from
+/// the tiles its workers stood on (<see cref="Nature"/>, after <c>nature</c> in the data), a worker moves on from a tile
+/// gone bare at the next quarter, a workplace whose whole area is bare stands still with its workers at it, and the tiles
+/// grow back once a day. Once a calendar day, at 00:00, the island settles its day: the start
 /// subsidy comes in, the upkeep of its buildings goes out, children, students and the retired get their money, and who is
 /// of working age the support, less what he earned that day (so a new worker who has had no wage yet, or one whose job
 /// rests at the weekend, is not left without),
@@ -66,6 +69,10 @@ public sealed class Work : IModule, IJobs, IStock
     private SortedSet<int> _working = [];
     // per structure, its work area; it follows from the map and the data, so it is not saved
     private readonly Dictionary<int, (Cell Place, IReadOnlyList<Cell> Cells)> _areas = [];
+    // per workplace with a batch in hand, the tiles of its area its workers stood on for it
+    private readonly SortedDictionary<int, HashSet<Cell>> _stood = [];
+    private Nature _nature = new(new Dictionary<Ground, NatureSettings>(), default);
+    private Dictionary<Ground, NatureSettings> _natureSettings = [];
 
     public string Name => "work";
 
@@ -73,6 +80,12 @@ public sealed class Work : IModule, IJobs, IStock
 
     /// <summary>The forest tiles that are felled now; they grow back after <c>forestRegrowTicks</c>.</summary>
     public IReadOnlyCollection<Cell> Felled => _felled.Keys;
+
+    /// <summary>What a tile has left to give, from 100 (full) to 0; a tile nobody worked is full.</summary>
+    public int YieldOf(Cell cell) => _nature.YieldOf(cell);
+
+    /// <summary>The tiles that are bare now: worked below 20, and the felled forest.</summary>
+    public IReadOnlyCollection<Cell> Bare => _nature.Bare.Concat(_felled.Keys).ToHashSet();
 
     /// <summary>Forest on the map that is not felled now.</summary>
     public bool IsForest(Cell cell) => _village is { } village && village.Map.At(cell) == Ground.Forest && !_felled.ContainsKey(cell);
@@ -126,6 +139,7 @@ public sealed class Work : IModule, IJobs, IStock
     {
         Read(village);
         _day = Today(village);
+        _nature = new Nature(_natureSettings, _day);
         foreach (var island in village.Map.Islands)
         {
             _treasuries[island.Id] = new Treasury { Cash = island.Eddie ? 0 : _settings.Start.Cash };
@@ -148,6 +162,7 @@ public sealed class Work : IModule, IJobs, IStock
         if (today != _day)
         {
             _day = today;
+            _nature.Grow(today);
             SettleDay(village, world);
         }
         Staff(village, world);
@@ -289,8 +304,9 @@ public sealed class Work : IModule, IJobs, IStock
         var workers = _jobs.Where(job => job.Value.Structure == structure.Id && job.Value.Job < jobs.Count && jobs[job.Value.Job].Outdoor)
             .Select(job => job.Key).ToList();
         var picks = new Dictionary<int, Cell>();
-        // the tiles there is work on now: all of the area
-        var candidates = area;
+        // the tiles there is work on now: those that still gave as the quarter began (felling has its own logic)
+        var quarter = Quarter(_village!);
+        IReadOnlyList<Cell> candidates = Fells(blueprint) ? area : [.. area.Where(cell => _nature.Yields(cell, quarter))];
         if (candidates.Count == 0) return picks;
         var taken = new HashSet<Cell>();
         var stretch = _village!.Clocks.Calendar.Now.ToUnixTimeSeconds() / QuarterSeconds / _settings.StayQuarters;
@@ -403,10 +419,14 @@ public sealed class Work : IModule, IJobs, IStock
     private void Produce(ModuleContext village, World world, Dictionary<int, List<int>> staffed)
     {
         var tick = village.Clocks.Tick;
+        var quarter = Quarter(village);
         foreach (var structure in world.Standing)
         {
             if (!staffed.ContainsKey(structure.Id) || !InEconomy(village.Map, structure)
                 || !_blueprints.TryGetValue(structure.Blueprint, out var blueprint) || blueprint.Recipe is not { } recipe) continue;
+            // the area that runs out as it is worked; one worked bare stands still until a tile of it grows back
+            var area = Fells(blueprint) ? [] : AreaOf(structure, blueprint);
+            if (area.Count > 0 && !area.Any(cell => _nature.Yields(cell, quarter))) continue;
             if (!_batches.TryGetValue(structure.Id, out var worked))
             {
                 // a new batch: a tree to fell, and what goes in, from the stock
@@ -415,12 +435,16 @@ public sealed class Work : IModule, IJobs, IStock
                 if (!TryTake(structure.Island, recipe.In)) continue;
                 if (tree is { } felled) _felled[felled] = tick + _settings.ForestRegrowTicks;
             }
+            if (area.Count > 0) Stood(world, structure.Id, staffed[structure.Id], area);
             if (++worked < recipe.Ticks)
             {
                 _batches[structure.Id] = worked;
                 continue;
             }
             _batches.Remove(structure.Id);
+            // the batch is taken from every tile it was worked on
+            if (_stood.Remove(structure.Id, out var tiles))
+                foreach (var cell in tiles) _nature.Take(cell, GroundOf(village.Map, blueprint, cell), quarter);
             foreach (var (material, amount) in recipe.Out.OrderBy(item => item.Key, StringComparer.Ordinal))
             {
                 Add(structure.Island, material, amount);
@@ -430,6 +454,29 @@ public sealed class Work : IModule, IJobs, IStock
         }
         var standing = world.Standing.Select(structure => structure.Id).ToHashSet();
         foreach (var gone in _batches.Keys.Where(id => !standing.Contains(id)).ToList()) _batches.Remove(gone);
+        foreach (var gone in _stood.Keys.Where(id => !_batches.ContainsKey(id)).ToList()) _stood.Remove(gone);
+    }
+
+    // the tiles of the area the workers stand on, at work
+    private void Stood(World world, int structure, List<int> workers, IReadOnlyList<Cell> area)
+    {
+        if (world.Day is not { } day) return;
+        foreach (var worker in workers)
+        {
+            if (day.Of(worker) is not { Walk: null } doing || !area.Contains(doing.At)) continue;
+            if (!_stood.TryGetValue(structure, out var tiles)) _stood[structure] = tiles = [];
+            tiles.Add(doing.At);
+        }
+    }
+
+    // the ground a tile of the area is worked as: its own, or for one by the water (a shore) that of the water
+    private static Ground GroundOf(IslandMap map, Blueprint blueprint, Cell cell)
+    {
+        var ground = map.At(cell);
+        if (blueprint.On.Contains(ground)) return ground;
+        foreach (var next in cell.Neighbours())
+            if (!map.IsWalkable(next) && blueprint.On.Contains(map.At(next))) return map.At(next);
+        return ground;
     }
 
     // the stock stays a number; the workers carry the most of the batch to the store where the island gathers, for all to see
@@ -582,6 +629,9 @@ public sealed class Work : IModule, IJobs, IStock
 
     private static DateOnly Today(ModuleContext village) => DateOnly.FromDateTime(village.Clocks.Calendar.Now.DateTime);
 
+    // the quarter of an hour it is now, counted since 1970
+    private static long Quarter(ModuleContext village) => village.Clocks.Calendar.Now.ToUnixTimeSeconds() / QuarterSeconds;
+
     private void Read(ModuleContext village)
     {
         _village = village;
@@ -598,6 +648,15 @@ public sealed class Work : IModule, IJobs, IStock
             foreach (var (material, amount) in stock)
                 if (!materials.Contains(material) || amount < 0)
                     throw new InvalidDataException($"The data section '{Section}' starts {island} with {amount} of '{material}'.");
+
+        _natureSettings = [];
+        foreach (var (name, nature) in _settings.Nature ?? new Dictionary<string, NatureSettings>())
+        {
+            if (!Enum.TryParse<Ground>(name, ignoreCase: true, out var ground) || nature.PerBatch < 0 || nature.RegrowDays < 1
+                || nature.GrowsInMonths?.Any(month => month is < 1 or > 12) == true)
+                throw new InvalidDataException($"The data section '{Section}' has nature for '{name}' that cannot be.");
+            _natureSettings[ground] = nature;
+        }
 
         _needs = [];
         foreach (var (need, amount) in _settings.Needs)
@@ -634,7 +693,9 @@ public sealed class Work : IModule, IJobs, IStock
             [.. _batches.Select(batch => new SavedBatch(batch.Key, batch.Value))],
             [.. _felled.OrderBy(item => (item.Key.Row, item.Key.Col)).Select(item => new SavedFelled(item.Key, item.Value))],
             _earned.Count > 0 ? [.. _earned.Select(item => new SavedEarned(item.Key, item.Value))] : null,
-            _working.Count > 0 ? [.. _working] : null), SaveJson.Options)!;
+            _working.Count > 0 ? [.. _working] : null,
+            new SavedNature(_nature.Day, _nature.Tiles),
+            _stood.Count > 0 ? [.. _stood.Select(item => new SavedStood(item.Key, [.. item.Value.OrderBy(cell => cell.Row).ThenBy(cell => cell.Col)]))] : null), SaveJson.Options)!;
 
     public void Load(ModuleContext village, JsonNode data, int version)
     {
@@ -651,6 +712,9 @@ public sealed class Work : IModule, IJobs, IStock
         _felled.Clear();
         _shopping.Clear();
         _earned.Clear();
+        _stood.Clear();
+        // a save from before nature ran out has every tile full
+        _nature = saved.Nature is { } nature ? new Nature(_natureSettings, nature.Day, nature.Tiles) : new Nature(_natureSettings, saved.Day);
         foreach (var island in village.Map.Islands)
         {
             _treasuries[island.Id] = new Treasury();
@@ -673,6 +737,7 @@ public sealed class Work : IModule, IJobs, IStock
         foreach (var felled in saved.Felled) _felled[felled.Cell] = felled.Until;
         foreach (var earned in saved.Earned ?? []) _earned[earned.Resident] = earned.Cents;
         _working = [.. saved.Working ?? []];
+        foreach (var stood in saved.Stood ?? []) _stood[stood.Structure] = [.. stood.Tiles];
     }
 
     /// <summary>A place to work: a builder's of the island (<see cref="Structure"/> −1), or one of a building's jobs.</summary>
@@ -690,7 +755,11 @@ public sealed class Work : IModule, IJobs, IStock
 
     private sealed record SavedWork(DateOnly Day, IReadOnlyList<SavedIsland> Islands, IReadOnlyList<SavedJob> Jobs,
         IReadOnlyList<SavedVacancy> Vacant, IReadOnlyList<SavedBatch> Batches, IReadOnlyList<SavedFelled> Felled, IReadOnlyList<SavedEarned>? Earned = null,
-        IReadOnlyList<int>? Working = null);
+        IReadOnlyList<int>? Working = null, SavedNature? Nature = null, IReadOnlyList<SavedStood>? Stood = null);
+
+    private sealed record SavedNature(DateOnly Day, IReadOnlyList<NatureTile> Tiles);
+
+    private sealed record SavedStood(int Structure, IReadOnlyList<Cell> Tiles);
 
     private sealed record SavedEarned(int Resident, long Cents);
 

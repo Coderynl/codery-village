@@ -18,6 +18,13 @@
   "forestRange": 3,
   "workRange": 3,
   "stayQuarters": 6,
+  "nature": {
+    "fertile": { "perBatch": 10, "regrowDays": 1, "growsInMonths": [4, 5, 6, 7, 8, 9, 10] },
+    "fishing": { "perBatch": 10, "regrowDays": 1 },
+    "forest": { "perBatch": 15, "regrowDays": 3 },
+    "rock": { "perBatch": 10, "regrowDays": 14 },
+    "clay": { "perBatch": 10, "regrowDays": 21 }
+  },
   "needs": {
     "food": { "perPerson": 1 },
     "heat": { "perHousehold": 1 }
