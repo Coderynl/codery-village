@@ -12,26 +12,89 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  # a pull request that only changes documentation needs no build
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      docs: ${{ steps.changes.outputs.docs }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      # a pull request that only changes documentation needs no build: the check "test" still reports, green
       - name: Only documentation?
         id: changes
-        if: github.event_name == 'pull_request'
         run: |
-          if git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" | grep -qvE '\.md$'; then
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "docs=false" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" | grep -qvE '\.md$'; then
             echo "docs=false" >> "$GITHUB_OUTPUT"
           else
             echo "docs=true" >> "$GITHUB_OUTPUT"
             echo "Only documentation changed: no build and no tests."
           fi
+
+  # the scenarios keep every core busy for minutes (30 seeds at once), so the two biggest get a machine each,
+  # the other scenarios (new ones too) a third, and all other tests a fourth
+  part:
+    needs: changes
+    if: needs.changes.outputs.docs != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: scenario four weeks
+            filter: Category=Scenario&FullyQualifiedName~ScenarioTests.Four_weeks
+          - name: scenario savings
+            filter: Category=Scenario&FullyQualifiedName~ScenarioTests.Everyone_saves
+          - name: other scenarios
+            filter: Category=Scenario&FullyQualifiedName!~ScenarioTests.Four_weeks&FullyQualifiedName!~ScenarioTests.Everyone_saves
+          - name: rest
+            filter: Category!=Scenario
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
-        if: steps.changes.outputs.docs != 'true'
         with:
           dotnet-version: 10.0.x
-      - run: dotnet test
-        if: steps.changes.outputs.docs != 'true'
+      - name: Test
+        shell: bash
+        run: dotnet test --filter "${{ matrix.filter }}" --logger "console;verbosity=normal" 2>&1 | tee test.log | grep -E '\[FAIL\]|Total tests|Passed:|Failed:|Error Message' -A1
+      # where the time goes on this machine: the slowest tests and test classes
+      - name: Slowest tests
+        if: always()
+        shell: python3 {0}
+        run: |
+          import re
+          def seconds(text):
+              total = 0.0
+              for amount, unit in re.findall(r"([\d.]+) (ms|s|m)\b", text):
+                  total += float(amount) * {"ms": 0.001, "s": 1, "m": 60}[unit]
+              return total
+          tests = []
+          for line in open("test.log", encoding="utf8"):
+              found = re.match(r"\s+(Passed|Failed) (.+) \[([^\]]+)\]\s*$", line)
+              if found:
+                  tests.append((seconds(found.group(3)), found.group(2).replace("Codery.Village.Tests.", "")))
+          tests.sort(reverse=True)
+          print(f"{len(tests)} tests, {sum(t for t, _ in tests):.0f} s in all")
+          for took, name in tests[:15]:
+              print(f"{took:7.1f} s  {name[:110]}")
+          classes = {}
+          for took, name in tests:
+              classes[name.split(".")[0]] = classes.get(name.split(".")[0], 0) + took
+          print()
+          for name, took in sorted(classes.items(), key=lambda item: -item[1])[:10]:
+              print(f"{took:7.1f} s  {name}")
+
+  # the check that main requires: green when every part is, or when only documentation changed
+  test:
+    needs: [changes, part]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [ "${{ needs.changes.result }}" != "success" ]; then exit 1; fi
+          if [ "${{ needs.changes.outputs.docs }}" = "true" ]; then echo "Only documentation changed."; exit 0; fi
+          if [ "${{ needs.part.result }}" != "success" ]; then echo "A part failed: ${{ needs.part.result }}"; exit 1; fi
+          echo "Every part is green."
