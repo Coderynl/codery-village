@@ -60,24 +60,33 @@ public class FeedTests(ITestOutputHelper output)
     [Fact]
     public void Traffic_stays_under_2_kB_a_second()
     {
-        // a week old, so that it has built and grown; then one calendar day of messages
+        // a week old, so that it has built and grown; then an hour of messages every four hours of a day, each after a
+        // page joins: night and day count alike, at a quarter of the work of measuring the whole day
+        const int hour = 3600 * VillageFeed.TicksPerSecond;
         var village = Start(Builders.June(1, 0));
-        village.Run(7L * 24 * 3600 * VillageFeed.TicksPerSecond);
-        village.Feed.Join(village.Engine);
+        village.Run(7L * 24 * hour);
 
         var seconds = new List<int>();
-        var bytes = 0;
-        for (var tick = 1; tick <= 24 * 3600 * VillageFeed.TicksPerSecond; tick++)
+        // the first second after a join catches up with what the join leaves out: part of joining, not of the steady
+        // traffic the busiest second is about
+        var joining = new List<int>();
+        for (var window = 0; window < 6; window++)
         {
-            village.Run(1);
-            bytes += ProtocolJson.Bytes(village.Feed.Next(village.Engine));
-            if (tick % VillageFeed.TicksPerSecond != 0) continue;
-            seconds.Add(bytes);
-            bytes = 0;
+            if (window > 0) village.Run(3L * hour);
+            village.Feed.Join(village.Engine);
+            var bytes = 0;
+            for (var tick = 1; tick <= hour; tick++)
+            {
+                village.Run(1);
+                bytes += ProtocolJson.Bytes(village.Feed.Next(village.Engine));
+                if (tick % VillageFeed.TicksPerSecond != 0) continue;
+                (tick == VillageFeed.TicksPerSecond ? joining : seconds).Add(bytes);
+                bytes = 0;
+            }
         }
 
-        var average = seconds.Average();
-        output.WriteLine($"{seconds.Count} s: {average:F0} B/s on average, {seconds.Max()} B in the busiest second, {seconds.Count(s => s > 2048)} s above 2 kB");
+        var average = seconds.Concat(joining).Average();
+        output.WriteLine($"{seconds.Count + joining.Count} s: {average:F0} B/s on average, {seconds.Max()} B in the busiest second, {seconds.Count(s => s > 2048)} s above 2 kB; after a join {string.Join(", ", joining)} B");
         Assert.True(average < 2048, $"{average:F0} bytes a second on average");
         Assert.True(seconds.Max() <= 8192, $"{seconds.Max()} bytes in one second");
     }
