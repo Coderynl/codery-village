@@ -1,0 +1,52 @@
+{
+  "currency": { "nl": "schelpen", "en": "shells" },
+  "wagePerHour": 110,
+  "allowancePerDay": 200,
+  "pensionPerDay": 300,
+  "supportPerDay": 200,
+  "spendPercent": 20,
+  "upkeepPerDay": 100,
+  "startSubsidy": 45000,
+  "subsidyDamping": 15,
+  "builders": 3,
+  "crew": 3,
+  "builderRole": "builder",
+  "builderShift": "day",
+  "eddieRole": "developer",
+  "eddieWorkshop": "eddie-workshop",
+  "forestRegrowTicks": 43200,
+  "forestRange": 3,
+  "needs": {
+    "food": { "perPerson": 1 },
+    "heat": { "perHousehold": 1 }
+  },
+  "prices": {
+    "berries": 200, "roots": 200, "fish": 200, "firewood": 75, "driftwood": 75,
+    "bread": 300, "wood": 100, "peat": 100
+  },
+  "fits": {
+    "builder": ["crafts", "technology", "numbers"],
+    "gatherer": ["nature", "walking", "gardening"],
+    "fisher": ["fishing"],
+    "reed-cutter": ["nature", "crafts"],
+    "loam-digger": ["gardening", "history"],
+    "beachcomber": ["walking", "fishing"],
+    "fire-keeper": ["stars", "reading"],
+    "woodcutter": ["nature", "walking"],
+    "sawyer": ["crafts", "technology"],
+    "farmer": ["gardening", "animals", "nature"],
+    "baker": ["cooking"],
+    "quarrier": ["walking", "puzzles"],
+    "digger": ["gardening", "history"],
+    "peat-cutter": ["nature", "history"],
+    "brickmaker": ["crafts", "art"],
+    "stoker": ["stars", "reading"]
+  },
+  "start": {
+    "cash": 100000,
+    "stock": {
+      "West": { "branches": 40, "firewood": 60, "reed": 20, "berries": 60 },
+      "Oost": { "stones": 30, "loam": 20, "reed": 20, "fish": 60, "driftwood": 60 }
+    }
+  }
+}

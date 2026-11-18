@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- The village as a service: the only place where network, files and processes are allowed. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Codery.Village.Core\Codery.Village.Core.csproj" />
+    <ProjectReference Include="..\Codery.Village.Modules\Codery.Village.Modules.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\data\**\*" LinkBase="data" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="viewer.html" LogicalName="viewer.html" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The tests wait until the village is loaded, save on demand and look at it under the lock. -->
+    <InternalsVisibleTo Include="Codery.Village.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Anthropic" Version="12.31.0" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
+  </ItemGroup>
+
+</Project>

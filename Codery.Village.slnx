@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Codery.Village.Core/Codery.Village.Core.csproj" />
+    <Project Path="src/Codery.Village.Modules/Codery.Village.Modules.csproj" />
+    <Project Path="src/Codery.Village.Server/Codery.Village.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Codery.Village.Tests/Codery.Village.Tests.csproj" />
+  </Folder>
+</Solution>

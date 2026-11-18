@@ -1,0 +1,85 @@
+{
+  "startMin": 12,
+  "startMax": 15,
+  "names": {
+    "man": [
+      "Daan", "Sem", "Lucas", "Levi", "Finn", "Milan", "Bram", "Thijs", "Jesse", "Ruben",
+      "Noah", "Liam", "Luuk", "Mees", "Teun", "Sven", "Stijn", "Tim", "Jeroen", "Mark",
+      "Bas", "Erik", "Peter", "Hans", "Kees", "Wim", "Jan", "Gerrit", "Henk", "Wouter",
+      "Joost", "Pieter", "Maarten", "Niels", "Rik", "Joris", "Koen", "Mats", "Julian", "Jayden",
+      "Mohamed", "Yusuf", "Mehmet", "Emre", "Omar", "Ayoub", "Rayan", "Hamza", "Bilal", "Kevin",
+      "Dennis", "Ravi", "Sanjay", "Tomasz", "Piotr", "Xavier", "Romano", "Ricardo", "Bayu", "Arjen"
+    ],
+    "woman": [
+      "Emma", "Julia", "Mila", "Tess", "Sophie", "Zoë", "Sara", "Nora", "Yara", "Eva",
+      "Anna", "Lotte", "Fleur", "Sanne", "Lisa", "Femke", "Iris", "Anouk", "Marieke", "Ingrid",
+      "Ria", "Annie", "Truus", "Els", "Marja", "Esther", "Linda", "Monique", "Petra", "Ilse",
+      "Noor", "Saar", "Liv", "Maud", "Roos", "Isa", "Lieke", "Naomi", "Chantal", "Wilma",
+      "Fatima", "Aisha", "Yasmina", "Elif", "Zeynep", "Salma", "Nadia", "Amira", "Hanna", "Ellen",
+      "Priya", "Sharmila", "Agnieszka", "Kasia", "Dewi", "Indah", "Shanice", "Gabriela", "Mirjam", "Joyce",
+      "Bo", "Merel", "Tamara"
+    ]
+  },
+  "interests": [
+    { "id": "gardening", "nl": "tuinieren", "en": "gardening" },
+    { "id": "cooking", "nl": "koken", "en": "cooking" },
+    { "id": "reading", "nl": "lezen", "en": "reading" },
+    { "id": "music", "nl": "muziek", "en": "music" },
+    { "id": "football", "nl": "voetbal", "en": "football" },
+    { "id": "walking", "nl": "wandelen", "en": "walking" },
+    { "id": "fishing", "nl": "vissen", "en": "fishing" },
+    { "id": "animals", "nl": "dieren", "en": "animals" },
+    { "id": "puzzles", "nl": "puzzelen", "en": "puzzles" },
+    { "id": "crafts", "nl": "knutselen", "en": "crafts" },
+    { "id": "technology", "nl": "techniek", "en": "technology", "study": true },
+    { "id": "nature", "nl": "natuur", "en": "nature", "study": true },
+    { "id": "history", "nl": "geschiedenis", "en": "history", "study": true },
+    { "id": "art", "nl": "kunst", "en": "art", "study": true },
+    { "id": "stars", "nl": "sterren", "en": "stars", "study": true },
+    { "id": "numbers", "nl": "rekenen", "en": "numbers", "study": true }
+  ],
+  "personality": {
+    "openness": { "mean": 50, "spread": 18 },
+    "conscientiousness": { "mean": 55, "spread": 15 },
+    "extraversion": { "mean": 50, "spread": 18 },
+    "agreeableness": { "mean": 60, "spread": 15 },
+    "sensitivity": { "mean": 45, "spread": 15 },
+    "status": { "mean": 45, "spread": 18 },
+    "comfort": { "mean": 50, "spread": 15 },
+    "thrift": { "mean": 50, "spread": 15 }
+  },
+  "households": [
+    { "adults": 1, "children": 0, "weight": 3 },
+    { "adults": 2, "children": 0, "weight": 3 },
+    { "adults": 2, "children": 1, "weight": 2 },
+    { "adults": 2, "children": 2, "weight": 2 },
+    { "adults": 2, "children": 3, "weight": 1 }
+  ],
+  "adultAges": [
+    { "from": 18, "to": 29, "weight": 3 },
+    { "from": 30, "to": 49, "weight": 4 },
+    { "from": 50, "to": 66, "weight": 3 },
+    { "from": 67, "to": 69, "weight": 1 }
+  ],
+  "parentAges": [
+    { "from": 26, "to": 39, "weight": 3 },
+    { "from": 40, "to": 52, "weight": 2 }
+  ],
+  "childAges": [
+    { "from": 0, "to": 5, "weight": 1 },
+    { "from": 6, "to": 11, "weight": 1 },
+    { "from": 12, "to": 17, "weight": 1 }
+  ],
+  "partnerGap": 4,
+  "parentGap": 20,
+  "arrivalChance": 0.6,
+  "arrivalDamping": 20,
+  "eddieName": "Eddie",
+  "log": {
+    "arrived": { "nl": "{subject} komt in het dorp wonen.", "en": "{subject} moves to the village." },
+    "phase-student": { "nl": "{subject} gaat studeren.", "en": "{subject} starts studying." },
+    "phase-working": { "nl": "{subject} gaat aan het werk.", "en": "{subject} starts working." },
+    "phase-retired": { "nl": "{subject} gaat met pensioen.", "en": "{subject} retires." },
+    "left-coast": { "nl": "{subject} verhuist naar de kust.", "en": "{subject} moves to the coast." }
+  }
+}

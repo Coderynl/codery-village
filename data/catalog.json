@@ -1,0 +1,145 @@
+{
+  "materials": [
+    { "id": "branches", "nl": "takken", "en": "branches" },
+    { "id": "firewood", "nl": "sprokkelhout", "en": "firewood", "satisfies": ["heat"] },
+    { "id": "driftwood", "nl": "drijfhout", "en": "driftwood", "satisfies": ["heat"] },
+    { "id": "reed", "nl": "riet", "en": "reed" },
+    { "id": "loam", "nl": "leem", "en": "loam" },
+    { "id": "stones", "nl": "stenen", "en": "stones" },
+    { "id": "berries", "nl": "bessen", "en": "berries", "satisfies": ["food"] },
+    { "id": "roots", "nl": "wortels", "en": "roots", "satisfies": ["food"] },
+    { "id": "fish", "nl": "vis", "en": "fish", "satisfies": ["food"] }
+  ],
+  "roles": [
+    { "id": "gatherer", "nl": "verzamelaar", "en": "gatherer" },
+    { "id": "fisher", "nl": "visser", "en": "fisher" },
+    { "id": "reed-cutter", "nl": "rietsnijder", "en": "reed cutter" },
+    { "id": "loam-digger", "nl": "leemsteker", "en": "loam digger" },
+    { "id": "beachcomber", "nl": "jutter", "en": "beachcomber" },
+    { "id": "fire-keeper", "nl": "vuurhoeder", "en": "fire keeper" },
+    { "id": "builder", "nl": "bouwer", "en": "builder" },
+    { "id": "developer", "nl": "ontwikkelaar", "en": "developer" }
+  ],
+  "blueprints": [
+    {
+      "id": "hut", "nl": "hut", "en": "hut", "on": ["lot"], "homes": 1,
+      "phases": [
+        { "id": "foundation", "nl": "fundering", "en": "foundation", "ticks": 400, "cost": { "branches": 2 } },
+        { "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 600, "cost": { "branches": 4 } },
+        { "id": "roof", "nl": "dak", "en": "roof", "ticks": 500, "cost": { "reed": 3 } },
+        { "id": "walls", "nl": "wanden", "en": "walls", "ticks": 600, "cost": { "branches": 4 } },
+        { "id": "garden", "nl": "erf", "en": "garden", "ticks": 300, "cost": {} }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "wood", "roof": "thatch", "extras": ["door"] }
+    },
+    {
+      "id": "stone-hut", "nl": "stenen hut", "en": "stone hut", "on": ["lot"], "homes": 1,
+      "phases": [
+        { "id": "foundation", "nl": "fundering", "en": "foundation", "ticks": 400, "cost": { "stones": 3 } },
+        { "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 600, "cost": { "stones": 4 } },
+        { "id": "roof", "nl": "dak", "en": "roof", "ticks": 500, "cost": { "reed": 3 } },
+        { "id": "walls", "nl": "wanden", "en": "walls", "ticks": 600, "cost": { "loam": 4 } },
+        { "id": "garden", "nl": "erf", "en": "garden", "ticks": 300, "cost": {} }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "stone", "roof": "thatch", "extras": ["door"] }
+    },
+    {
+      "id": "campfire", "nl": "vuurplaats", "en": "campfire", "on": ["land"],
+      "jobs": [{ "role": "fire-keeper", "count": 1, "shift": "night", "outdoor": true }],
+      "phases": [
+        { "id": "ring", "nl": "stenen kring", "en": "stone ring", "ticks": 200, "cost": {} }
+      ],
+      "look": { "form": "kit", "models": ["campfire"] }
+    },
+    {
+      "id": "brushwood", "nl": "sprokkelplek", "en": "brushwood spot", "on": ["forest"],
+      "jobs": [{ "role": "gatherer", "count": 4, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "branches": 2, "firewood": 2 }, "ticks": 9000 },
+      "phases": [
+        { "id": "clearing", "nl": "open plek", "en": "clearing", "ticks": 200, "cost": {} }
+      ],
+      "look": { "form": "kit", "models": ["woodpile"] }
+    },
+    {
+      "id": "berry-patch", "nl": "bessenplek", "en": "berry patch", "on": ["fertile"],
+      "jobs": [{ "role": "gatherer", "count": 4, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "berries": 2, "roots": 1 }, "ticks": 7000 },
+      "phases": [
+        { "id": "clearing", "nl": "open plek", "en": "clearing", "ticks": 200, "cost": {} }
+      ],
+      "look": { "form": "kit", "models": ["berry_bushes"] }
+    },
+    {
+      "id": "reed-bed", "nl": "rietveld", "en": "reed bed", "on": ["fertile", "clay"],
+      "jobs": [{ "role": "reed-cutter", "count": 2, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "reed": 2 }, "ticks": 28800 },
+      "phases": [
+        { "id": "clearing", "nl": "open plek", "en": "clearing", "ticks": 200, "cost": {} }
+      ],
+      "look": { "form": "kit", "models": ["reeds"] }
+    },
+    {
+      "id": "loam-pit", "nl": "leemkuil", "en": "loam pit", "on": ["clay"],
+      "jobs": [{ "role": "loam-digger", "count": 2, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "loam": 2 }, "ticks": 28800 },
+      "phases": [
+        { "id": "clearing", "nl": "open plek", "en": "clearing", "ticks": 200, "cost": {} }
+      ],
+      "look": { "form": "kit", "models": ["loam_pit"] }
+    },
+    {
+      "id": "stone-field", "nl": "keienveld", "en": "stone field", "on": ["rock"],
+      "jobs": [{ "role": "gatherer", "count": 2, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "stones": 2 }, "ticks": 21600 },
+      "phases": [
+        { "id": "clearing", "nl": "open plek", "en": "clearing", "ticks": 200, "cost": {} }
+      ],
+      "look": { "form": "kit", "models": ["stone_heap"] }
+    },
+    {
+      "id": "fishing-spot", "nl": "visplek", "en": "fishing spot", "on": ["fishing"],
+      "jobs": [{ "role": "fisher", "count": 3, "shift": "early", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "fish": 2 }, "ticks": 6500 },
+      "phases": [
+        { "id": "trap", "nl": "fuik", "en": "fish trap", "ticks": 300, "cost": { "reed": 2 } }
+      ],
+      "look": { "form": "kit", "models": ["fish_trap"] }
+    },
+    {
+      "id": "driftwood-beach", "nl": "jutplek", "en": "beachcombing spot", "on": ["fishing"],
+      "jobs": [{ "role": "beachcomber", "count": 3, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "driftwood": 2 }, "ticks": 9000 },
+      "phases": [
+        { "id": "clearing", "nl": "open plek", "en": "clearing", "ticks": 200, "cost": {} }
+      ],
+      "look": { "form": "kit", "models": ["driftwood"] }
+    },
+    {
+      "id": "eddie-house", "nl": "huis van Eddie", "en": "Eddie's house", "on": ["land"], "homes": 1,
+      "phases": [
+        { "id": "foundation", "nl": "fundering", "en": "foundation", "ticks": 400, "cost": {} },
+        { "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 600, "cost": {} },
+        { "id": "roof", "nl": "dak", "en": "roof", "ticks": 500, "cost": {} },
+        { "id": "walls", "nl": "wanden", "en": "walls", "ticks": 600, "cost": {} },
+        { "id": "garden", "nl": "erf", "en": "garden", "ticks": 300, "cost": {} }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "glass", "roof": "flat", "extras": ["door", "antenna"] }
+    },
+    {
+      "id": "eddie-workshop", "nl": "werkplaats van Eddie", "en": "Eddie's workshop", "on": ["land"],
+      "phases": [
+        { "id": "foundation", "nl": "fundering", "en": "foundation", "ticks": 300, "cost": {} },
+        { "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 400, "cost": {} },
+        { "id": "roof", "nl": "dak", "en": "roof", "ticks": 300, "cost": {} },
+        { "id": "walls", "nl": "wanden", "en": "walls", "ticks": 300, "cost": {} }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "planks", "roof": "gable", "extras": ["door", "awning", "antenna"] }
+    }
+  ],
+  "things": [
+    { "id": "log", "nl": "boomstam", "en": "log" },
+    { "id": "basket", "nl": "mand", "en": "basket" },
+    { "id": "sapling", "nl": "jonge boom", "en": "sapling" },
+    { "id": "boulder", "nl": "kei", "en": "boulder" }
+  ]
+}

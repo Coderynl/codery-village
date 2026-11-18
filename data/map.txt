@@ -1,0 +1,23 @@
+# De kaart van het dorp: twee eilanden met zee ertussen en Eddies eilandje in het midden.
+# Spitse hexen in rijen; elke oneven rij ligt een halve tegel naar rechts.
+# ~ water   v visgrond   . land   T bos   F vruchtbare grond   R rots   C klei   h kavel
+# West: bos en vruchtbare grond. Oost: rots en klei, met visgrond langs de kust.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~TTTTT.~~~~~~~~~~~~~~~~~~RRRR~~~~~~~~
+~~~TTTTT...hh~~~~~~~~~~~~~.RRRRR..vv~~~~
+~~TTTT..hhhh..~~~~~~~~~~~..hhRRR..h.v~~~
+~~TTT..hhhhh...~~~~~~~~~..hhhh..hhh.vv~~
+~~TT..hh..hh.FF~~~~~~~~~.hhh..hhh..CC.v~
+~~~T.hhh..hh.FFF~~~..~~~..hh....hh.CC.v~
+~~~T..hh....FFFF~~~..~~~~.hhh..hhh.CCCv~
+~~TT...hhhh.FFF~~~~~~~~~~..CC....h.CC.v~
+~~~T..FFFF..FF~~~~~~~~~~~~.CCC..RR..vv~~
+~~~~..FFFFF..~~~~~~~~~~~~~~..CC.RRR.v~~~
+~~~~~..FFF.~~~~~~~~~~~~~~~~~vv.....vv~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~vvvvvv~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Elke regel noemt het eiland dat die tegel bevat: island <rij> <kolom> <naam> [eddie]
+island 6 8 West
+island 6 19 Eddie eddie
+island 6 30 Oost

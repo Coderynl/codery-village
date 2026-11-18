@@ -1,0 +1,21 @@
+{
+  "ticksPerLifeYear": 2419200,
+  "schoolFrom": 6,
+  "workFrom": 18,
+  "retireFrom": 67,
+  "studyYears": 3,
+  "retiredYears": 3,
+  "eddieAge": 35,
+  "happiness": {
+    "base": 50,
+    "maxStepPerHour": 3,
+    "leisure": ["leisure", "visit", "help"],
+    "reasons": {
+      "home": { "plus": 15, "minus": -25, "nl": "een huis", "en": "a home" },
+      "food": { "plus": 10, "minus": -20, "nl": "eten", "en": "food" },
+      "heat": { "plus": 5, "minus": -15, "nl": "warmte", "en": "warmth" },
+      "work": { "plus": 10, "minus": -10, "nl": "werk", "en": "work" },
+      "leisure": { "plus": 5, "minus": -5, "nl": "vrije tijd vandaag", "en": "free time today" }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "materials": [
+    { "id": "peat", "nl": "turf", "en": "peat", "satisfies": ["heat"] }
+  ],
+  "roles": [
+    { "id": "peat-cutter", "nl": "turfsteker", "en": "peat cutter" }
+  ],
+  "blueprints": [
+    {
+      "id": "peat-cutter", "nl": "turfsteker", "en": "peat cutter", "on": ["clay"], "serves": "peat",
+      "jobs": [{ "role": "peat-cutter", "count": 2, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "peat": 2 }, "ticks": 300 },
+      "phases": [
+        { "id": "foundation", "nl": "fundering", "en": "foundation", "ticks": 300, "cost": { "stones": 2 } }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "open", "roof": "thatch", "extras": ["crates"] }
+    }
+  ]
+}
