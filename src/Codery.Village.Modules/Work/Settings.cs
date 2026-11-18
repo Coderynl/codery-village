@@ -40,7 +40,9 @@ public sealed record EconomySettings(
     // how many quarters of an hour a worker keeps his tile of the work area
     int StayQuarters = 1,
     // by ground, how a tile of it that is worked runs out and grows back; a ground without it never runs out
-    IReadOnlyDictionary<string, NatureSettings>? Nature = null);
+    IReadOnlyDictionary<string, NatureSettings>? Nature = null,
+    // whether a household fetches the food it bought at the store where it lies, for all to see; the purchase is booked either way
+    bool FetchFood = false);
 
 /// <summary>
 /// How a tile of a ground runs out and grows back. Its yield goes from 100 (full) to 0; every batch made on it takes

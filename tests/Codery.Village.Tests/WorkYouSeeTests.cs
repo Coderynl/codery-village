@@ -183,6 +183,94 @@ public class WorkYouSeeTests
         Assert.Equal(reed - 1, village.Work.Count(West, "reed"));
     }
 
+    private static int HouseholdOf(Resident resident) => resident.Household ?? -1 - resident.Id;
+
+    private static bool Grown(Resident resident) => resident.Phase is LifePhase.Working or LifePhase.Retired;
+
+    [Fact]
+    public void A_household_fetches_its_food_at_the_source()
+    {
+        var village = Builders.Start(1, June(1, 9));
+        village.Run(1);
+        // everyone can pay for his food
+        foreach (var resident in village.People.All) resident.Money = 100_000;
+
+        // Tuesday: the purchase is booked at midnight, and at 17:30 the home block begins (after a stop, at once)
+        village.JumpTo(June(2, 17, 30));
+        Assert.Equal(0, village.Work.LastShopping(West).Short["food"]);
+        var home = village.People.On(West).Where(resident => village.Day.TripOf(resident.Id) is { Was: Activity.Home } || village.Day.Of(resident.Id).Activity == Activity.Home)
+            .Select(resident => resident.Id).ToHashSet();
+
+        // of every household with someone grown at home, one goes for the food it bought, to where it lies nearest home
+        var trips = new Dictionary<int, Trip>();
+        foreach (var household in village.People.On(West).GroupBy(HouseholdOf))
+        {
+            var fetching = household.Where(resident => village.Day.TripOf(resident.Id) is { Errand.Kind: Activity.Fetch }).ToList();
+            if (!household.Any(resident => Grown(resident) && home.Contains(resident.Id)))
+            {
+                Assert.Empty(fetching);
+                continue;
+            }
+            var fetcher = Assert.Single(fetching);
+            Assert.True(Grown(fetcher), $"{fetcher.Name} is a {fetcher.Phase}");
+            var trip = village.Day.TripOf(fetcher.Id)!;
+            Assert.Equal(Activity.Home, trip.Was);
+            Assert.Equal(new Errand(Activity.Fetch, ((IStock)village.Work).SourceOf(West, "berries", trip.Home)!.Value, null, "berries"), trip.Errand);
+            trips[fetcher.Id] = trip;
+        }
+        Assert.NotEmpty(trips);
+
+        // there, and home with it on his back
+        var ticks = 0;
+        while (trips.Keys.Any(fetcher => village.Day.TripOf(fetcher) is not null) && ticks++ < 5000) village.Run(1);
+        village.Run(1);
+        Assert.True(village.Time.GetUtcNow() < June(2, 19), "the walks lasted past the home block");
+        foreach (var (fetcher, trip) in trips)
+        {
+            Assert.Single(village.Heard<Reached>(), e => e.Resident == fetcher && e.Errand == Activity.Fetch && e.At == trip.Errand.Target);
+            Assert.Equal(new Returned(0, fetcher, Activity.Fetch, trip.Home, "berries"),
+                village.Heard<Returned>().Single(e => e.Resident == fetcher && e.Errand == Activity.Fetch) with { Tick = 0 });
+        }
+        // once a day: no household of West goes a second time (one whose grown came home later goes then)
+        village.Run(90 * 60 * 4);
+        var households = village.People.On(West).ToDictionary(resident => resident.Id, HouseholdOf);
+        var went = village.Heard<Reached>().Where(e => e.Errand == Activity.Fetch && households.ContainsKey(e.Resident))
+            .GroupBy(e => households[e.Resident]).ToDictionary(group => group.Key, group => group.Count());
+        Assert.All(went, item => Assert.Equal(1, item.Value));
+        Assert.All(trips.Keys, fetcher => Assert.Contains(households[fetcher], went.Keys));
+    }
+
+    [Fact]
+    public void A_household_with_no_one_to_send_still_eats()
+    {
+        var start = Builders.Start(1, June(1, 9));
+        start.Run(1);
+        // one household of West becomes a household of children, who are home at 17:30 too
+        var saved = start.Engine.Save();
+        var residents = saved.Modules.Single(part => part.Name == "people").Data["residents"]!.AsArray();
+        var year = (long)JsonNode.Parse(File.ReadAllText(Path.Combine(Builders.Folder, "life.json")))!["ticksPerLifeYear"]!;
+        var children = start.People.On(West).First(resident => Grown(resident) && resident.Household is not null).Household!.Value;
+        foreach (var resident in residents.Where(resident => (int?)resident!["household"] == children)) resident!["bornTick"] = saved.Tick - 10 * year;
+        var village = Builders.Load(saved, Builders.Data());
+        var kids = village.People.On(West).Where(resident => HouseholdOf(resident) == children).ToList();
+        Assert.NotEmpty(kids);
+        foreach (var resident in village.People.All) resident.Money = 100_000;
+        var berries = village.Work.Count(West, "berries");
+
+        village.JumpTo(June(2, 17, 30));
+        Assert.All(kids, kid => Assert.Equal(LifePhase.Child, kid.Phase));
+        // the purchase is booked as before: every household of West has all its food, the children too
+        var shopping = village.Work.LastShopping(West);
+        Assert.Equal((village.People.On(West).Select(HouseholdOf).Distinct().Count(), 0), (shopping.Households, shopping.Short["food"]));
+        Assert.Equal(berries - village.People.On(West).Count(), village.Work.Count(West, "berries"));
+
+        // the other households go for theirs; the children stay home, all evening
+        Assert.Contains(village.People.On(West), resident => village.Day.TripOf(resident.Id) is { Errand.Kind: Activity.Fetch });
+        Assert.All(kids, kid => Assert.Equal(Activity.Home, village.Day.Of(kid.Id).Activity));
+        village.Run(90 * 60 * 4);
+        Assert.DoesNotContain(village.Heard<Reached>(), e => kids.Any(kid => kid.Id == e.Resident));
+    }
+
     // a berry patch near the heart of West, standing, on Monday the first of June just after ten
     private static (Builders.Village Village, int Patch) BerryPatch(DataSet? data = null)
     {

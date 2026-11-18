@@ -18,6 +18,7 @@
   "forestRange": 3,
   "workRange": 3,
   "stayQuarters": 6,
+  "fetchFood": true,
   "nature": {
     "fertile": { "perBatch": 10, "regrowDays": 1 },
     "fishing": { "perBatch": 10, "regrowDays": 1 },

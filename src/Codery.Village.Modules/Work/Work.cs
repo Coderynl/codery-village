@@ -9,6 +9,7 @@ using Codery.Village.Core.Time;
 using Codery.Village.Modules.Contracts;
 using Codery.Village.Modules.People;
 using Activity = Codery.Village.Modules.Day.Activity;
+using Doing = Codery.Village.Modules.Day.Doing;
 using Errand = Codery.Village.Modules.Day.Errand;
 using DayModule = Codery.Village.Modules.Day.Day;
 
@@ -31,7 +32,10 @@ namespace Codery.Village.Modules.Work;
 /// subsidy comes in, the upkeep of its buildings goes out, children, students and the retired get their money, and who is
 /// of working age the support, less what he earned that day (so a new worker who has had no wage yet, or one whose job
 /// rests at the weekend, is not left without),
-/// every household buys food and heat from the stores nearest where the island gathers, and every resident spends after his thrift. Who leaves the
+/// every household buys food and heat from the stores nearest where the island gathers, and every resident spends after his thrift.
+/// With <c>fetchFood</c>, someone grown of every household that bought food walks to the store nearest home that has the food it
+/// bought most and carries it home, once that day: the first who is at home and awake as a quarter begins. The purchase is
+/// booked at midnight all the same, also for a household with nobody to send. Who leaves the
 /// village takes his money with him; the island books it the tick after. Eddie works
 /// in his workshop for nothing: he is outside the economy.
 /// </summary>
@@ -40,6 +44,8 @@ public sealed class Work : IModule, IJobs, IStock
     private const string Section = "economy";
     private const long TicksPerHour = Clocks.TicksPerSecond * 3600L;
     private const long QuarterSeconds = 15 * 60;
+    // the need whose purchase a household fetches
+    private const string Food = "food";
 
     private readonly Dictionary<int, Treasury> _treasuries = [];
     // per island, its stores
@@ -63,6 +69,10 @@ public sealed class Work : IModule, IJobs, IStock
     private readonly Dictionary<Cell, long> _felled = [];
     // per island, how the households did at the last settling of the day
     private readonly Dictionary<int, Shopping> _shopping = [];
+    // per household that bought food at the last settling and has not been to fetch it, the food it bought most
+    private readonly SortedDictionary<int, string> _fetch = [];
+    // the quarter the households last looked for someone to fetch their food
+    private long _fetchQuarter;
     // the calendar day that was settled last
     private DateOnly _day;
     private ModuleContext? _village;
@@ -175,6 +185,7 @@ public sealed class Work : IModule, IJobs, IStock
             _nature.Grow(today);
             SettleDay(village, world);
         }
+        FetchFood(village, world);
         Staff(village, world);
         Produce(village, world, Labour(world));
         Regrow(village.Clocks.Tick);
@@ -597,6 +608,7 @@ public sealed class Work : IModule, IJobs, IStock
 
     private void SettleDay(ModuleContext village, World world)
     {
+        _fetch.Clear();
         foreach (var island in village.Map.Islands)
         {
             if (island.Eddie) continue;
@@ -647,10 +659,11 @@ public sealed class Work : IModule, IJobs, IStock
     private Shopping Shop(int island, List<Resident> residents, Treasury treasury, Cell gathering)
     {
         var shortOf = _needs.ToDictionary(need => need.Need, _ => 0);
-        var households = residents.GroupBy(resident => resident.Household ?? -1 - resident.Id).ToList();
+        var households = residents.GroupBy(HouseholdOf).ToList();
         foreach (var household in households)
         {
             var members = household.ToList();
+            var food = new SortedDictionary<string, int>(StringComparer.Ordinal);
             foreach (var (need, amount, goods) in _needs)
             {
                 var units = amount.PerPerson * members.Count + amount.PerHousehold;
@@ -664,6 +677,7 @@ public sealed class Work : IModule, IJobs, IStock
                         break;
                     }
                     TryTake(island, new Dictionary<string, int> { [material] = 1 }, gathering);
+                    if (need == Food) food[material] = food.GetValueOrDefault(material) + 1;
                     var due = (long)price;
                     foreach (var member in members)
                     {
@@ -674,8 +688,39 @@ public sealed class Work : IModule, IJobs, IStock
                     treasury.Cash += price;
                 }
             }
+            if (_settings.FetchFood && food.Count > 0) _fetch[household.Key] = Most(food);
         }
         return new Shopping(households.Count, shortOf);
+    }
+
+    private static int HouseholdOf(Resident resident) => resident.Household ?? -1 - resident.Id;
+
+    // as a quarter begins, a household that has not fetched its food sends the first who is grown, at home, awake and
+    // not out on an errand, from where he is to the store nearest home that has it, and home with it; with none of it
+    // left anywhere, nobody goes that day
+    private void FetchFood(ModuleContext village, World world)
+    {
+        var quarter = Quarter(village);
+        if (quarter == _fetchQuarter) return;
+        _fetchQuarter = quarter;
+        if (_fetch.Count == 0 || world.Day is not { } day) return;
+        foreach (var resident in world.People.All.OrderBy(resident => resident.Id))
+        {
+            if (resident is not { Phase: LifePhase.Working or LifePhase.Retired, IsEddie: false }
+                || !_fetch.TryGetValue(HouseholdOf(resident), out var food) || day.TripOf(resident.Id) is not null) continue;
+            Doing doing;
+            try
+            {
+                doing = day.Of(resident.Id);
+            }
+            catch (KeyNotFoundException)
+            {
+                continue;
+            }
+            if (doing.Activity != Activity.Home) continue;
+            if (SourceOf(resident.Island, food, doing.Place) is { } source && !day.Send(resident.Id, new Errand(Activity.Fetch, source, null, food))) continue;
+            _fetch.Remove(HouseholdOf(resident));
+        }
     }
 
     // ── helpers ──
@@ -770,7 +815,9 @@ public sealed class Work : IModule, IJobs, IStock
             _working.Count > 0 ? [.. _working] : null,
             new SavedNature(_nature.Day, _nature.Tiles),
             _stood.Count > 0 ? [.. _stood.Select(item => new SavedStood(item.Key, [.. item.Value.OrderBy(cell => cell.Row).ThenBy(cell => cell.Col)]))] : null,
-            _spread ? true : null), SaveJson.Options)!;
+            _spread ? true : null,
+            _fetch.Count > 0 ? [.. _fetch.Select(item => new SavedFetch(item.Key, item.Value))] : null,
+            _fetchQuarter != 0 ? _fetchQuarter : null), SaveJson.Options)!;
 
     public void Load(ModuleContext village, JsonNode data, int version)
     {
@@ -788,6 +835,7 @@ public sealed class Work : IModule, IJobs, IStock
         _shopping.Clear();
         _earned.Clear();
         _stood.Clear();
+        _fetch.Clear();
         // a save from before nature ran out has every tile full
         _nature = saved.Nature is { } nature ? new Nature(_natureSettings, nature.Day, nature.Tiles) : new Nature(_natureSettings, saved.Day);
         foreach (var island in village.Map.Islands)
@@ -818,6 +866,9 @@ public sealed class Work : IModule, IJobs, IStock
         foreach (var earned in saved.Earned ?? []) _earned[earned.Resident] = earned.Cents;
         _working = [.. saved.Working ?? []];
         foreach (var stood in saved.Stood ?? []) _stood[stood.Structure] = [.. stood.Tiles];
+        // a save from before households fetched their food has nothing to fetch
+        foreach (var fetch in saved.Fetch ?? []) _fetch[fetch.Household] = fetch.Material;
+        _fetchQuarter = saved.FetchQuarter ?? 0;
     }
 
     /// <summary>A place to work: a builder's of the island (<see cref="Structure"/> −1), or one of a building's jobs.</summary>
@@ -835,7 +886,10 @@ public sealed class Work : IModule, IJobs, IStock
 
     private sealed record SavedWork(DateOnly Day, IReadOnlyList<SavedIsland> Islands, IReadOnlyList<SavedJob> Jobs,
         IReadOnlyList<SavedVacancy> Vacant, IReadOnlyList<SavedBatch> Batches, IReadOnlyList<SavedFelled> Felled, IReadOnlyList<SavedEarned>? Earned = null,
-        IReadOnlyList<int>? Working = null, SavedNature? Nature = null, IReadOnlyList<SavedStood>? Stood = null, bool? Spread = null);
+        IReadOnlyList<int>? Working = null, SavedNature? Nature = null, IReadOnlyList<SavedStood>? Stood = null, bool? Spread = null,
+        IReadOnlyList<SavedFetch>? Fetch = null, long? FetchQuarter = null);
+
+    private sealed record SavedFetch(int Household, string Material);
 
     private sealed record SavedStore(int Store, IReadOnlyDictionary<string, int> Stock);
 
