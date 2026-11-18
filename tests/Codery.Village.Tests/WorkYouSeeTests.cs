@@ -424,11 +424,14 @@ public class WorkYouSeeTests
     }
 
     [Fact]
-    public void Berries_do_not_grow_back_in_winter()
+    public void Ground_does_not_grow_back_outside_its_months()
     {
+        // fertile ground that grows from April to October only
+        var data = QuickBerries(economy => economy["nature"]!["fertile"]!["growsInMonths"] = new JsonArray(4, 5, 6, 7, 8, 9, 10));
+
         // worked bare on the first of December, it is as bare a fortnight later
         var winter = new DateTimeOffset(2026, 12, 1, 9, 0, 0, TimeSpan.FromHours(1));
-        var (cold, coldPatch) = PatchFrom(winter, QuickBerries());
+        var (cold, coldPatch) = PatchFrom(winter, data);
         var frozen = WorkUntilBare(cold, coldPatch);
         var left = cold.Work.YieldOf(frozen);
         cold.JumpTo(new DateTimeOffset(2026, 12, 15, 1, 0, 0, TimeSpan.FromHours(1)));
@@ -436,7 +439,7 @@ public class WorkYouSeeTests
         Assert.Contains(frozen, cold.Work.Bare);
 
         // worked bare on the first of June, it is back by the third
-        var (summer, summerPatch) = PatchFrom(June(1, 9), QuickBerries());
+        var (summer, summerPatch) = PatchFrom(June(1, 9), data);
         var grown = WorkUntilBare(summer, summerPatch);
         summer.JumpTo(June(3, 1));
         Assert.True(summer.Work.YieldOf(grown) >= Low, $"a yield of {summer.Work.YieldOf(grown)}");
