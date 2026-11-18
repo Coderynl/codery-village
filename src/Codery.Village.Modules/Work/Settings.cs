@@ -42,7 +42,9 @@ public sealed record EconomySettings(
     // by ground, how a tile of it that is worked runs out and grows back; a ground without it never runs out
     IReadOnlyDictionary<string, NatureSettings>? Nature = null,
     // whether a household fetches the food it bought at the store where it lies, for all to see; the purchase is booked either way
-    bool FetchFood = false);
+    bool FetchFood = false,
+    // from this time of day ("HH:mm") a household sends someone who comes home for its food; never in the night of the day section
+    string FetchFoodFrom = "12:00");
 
 /// <summary>
 /// How a tile of a ground runs out and grows back. Its yield goes from 100 (full) to 0; every batch made on it takes

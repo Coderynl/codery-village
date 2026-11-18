@@ -195,22 +195,18 @@ public class WorkYouSeeTests
         // everyone can pay for his food
         foreach (var resident in village.People.All) resident.Money = 100_000;
 
-        // Tuesday: the purchase is booked at midnight, and at 17:30 the home block begins (after a stop, at once)
-        village.JumpTo(June(2, 17, 30));
+        // Tuesday: the purchase is booked at midnight; the day shift comes home at 17:30
+        village.JumpTo(June(2, 17, 15));
         Assert.Equal(0, village.Work.LastShopping(West).Short["food"]);
-        var home = village.People.On(West).Where(resident => village.Day.TripOf(resident.Id) is { Was: Activity.Home } || village.Day.Of(resident.Id).Activity == Activity.Home)
-            .Select(resident => resident.Id).ToHashSet();
+        while (village.Time.GetUtcNow() < June(2, 17, 30)) village.Run(1);
+        village.Run(1);
 
-        // of every household with someone grown at home, one goes for the food it bought, to where it lies nearest home
+        // who comes home goes for the food his household bought, to where it lies nearest home: one of a household
         var trips = new Dictionary<int, Trip>();
         foreach (var household in village.People.On(West).GroupBy(HouseholdOf))
         {
             var fetching = household.Where(resident => village.Day.TripOf(resident.Id) is { Errand.Kind: Activity.Fetch }).ToList();
-            if (!household.Any(resident => Grown(resident) && home.Contains(resident.Id)))
-            {
-                Assert.Empty(fetching);
-                continue;
-            }
+            if (fetching.Count == 0) continue;
             var fetcher = Assert.Single(fetching);
             Assert.True(Grown(fetcher), $"{fetcher.Name} is a {fetcher.Phase}");
             var trip = village.Day.TripOf(fetcher.Id)!;
@@ -238,6 +234,54 @@ public class WorkYouSeeTests
             .GroupBy(e => households[e.Resident]).ToDictionary(group => group.Key, group => group.Count());
         Assert.All(went, item => Assert.Equal(1, item.Value));
         Assert.All(trips.Keys, fetcher => Assert.Contains(households[fetcher], went.Keys));
+    }
+
+    private static string Local(DateTimeOffset at) => at.ToOffset(TimeSpan.FromHours(2)).ToString("ddd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+
+    [Fact]
+    public void Households_fetch_on_the_way_home_not_at_night()
+    {
+        // a fishing spot on Oost, whose fishers work the early shift
+        var village = Builders.Start(1, June(1, 9));
+        village.Run(1);
+        var spot = village.PlaceNearHeart("fishing-spot", Oost);
+        village.JumpTo(June(1, 10));
+        for (var tick = 0; tick < 5000 && !village.Get(spot).Done; tick++) village.Run(1);
+        Assert.True(village.Get(spot).Done);
+        village.Run(1);
+        foreach (var resident in village.People.All) resident.Money = 100_000;
+
+        // from Monday 22:00 to Tuesday 18:30, tick by tick: when does a household set off for its food?
+        village.JumpTo(June(1, 22));
+        var started = new Dictionary<int, DateTimeOffset>();
+        while (village.Time.GetUtcNow() < June(2, 18, 30))
+        {
+            village.Run(1);
+            foreach (var resident in village.People.All)
+                if (village.Day.TripOf(resident.Id) is { Errand.Kind: Activity.Fetch, Was: Activity.Home } && !started.ContainsKey(resident.Id))
+                    started[resident.Id] = village.Time.GetUtcNow();
+        }
+        Assert.NotEmpty(started);
+        var household = village.People.All.ToDictionary(resident => resident.Id, HouseholdOf);
+        var members = village.People.All.ToLookup(HouseholdOf);
+        var fetched = started.GroupBy(item => household[item.Key]).ToDictionary(group => group.Key, group => group.Min(item => item.Value));
+
+        // nobody goes at night
+        Assert.All(fetched.Values, at => Assert.False(at >= June(1, 22) && at < June(2, 6), $"a fetch at {Local(at)}"));
+
+        // a household of the day shift goes as it comes home at 17:30 (who is careless comes home later)
+        Shift? ShiftOf(Resident resident) => village.Work.JobOf(resident.Id)?.Shift;
+        var day = members.Where(group => group.Where(Grown).All(member => ShiftOf(member) == Shift.Day)
+            && group.Any(member => ShiftOf(member) == Shift.Day && member.Traits.Conscientiousness >= 50)).Select(group => group.Key).ToList();
+        Assert.NotEmpty(day);
+        Assert.All(day, key => Assert.True(fetched.TryGetValue(key, out var at) && at >= June(2, 17, 30) && at < June(2, 17, 45),
+            $"household {key} went at {(fetched.TryGetValue(key, out var when) ? Local(when) : "no time")}"));
+
+        // a household of the early shift goes from noon on, as its fisher comes home
+        var early = members.Where(group => group.Any(member => ShiftOf(member) == Shift.Early)).Select(group => group.Key).ToList();
+        Assert.NotEmpty(early);
+        Assert.Contains(early, fetched.ContainsKey);
+        Assert.All(early.Where(fetched.ContainsKey), key => Assert.True(fetched[key] >= June(2, 12), $"household {key} went at {Local(fetched[key])}"));
     }
 
     [Fact]

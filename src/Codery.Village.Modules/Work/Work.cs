@@ -9,7 +9,6 @@ using Codery.Village.Core.Time;
 using Codery.Village.Modules.Contracts;
 using Codery.Village.Modules.People;
 using Activity = Codery.Village.Modules.Day.Activity;
-using Doing = Codery.Village.Modules.Day.Doing;
 using Errand = Codery.Village.Modules.Day.Errand;
 using DayModule = Codery.Village.Modules.Day.Day;
 
@@ -34,8 +33,10 @@ namespace Codery.Village.Modules.Work;
 /// rests at the weekend, is not left without),
 /// every household buys food and heat from the stores nearest where the island gathers, and every resident spends after his thrift.
 /// With <c>fetchFood</c>, someone grown of every household that bought food walks to the store nearest home that has the food it
-/// bought most and carries it home, once that day: the first who is at home and awake as a quarter begins. The purchase is
-/// booked at midnight all the same, also for a household with nobody to send. Who leaves the
+/// bought most and carries it home, once that day: the first who comes home, awake, from <c>fetchFoodFrom</c> on and never in
+/// the night of the day section (the day shift at 17:30, the early shift at noon). A fetch the next block cuts short is not
+/// done again that day, and with the food nowhere in store nobody walks. The purchase is booked at midnight all the same, also
+/// for a household with nobody to send. Who leaves the
 /// village takes his money with him; the island books it the tick after. Eddie works
 /// in his workshop for nothing: he is outside the economy.
 /// </summary>
@@ -73,6 +74,11 @@ public sealed class Work : IModule, IJobs, IStock
     private readonly SortedDictionary<int, string> _fetch = [];
     // the quarter the households last looked for someone to fetch their food
     private long _fetchQuarter;
+    // the grown who were at home and awake (or out on an errand from there) as that quarter began
+    private SortedSet<int> _atHome = [];
+    private TimeOnly _fetchFrom;
+    // the night of the day section, when nobody goes for food; null without one
+    private (TimeOnly From, TimeOnly To)? _night;
     // the calendar day that was settled last
     private DateOnly _day;
     private ModuleContext? _village;
@@ -695,31 +701,41 @@ public sealed class Work : IModule, IJobs, IStock
 
     private static int HouseholdOf(Resident resident) => resident.Household ?? -1 - resident.Id;
 
-    // as a quarter begins, a household that has not fetched its food sends the first who is grown, at home, awake and
-    // not out on an errand, from where he is to the store nearest home that has it, and home with it; with none of it
-    // left anywhere, nobody goes that day
+    // as a quarter begins, who came home in it (from anything else, sleep too) and is grown, awake and not out on an errand
+    // goes for the food of his household if it has not been yet, from where he is to the store nearest home that has it,
+    // and home with it; from fetchFoodFrom on, not at night. With none of it left anywhere, nobody goes that day
     private void FetchFood(ModuleContext village, World world)
     {
         var quarter = Quarter(village);
         if (quarter == _fetchQuarter) return;
         _fetchQuarter = quarter;
-        if (_fetch.Count == 0 || world.Day is not { } day) return;
-        foreach (var resident in world.People.All.OrderBy(resident => resident.Id))
+        if (world.Day is not { } day) return;
+        var wasHome = _atHome;
+        _atHome = [];
+        foreach (var resident in world.People.All)
+            if (resident is { Phase: LifePhase.Working or LifePhase.Retired, IsEddie: false } && AtHome(day, resident.Id)) _atHome.Add(resident.Id);
+        if (_fetch.Count == 0) return;
+        var time = TimeOnly.FromDateTime(village.Clocks.Calendar.Now.DateTime);
+        if (time < _fetchFrom || _night is { } night && (night.From <= night.To ? time >= night.From && time < night.To : time >= night.From || time < night.To)) return;
+        foreach (var id in _atHome)
         {
-            if (resident is not { Phase: LifePhase.Working or LifePhase.Retired, IsEddie: false }
-                || !_fetch.TryGetValue(HouseholdOf(resident), out var food) || day.TripOf(resident.Id) is not null) continue;
-            Doing doing;
-            try
-            {
-                doing = day.Of(resident.Id);
-            }
-            catch (KeyNotFoundException)
-            {
-                continue;
-            }
-            if (doing.Activity != Activity.Home) continue;
-            if (SourceOf(resident.Island, food, doing.Place) is { } source && !day.Send(resident.Id, new Errand(Activity.Fetch, source, null, food))) continue;
-            _fetch.Remove(HouseholdOf(resident));
+            var household = HouseholdOf(world.Residents[id]);
+            if (wasHome.Contains(id) || !_fetch.TryGetValue(household, out var food) || day.TripOf(id) is not null) continue;
+            if (SourceOf(world.Residents[id].Island, food, day.Of(id).Place) is { } source && !day.Send(id, new Errand(Activity.Fetch, source, null, food))) continue;
+            _fetch.Remove(household);
+        }
+    }
+
+    private static bool AtHome(DayModule day, int resident)
+    {
+        if (day.TripOf(resident) is { } trip) return trip.Was == Activity.Home;
+        try
+        {
+            return day.Of(resident).Activity == Activity.Home;
+        }
+        catch (KeyNotFoundException)
+        {
+            return false;
         }
     }
 
@@ -750,10 +766,17 @@ public sealed class Work : IModule, IJobs, IStock
     // the quarter of an hour it is now, counted since 1970
     private static long Quarter(ModuleContext village) => village.Clocks.Calendar.Now.ToUnixTimeSeconds() / QuarterSeconds;
 
+    private static TimeOnly Time(string text) =>
+        TimeOnly.TryParseExact(text, "HH:mm", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var time)
+            ? time
+            : throw new InvalidDataException($"The data has the time '{text}', which is not HH:mm.");
+
     private void Read(ModuleContext village)
     {
         _village = village;
         _settings = village.Data.Section<EconomySettings>(Section);
+        _fetchFrom = Time(_settings.FetchFoodFrom);
+        _night = village.Data.Names.Contains("day") && village.Data.Section<WorkDay>("day").Night is { } night ? (Time(night.From), Time(night.To)) : null;
         var catalog = village.Data.Section<Catalog>("catalog");
         _blueprints = catalog.Blueprints.ToDictionary(blueprint => blueprint.Id);
         var materials = catalog.Materials.Select(material => material.Id).ToHashSet();
@@ -817,7 +840,8 @@ public sealed class Work : IModule, IJobs, IStock
             _stood.Count > 0 ? [.. _stood.Select(item => new SavedStood(item.Key, [.. item.Value.OrderBy(cell => cell.Row).ThenBy(cell => cell.Col)]))] : null,
             _spread ? true : null,
             _fetch.Count > 0 ? [.. _fetch.Select(item => new SavedFetch(item.Key, item.Value))] : null,
-            _fetchQuarter != 0 ? _fetchQuarter : null), SaveJson.Options)!;
+            _fetchQuarter != 0 ? _fetchQuarter : null,
+            _atHome.Count > 0 ? [.. _atHome] : null), SaveJson.Options)!;
 
     public void Load(ModuleContext village, JsonNode data, int version)
     {
@@ -869,6 +893,7 @@ public sealed class Work : IModule, IJobs, IStock
         // a save from before households fetched their food has nothing to fetch
         foreach (var fetch in saved.Fetch ?? []) _fetch[fetch.Household] = fetch.Material;
         _fetchQuarter = saved.FetchQuarter ?? 0;
+        _atHome = [.. saved.AtHome ?? []];
     }
 
     /// <summary>A place to work: a builder's of the island (<see cref="Structure"/> −1), or one of a building's jobs.</summary>
@@ -887,9 +912,14 @@ public sealed class Work : IModule, IJobs, IStock
     private sealed record SavedWork(DateOnly Day, IReadOnlyList<SavedIsland> Islands, IReadOnlyList<SavedJob> Jobs,
         IReadOnlyList<SavedVacancy> Vacant, IReadOnlyList<SavedBatch> Batches, IReadOnlyList<SavedFelled> Felled, IReadOnlyList<SavedEarned>? Earned = null,
         IReadOnlyList<int>? Working = null, SavedNature? Nature = null, IReadOnlyList<SavedStood>? Stood = null, bool? Spread = null,
-        IReadOnlyList<SavedFetch>? Fetch = null, long? FetchQuarter = null);
+        IReadOnlyList<SavedFetch>? Fetch = null, long? FetchQuarter = null, IReadOnlyList<int>? AtHome = null);
 
     private sealed record SavedFetch(int Household, string Material);
+
+    /// <summary>What Work reads from the section "day": the night, "HH:mm" from and to.</summary>
+    private sealed record WorkDay(NightHours? Night = null);
+
+    private sealed record NightHours(string From, string To);
 
     private sealed record SavedStore(int Store, IReadOnlyDictionary<string, int> Stock);
 
