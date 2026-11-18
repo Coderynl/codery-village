@@ -277,28 +277,25 @@ public sealed class Work : IModule, IJobs, IStock
             : [];
 
     /// <summary>
-    /// The tile of the area each outdoor worker of the structure works on now. A worker out on an errand for his work
-    /// keeps the tile he left; the others each get one from a hash of who he is, the structure and the stretch of
-    /// <c>stayQuarters</c> quarters it is now, so it is the same all through the stretch, and take the next free one
-    /// when it is taken, so they spread out while the area has room.
+    /// The tile of the area each outdoor worker of the structure works on now: from a hash of who he is, the structure
+    /// and the stretch of <c>stayQuarters</c> quarters it is now, the next free one when it is taken, so they spread out
+    /// while the area has room. Who is out and back does not change it, so it holds all through the stretch. A worker
+    /// out on an errand for his work keeps the tile he left, even when another has it now. Without a tile to work on,
+    /// nobody has one: they work at the structure.
     /// </summary>
     private Dictionary<int, Cell> Picks(World world, StructureView structure, Blueprint blueprint, IReadOnlyList<Cell> area)
     {
-        var workers = _jobs.Where(job => job.Value.Structure == structure.Id && blueprint.Jobs![job.Value.Job].Outdoor).Select(job => job.Key).ToList();
+        var jobs = blueprint.Jobs!;
+        var workers = _jobs.Where(job => job.Value.Structure == structure.Id && job.Value.Job < jobs.Count && jobs[job.Value.Job].Outdoor)
+            .Select(job => job.Key).ToList();
         var picks = new Dictionary<int, Cell>();
-        var taken = new HashSet<Cell>();
-        foreach (var worker in workers)
-            if (world.Day?.TripOf(worker) is { Was: Activity.Work } trip)
-            {
-                picks[worker] = trip.Home;
-                taken.Add(trip.Home);
-            }
         // the tiles there is work on now: all of the area
         var candidates = area;
+        if (candidates.Count == 0) return picks;
+        var taken = new HashSet<Cell>();
         var stretch = _village!.Clocks.Calendar.Now.ToUnixTimeSeconds() / QuarterSeconds / _settings.StayQuarters;
         foreach (var worker in workers)
         {
-            if (picks.ContainsKey(worker)) continue;
             if (candidates.All(taken.Contains)) taken.Clear();
             var key = unchecked((ulong)worker * 0x9E3779B97F4A7C15UL ^ (ulong)structure.Id * 0xC2B2AE3D27D4EB4FUL ^ (ulong)stretch);
             var at = Rng.For(key, "work area").Next(candidates.Count);
@@ -306,6 +303,8 @@ public sealed class Work : IModule, IJobs, IStock
             picks[worker] = candidates[at];
             taken.Add(candidates[at]);
         }
+        foreach (var worker in workers)
+            if (world.Day?.TripOf(worker) is { Was: Activity.Work } trip) picks[worker] = trip.Home;
         return picks;
     }
 
@@ -368,9 +367,9 @@ public sealed class Work : IModule, IJobs, IStock
         return staffed;
     }
 
-    // working, and there: not on the way, unless he was at work and goes on from one tile of his work area to another (not
-    // on his way to work); standing on another tile of it, as when he is back from an errand and his tile has moved on, is
-    // work too
+    // working, and there: not on the way, unless he was at work and goes on to a tile of his work area, wherever he set off
+    // from (not on his way to work); standing on another tile of it, as when he is back from an errand and his tile has
+    // moved on, is work too
     private static bool AtWork(DayModule day, int resident, Cell place, IReadOnlyList<Cell> area, bool wasWorking)
     {
         try
@@ -378,7 +377,7 @@ public sealed class Work : IModule, IJobs, IStock
             var doing = day.Of(resident);
             if (doing.Activity != Activity.Work) return false;
             if (doing.Walk is null) return doing.Place == place || area.Contains(doing.Place);
-            return wasWorking && area.Contains(doing.Place) && area.Contains(doing.At);
+            return wasWorking && area.Contains(doing.Place);
         }
         catch (KeyNotFoundException)
         {

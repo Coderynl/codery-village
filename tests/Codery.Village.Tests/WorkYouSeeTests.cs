@@ -258,6 +258,80 @@ public class WorkYouSeeTests
         Assert.Contains(gatherers, gatherer => village.Work.JobOf(gatherer)!.Place != left[gatherer]);
     }
 
+    [Fact]
+    public void An_errand_of_one_worker_does_not_move_the_others()
+    {
+        // a small area, so the workers' tiles crowd; each in turn is out on an errand as the stretch turns at 11:00
+        var data = Builders.Data(economy: economy => economy["workRange"] = 1);
+        var boundary = June(1, 11);
+        var (first, id) = BerryPatch(data);
+        foreach (var traveller in WorkersOf(first, id))
+        {
+            var (village, _) = BerryPatch(data);
+            village.JumpTo(boundary.AddSeconds(-10));
+            var others = WorkersOf(village, id).Where(worker => worker != traveller).ToList();
+            var anchor = village.Get(id).Anchor;
+            var far = Builders.RealMap.Islands.Single(island => island.Id == West).Cells
+                .Where(Builders.RealMap.IsWalkable).OrderByDescending(cell => cell.DistanceTo(anchor)).ThenBy(cell => cell.Row).ThenBy(cell => cell.Col).First();
+            Assert.True(village.Day.Send(traveller, new Errand(Activity.Bring, far, "berries")));
+            village.Run(40);
+            Assert.True(village.Time.GetUtcNow() > boundary);
+            Assert.NotNull(village.Day.TripOf(traveller));
+
+            // the others' tiles of the new stretch hold until it ends, also once he is back
+            var tiles = others.ToDictionary(worker => worker, worker => village.Work.JobOf(worker)!.Place);
+            for (var ticks = 0; village.Day.TripOf(traveller) is not null && ticks < 5000; ticks++) village.Run(1);
+            Assert.Null(village.Day.TripOf(traveller));
+            village.Run(15 * 60 * 4);
+            Assert.All(others, worker => Assert.Equal(tiles[worker], village.Work.JobOf(worker)!.Place));
+        }
+    }
+
+    [Fact]
+    public void A_worker_turned_round_on_ground_outside_the_area_is_still_paid()
+    {
+        // fertile ground in strips with land between them, so the area is not of one piece
+        var map = MapText.Parse("""
+            ~~~~~~~~~~~~~~
+            ~hhhhhhhhhhhh~
+            ~hhhhhhhhhhhh~
+            ~F..F..F.....~
+            ~F..F..F.....~
+            ~............~
+            ~~~~~~~~~~~~~~
+            island 1 1 Proef
+            """);
+        // a new tile every quarter, and a quarter for every step: a walk over the land between the strips is still
+        // going when the quarter turns, and Day turns him round towards his new tile from where he is; no batch is
+        // done in these hours, so no errand comes in between
+        var village = Builders.Start(1, June(1, 9), Builders.Data(
+            economy: economy => economy["stayQuarters"] = 1,
+            day: day => day["ticksPerCell"] = 15 * 60 * 4,
+            catalog: catalog => catalog["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "berry-patch")!["recipe"]!["ticks"] = 1_000_000), map: map);
+        village.Run(1);
+        var id = village.Building.Place("berry-patch", new Cell(3, 4), 0);
+        village.JumpTo(June(1, 10));
+        village.Run(400);
+        Assert.True(village.Get(id).Done);
+        village.Run(1);
+        village.JumpTo(June(1, 10, 45));
+        var gatherers = WorkersOf(village, id);
+        Assert.NotEmpty(gatherers);
+        var area = village.Work.WorkAreaOf(id);
+        var wage = (long)Economy("wagePerHour");
+        var money = gatherers.ToDictionary(gatherer => gatherer, gatherer => village.People.Get(gatherer).Money);
+
+        var outside = false;
+        for (var tick = 0; tick < 3 * 14400; tick++)
+        {
+            village.Run(1);
+            outside |= gatherers.Any(gatherer => village.Day.Of(gatherer) is { Activity: Activity.Work, Walk: not null } doing && !area.Contains(doing.At));
+        }
+        Assert.True(outside, "nobody was turned round on ground outside the area");
+        // paid every tick of the three hours
+        Assert.All(gatherers, gatherer => Assert.Equal(3 * wage, village.People.Get(gatherer).Money - money[gatherer]));
+    }
+
     private static Action<JsonObject> Paths(int window, int threshold, int keep, double speed) => day =>
     {
         day["pathWindowDays"] = window;
