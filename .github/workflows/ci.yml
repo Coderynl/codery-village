@@ -33,5 +33,33 @@ jobs:
         if: steps.changes.outputs.docs != 'true'
         with:
           dotnet-version: 10.0.x
-      - run: dotnet test
+      - name: Test
         if: steps.changes.outputs.docs != 'true'
+        shell: bash
+        run: dotnet test --logger "console;verbosity=normal" 2>&1 | tee test.log | grep -E '\[FAIL\]|Passed!|Failed!|Error Message' -A1
+      # where the time goes on this machine: the slowest tests and test classes
+      - name: Slowest tests
+        if: always() && steps.changes.outputs.docs != 'true'
+        shell: python3 {0}
+        run: |
+          import re
+          def seconds(text):
+              total = 0.0
+              for amount, unit in re.findall(r"([\d.]+) (ms|s|m)\b", text):
+                  total += float(amount) * {"ms": 0.001, "s": 1, "m": 60}[unit]
+              return total
+          tests = []
+          for line in open("test.log", encoding="utf8"):
+              found = re.match(r"\s+(Passed|Failed) (.+) \[([^\]]+)\]\s*$", line)
+              if found:
+                  tests.append((seconds(found.group(3)), found.group(2).replace("Codery.Village.Tests.", "")))
+          tests.sort(reverse=True)
+          print(f"{len(tests)} tests, {sum(t for t, _ in tests):.0f} s in all")
+          for took, name in tests[:15]:
+              print(f"{took:7.1f} s  {name[:110]}")
+          classes = {}
+          for took, name in tests:
+              classes[name.split(".")[0]] = classes.get(name.split(".")[0], 0) + took
+          print()
+          for name, took in sorted(classes.items(), key=lambda item: -item[1])[:10]:
+              print(f"{took:7.1f} s  {name}")
