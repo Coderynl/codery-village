@@ -19,7 +19,7 @@ What every agent working in this repo must know, whatever the tool. Claude Code 
 
 ### Running
 
-- `dotnet test` in the root. Docker must be running: the tests against the database start their own Postgres container. Locally it takes five to six minutes, on CI fifteen minutes.
+- `dotnet test` in the root. Docker must be running: the tests against the database start their own Postgres container. Locally it takes five to six minutes. CI spreads the tests over four machines (the two biggest scenarios each on their own) and takes about ten minutes.
 - The tests that use a real server or the real clock are in the collection `RealTimeCollection`; the tests against the database in `PostgresCollection`. Both run only after the rest, and not side by side. A new test of that kind belongs in one of the two: next to the tests that simulate weeks of village, they miss their timeouts on CI (four cores).
 
 
