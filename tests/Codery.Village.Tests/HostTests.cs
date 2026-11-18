@@ -117,8 +117,9 @@ internal sealed class EchoTalker : ITalker
 }
 
 /// <summary>
-/// The tests that wait on the real clock for the server to tick. They run on their own, after the others: next to the
-/// tests that simulate weeks of village, a small machine (CI has four cores) does not tick fast enough for their waits.
+/// The tests that run the real server and wait on the real clock for it to tick or answer. They run on their own, after
+/// the others: next to the tests that simulate weeks of village, a small machine (CI has four cores) does not tick or
+/// answer fast enough for their waits.
 /// </summary>
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class RealTimeCollection

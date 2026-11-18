@@ -17,6 +17,7 @@ using BuildingModule = Codery.Village.Modules.Building.Building;
 namespace Codery.Village.Tests;
 
 /// <summary>The server as a page meets it: over a WebSocket, from an origin.</summary>
+[Collection(RealTimeCollection.Name)]
 public class ServerTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
 {
     private const string Site = HostTests.Site;
