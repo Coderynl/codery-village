@@ -2,13 +2,13 @@
 
 # Codery Village
 
-Het dorp van Codery: .NET-solution met `Core`, `Modules`, `Server` en `Tests`.
+Codery's village: a .NET solution with `Core`, `Modules`, `Server` and `Tests`.
 
-## Vaste eisen
+## Fixed requirements
 
-- **De wereld is data:** getallen, namen, schema's, lonen, fases en zinnen staan in `data/`, niet in code. Data wordt bij het opstarten geladen en daarna niet meer veranderd.
-- **Herhaalbaar:** dezelfde seed en dezelfde klok geven hetzelfde dorp, ook na bewaren en laden. Geen `System.Random`, geen `DateTime.Now`: alleen de kern-RNG (`Rng.For(seed, stream)`) en de klokken van de kern.
-- **Geen netwerk, bestanden of processen** in `Core` en `Modules`. Dat mag alleen in `Codery.Village.Server`.
-- **Fatsoen:** geen geweld, geen dood, geen seksuele inhoud, geen geloof, geen discriminatie. Geslacht bepaalt alleen naam en voornaamwoord; leeftijd alleen de levensfase.
-- **Test-eerst,** volgens de regels in `AGENTS.md`. Namen in code zijn Engels; teksten voor bezoekers staan in het Nederlands en het Engels in de data.
-- **Commits:** in het Nederlands, een onderwerp en een korte body met wat er veranderde, zonder Co-Authored-By.
+- **The world is data:** numbers, names, schedules, wages, phases and sentences live in `data/`, not in code. Data is loaded at startup and not changed after that.
+- **Repeatable:** the same seed and the same clock give the same village, also after saving and loading. No `System.Random`, no `DateTime.Now`: only the core RNG (`Rng.For(seed, stream)`) and the core's clocks.
+- **No network, files or processes** in `Core` and `Modules`. That is allowed only in `Codery.Village.Server`.
+- **Decency:** no violence, no death, no sexual content, no religion, no discrimination. Gender determines only name and pronoun; age only the life stage.
+- **Test-first,** following the rules in `AGENTS.md`. Names in code are English; texts for visitors are in Dutch and English in the data.
+- **Commits:** in English, a subject and a short body with what changed, without Co-Authored-By.

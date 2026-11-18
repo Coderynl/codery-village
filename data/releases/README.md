@@ -1,30 +1,30 @@
-# De ladder naar de toekomst
+# The ladder to the future
 
-Het dorp begint prehistorisch: de basis (`catalog.json`) kent vuurplaatsen, hutten, verzamelen, vissen vanaf de kant, riet, leem, stenen en drijfhout. Elke stap vooruit is een release: een wens van de bewoners die Eddie bouwt. De stappen die nu al bekend zijn, staan hier klaar, zodat de vooruitgang met de hand te tonen is (`Village:Extras`).
+The village starts prehistoric: the base (`catalog.json`) knows fire pits, huts, gathering, fishing from the shore, reed, loam, stones and driftwood. Every step forward is a release: a wish of the residents that Eddie builds. The steps already known are ready here, so progress can be shown by hand (`Village:Extras`).
 
-Een release voegt lijsten toe aan de catalogus (`materials`, `roles`, `blueprints`, `things`) en verandert niets wat er al is. Elke release bedient met `serves` een wens uit `wishes.json`; de basis doet dat nooit.
+A release adds lists to the catalog (`materials`, `roles`, `blueprints`, `things`) and changes nothing that already exists. Every release serves a wish from `wishes.json` with `serves`; the base never does.
 
-## Volgorde
+## Order
 
-Een release mag gebruiken wat een eerdere toevoegt. Laad hem dus op de basis plus de releases waar hij van afhangt. Deze volgorde laadt in één keer:
+A release may use what an earlier one adds. So load it on the base plus the releases it depends on. This order loads in one go:
 
-1. `tools.json` — houthakkerij (hout). Wens `tools`. Hangt nergens van af.
-2. `sawmill.json` — zagerij (planken uit hout). Wens `planks`. Na `tools.json`.
-3. `farm.json` — boerderij (graan). Wens `fields`. Hangt nergens van af.
-4. `bakery.json` — bakkerij (brood uit graan). Wens `bread`. Na `farm.json`.
-5. `quarry.json` — steengroeve (behouwen steen). Wens `stone`. Hangt nergens van af.
-6. `brickworks.json` — kleiput en steenbakkerij (klei, bakstenen). Wens `bricks`. Na `quarry.json`.
-7. `peat.json` — turfsteker (turf). Wens `peat`. Hangt nergens van af.
-8. `wooden-house.json` — houten huis. Wens `house`. Na `sawmill.json` (en dus `tools.json`).
-9. `stone-house.json` — stenen huis. Wens `house`. Na `quarry.json` en `brickworks.json`.
-10. `jetty.json` — vissteiger. Wens `jetty`. Na `quarry.json`.
-11. `cafe.json` — café. Wens `cafe`. Hangt nergens van af.
-12. `grapes.json` — wilde wijnranken (druiven, geplukt op vruchtbare grond). Wens `fruit`. Hangt nergens van af.
+1. `tools.json` — lumberyard (wood). Wish `tools`. No dependencies.
+2. `sawmill.json` — sawmill (planks from wood). Wish `planks`. After `tools.json`.
+3. `farm.json` — farm (grain). Wish `fields`. No dependencies.
+4. `bakery.json` — bakery (bread from grain). Wish `bread`. After `farm.json`.
+5. `quarry.json` — quarry (dressed stone). Wish `stone`. No dependencies.
+6. `brickworks.json` — clay pit and brickworks (clay, bricks). Wish `bricks`. After `quarry.json`.
+7. `peat.json` — peat cutter (peat). Wish `peat`. No dependencies.
+8. `wooden-house.json` — wooden house. Wish `house`. After `sawmill.json` (and so `tools.json`).
+9. `stone-house.json` — stone house. Wish `house`. After `quarry.json` and `brickworks.json`.
+10. `jetty.json` — fishing jetty. Wish `jetty`. After `quarry.json`.
+11. `cafe.json` — café. Wish `cafe`. No dependencies.
+12. `grapes.json` — wild vines (grapes, picked on fertile soil). Wish `fruit`. No dependencies.
 
-Wat een eiland met een release kan, hangt af van zijn grond: Oost heeft geen bos en geen vruchtbare grond, dus geen houthakkerij, boerderij, bakkerij of wijnranken; West heeft geen rots, klei of visgrond.
+What an island can do with a release depends on its soil: Oost has no forest and no fertile soil, so no lumberyard, farm, bakery or vines; West has no rock, clay or fishing ground.
 
-De test `Every_release_serves_a_wish_and_loads` leidt per release af waar hij van afhangt, laadt hem daarop en controleert dat deze lijst elke release één keer noemt, na wat hij nodig heeft.
+The test `Every_release_serves_a_wish_and_loads` derives per release what it depends on, loads it on that and checks that this list names every release once, after what it needs.
 
-## Wensen die op een release wachten
+## Wishes waiting for a release
 
-Een wens met `after` telt pas als de geladen data (de basis plus de releases) elk genoemd id kent, een stof of een bouwsel. Zo brengt de ene release de volgende wens: met `grapes.json` kent het dorp druiven, en dan wensen bewoners `wine`. Geen release bedient wijn, dus dat wordt een taak voor Eddie. Een id in `after` dat nog nergens bestaat, is geen fout: een latere release van Eddie kan het brengen. Een lege `after` is wel een fout.
+A wish with `after` only counts once the loaded data (the base plus the releases) knows every named id, a material or a structure. That way one release brings the next wish: with `grapes.json` the village knows grapes, and then residents wish for `wine`. No release serves wine, so that becomes a task for Eddie. An id in `after` that does not exist anywhere yet is not an error: a later release from Eddie can bring it. An empty `after` is an error.

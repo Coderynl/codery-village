@@ -1,6 +1,6 @@
-# Codery Village: voor agents
+# Codery Village: for agents
 
-Wat elke agent die in deze repo werkt moet weten, welke tool het ook is. Claude Code leest dit bestand via `@AGENTS.md` bovenaan `CLAUDE.md`.
+What every agent working in this repo must know, whatever the tool. Claude Code reads this file via `@AGENTS.md` at the top of `CLAUDE.md`.
 
 
 ## Testing
@@ -17,9 +17,9 @@ Wat elke agent die in deze repo werkt moet weten, welke tool het ook is. Claude 
 - Every bug fix gets exactly one regression test that fails before the fix.
 - No coverage target. List what you deliberately left untested in the PR.
 
-### Draaien
+### Running
 
-- `dotnet test` in de root. Docker moet draaien: de tests tegen de database starten zelf een Postgres-container. Lokaal duurt het vijf à zes minuten, op CI een kwartier.
-- De tests die een echte server of de echte klok gebruiken, staan in de collectie `RealTimeCollection`; de tests tegen de database in `PostgresCollection`. Beide draaien pas na de rest, en niet naast elkaar. Een nieuwe test van die soort hoort in een van de twee: naast de tests die weken dorp simuleren, halen ze op CI (vier kernen) hun wachttijden niet.
+- `dotnet test` in the root. Docker must be running: the tests against the database start their own Postgres container. Locally it takes five to six minutes, on CI fifteen minutes.
+- The tests that use a real server or the real clock are in the collection `RealTimeCollection`; the tests against the database in `PostgresCollection`. Both run only after the rest, and not side by side. A new test of that kind belongs in one of the two: next to the tests that simulate weeks of village, they miss their timeouts on CI (four cores).
 
 
