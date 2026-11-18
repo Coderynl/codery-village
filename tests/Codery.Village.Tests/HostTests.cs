@@ -377,7 +377,9 @@ public class HostTests
     [Fact]
     public async Task Conversations_are_written_by_the_talker_and_said_in_the_tick()
     {
-        await using var server = Server(time: new SimulatedTime(Builders.June(6, 14)), talker: new EchoTalker(), settings: ("Village:Speed", "64"));
+        // at eight in the evening residents are at leisure together, so the first moment to talk comes at once;
+        // at two in the afternoon it took 18,000 ticks, more than a minute at full speed
+        await using var server = Server(time: new SimulatedTime(Builders.June(6, 20)), talker: new EchoTalker(), settings: ("Village:Speed", "64"));
         await using var connection = Connect(server);
         var said = new TaskCompletionSource<Said>(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.On<TickMessage>("tick", message =>
@@ -387,8 +389,7 @@ public class HostTests
         await connection.StartAsync();
         await Started(server);
 
-        // at speed 64 the first conversation comes after about a minute, also on CI: room for a slow machine
-        var conversation = await said.Task.WaitAsync(TimeSpan.FromSeconds(180));
+        var conversation = await said.Task.WaitAsync(TimeSpan.FromSeconds(60));
 
         Assert.EndsWith(": Echo.", conversation.Nl[0]);
         Assert.EndsWith(": Echo!", conversation.En[1]);
