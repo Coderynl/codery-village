@@ -1,6 +1,8 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Codery.Village.Core.Data;
 using Codery.Village.Core.Map;
+using Codery.Village.Core.Save;
 using Codery.Village.Modules.Building;
 using Codery.Village.Modules.Contracts;
 using Codery.Village.Modules.Day;
@@ -410,17 +412,48 @@ public class WorkYouSeeTests
         while (QuarterOf(village) == quarter) village.Run(1);
         var gatherers = WorkersOf(village, id);
         for (var tick = 0; tick < 5000 && gatherers.Any(gatherer => village.Day.TripOf(gatherer) is not null); tick++) village.Run(1);
-        var made = village.Heard<Produced>().Count();
+        // what the patch made: the berries and roots of West
+        int Made() => village.Heard<Produced>().Count(e => e.Island == West && e.Material is "berries" or "roots");
+        var made = Made();
         village.Run(15 * 60 * 4);
         Assert.All(gatherers, gatherer => Assert.Equal(anchor, village.Work.JobOf(gatherer)!.Place));
-        Assert.Equal(made, village.Heard<Produced>().Count());
+        Assert.Equal(made, Made());
 
         // after regrowDays it grows back, and the patch makes berries again
         var regrow = (int)Economy("nature")!["fertile"]!["regrowDays"]!;
         village.JumpTo(June(1 + regrow, 10, 45));
         Assert.Contains(area, cell => village.Work.YieldOf(cell) >= Low);
-        for (var tick = 0; tick < 5000 && village.Heard<Produced>().Count() == made; tick++) village.Run(1);
-        Assert.True(village.Heard<Produced>().Count() > made, "the patch made nothing after it grew back");
+        for (var tick = 0; tick < 5000 && Made() == made; tick++) village.Run(1);
+        Assert.True(Made() > made, "the patch made nothing after it grew back");
+    }
+
+    [Fact]
+    public void One_tile_gone_bare_moves_only_its_worker()
+    {
+        // a stretch of a whole day, so the quarters that follow do not move anyone by themselves
+        var data = Builders.Data(economy: economy => economy["stayQuarters"] = 96);
+        var (village, id) = BerryPatch(data);
+        village.JumpTo(June(1, 10, 45));
+        var gatherers = WorkersOf(village, id);
+        Assert.True(gatherers.Count > 1);
+        var before = gatherers.ToDictionary(gatherer => gatherer, gatherer => village.Work.JobOf(gatherer)!.Place);
+        var worker = gatherers[0];
+
+        // the tile of one of them has gone bare (as a save holds it)
+        var saved = SaveJson.FromJson(SaveJson.ToJson(village.Engine.Save()));
+        var work = saved.Modules.Single(part => part.Name == "work").Data;
+        work["nature"]!["tiles"]!.AsArray().Add(JsonSerializer.SerializeToNode(new NatureTile(before[worker], 0, Ground.Fertile, 0), SaveJson.Options));
+        var bare = Builders.Load(saved, data);
+        Assert.Contains(before[worker], bare.Work.Bare);
+
+        // he moves to a tile that yields; the others keep theirs, this quarter and the next
+        for (var quarter = 0; quarter < 2; quarter++)
+        {
+            Assert.NotEqual(before[worker], bare.Work.JobOf(worker)!.Place);
+            Assert.True(bare.Work.YieldOf(bare.Work.JobOf(worker)!.Place) >= Low);
+            Assert.All(gatherers.Where(gatherer => gatherer != worker), gatherer => Assert.Equal(before[gatherer], bare.Work.JobOf(gatherer)!.Place));
+            bare.Run(15 * 60 * 4);
+        }
     }
 
     [Fact]

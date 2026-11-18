@@ -295,8 +295,9 @@ public sealed class Work : IModule, IJobs, IStock
     /// The tile of the area each outdoor worker of the structure works on now: from a hash of who he is, the structure
     /// and the stretch of <c>stayQuarters</c> quarters it is now, the next free one when it is taken, so they spread out
     /// while the area has room. Who is out and back does not change it, so it holds all through the stretch. A worker
-    /// out on an errand for his work keeps the tile he left, even when another has it now. Without a tile to work on,
-    /// nobody has one: they work at the structure.
+    /// whose tile does not yield (it went bare before this quarter) takes, in the same way, one of the tiles that still
+    /// yield and nobody has; the others keep theirs. A worker out on an errand for his work keeps the tile he left, even
+    /// when another has it now. Without a tile that yields, nobody has one: they work at the structure.
     /// </summary>
     private Dictionary<int, Cell> Picks(World world, StructureView structure, Blueprint blueprint, IReadOnlyList<Cell> area)
     {
@@ -306,19 +307,34 @@ public sealed class Work : IModule, IJobs, IStock
         var picks = new Dictionary<int, Cell>();
         // the tiles there is work on now: those that still gave as the quarter began (felling has its own logic)
         var quarter = Quarter(_village!);
-        IReadOnlyList<Cell> candidates = Fells(blueprint) ? area : [.. area.Where(cell => _nature.Yields(cell, quarter))];
-        if (candidates.Count == 0) return picks;
-        var taken = new HashSet<Cell>();
+        bool Yields(Cell cell) => Fells(blueprint) || _nature.Yields(cell, quarter);
+        var yielding = area.Where(Yields).ToList();
+        if (yielding.Count == 0) return picks;
         var stretch = _village!.Clocks.Calendar.Now.ToUnixTimeSeconds() / QuarterSeconds / _settings.StayQuarters;
+        ulong Key(int worker) => unchecked((ulong)worker * 0x9E3779B97F4A7C15UL ^ (ulong)structure.Id * 0xC2B2AE3D27D4EB4FUL ^ (ulong)stretch);
+
+        // over the whole area, as if every tile yielded, so a tile that goes bare or grows back moves nobody else
+        var taken = new HashSet<Cell>();
         foreach (var worker in workers)
         {
-            if (candidates.All(taken.Contains)) taken.Clear();
-            var key = unchecked((ulong)worker * 0x9E3779B97F4A7C15UL ^ (ulong)structure.Id * 0xC2B2AE3D27D4EB4FUL ^ (ulong)stretch);
-            var at = Rng.For(key, "work area").Next(candidates.Count);
-            while (taken.Contains(candidates[at])) at = (at + 1) % candidates.Count;
-            picks[worker] = candidates[at];
-            taken.Add(candidates[at]);
+            if (area.All(taken.Contains)) taken.Clear();
+            var at = Rng.For(Key(worker), "work area").Next(area.Count);
+            while (taken.Contains(area[at])) at = (at + 1) % area.Count;
+            picks[worker] = area[at];
+            taken.Add(area[at]);
         }
+
+        // who drew a tile that does not yield takes one that does, and that nobody has
+        var held = picks.Values.Where(Yields).ToHashSet();
+        foreach (var worker in workers.Where(worker => !Yields(picks[worker])))
+        {
+            if (yielding.All(held.Contains)) held.Clear();
+            var at = Rng.For(Key(worker), "work area, yielding").Next(yielding.Count);
+            while (held.Contains(yielding[at])) at = (at + 1) % yielding.Count;
+            picks[worker] = yielding[at];
+            held.Add(yielding[at]);
+        }
+
         foreach (var worker in workers)
             if (world.Day?.TripOf(worker) is { Was: Activity.Work } trip) picks[worker] = trip.Home;
         return picks;
