@@ -47,7 +47,11 @@ public sealed class PostgresFixture : IAsyncLifetime
     }
 }
 
-[CollectionDefinition(Name)]
+/// <summary>
+/// The tests against the database. They run on their own, after the others: next to the tests that simulate weeks of
+/// village, a small machine (CI has four cores) leaves the container too little time to answer within its timeout.
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>
 {
     public const string Name = "postgres";

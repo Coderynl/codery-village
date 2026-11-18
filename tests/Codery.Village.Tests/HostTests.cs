@@ -116,7 +116,18 @@ internal sealed class EchoTalker : ITalker
             FromTemplate: false));
 }
 
+/// <summary>
+/// The tests that wait on the real clock for the server to tick. They run on their own, after the others: next to the
+/// tests that simulate weeks of village, a small machine (CI has four cores) does not tick fast enough for their waits.
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class RealTimeCollection
+{
+    public const string Name = "real time";
+}
+
 /// <summary>What the server does with a store, a clock and the talker: load at the start, save as it goes, never stop for a database that is away.</summary>
+[Collection(RealTimeCollection.Name)]
 public class HostTests
 {
     internal const string Site = "http://localhost:3100";
@@ -375,7 +386,8 @@ public class HostTests
         await connection.StartAsync();
         await Started(server);
 
-        var conversation = await said.Task.WaitAsync(TimeSpan.FromSeconds(90));
+        // at speed 64 the first conversation comes after about a minute, also on CI: room for a slow machine
+        var conversation = await said.Task.WaitAsync(TimeSpan.FromSeconds(180));
 
         Assert.EndsWith(": Echo.", conversation.Nl[0]);
         Assert.EndsWith(": Echo!", conversation.En[1]);
