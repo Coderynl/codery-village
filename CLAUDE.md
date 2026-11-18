@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # Codery Village
 
 Het dorp van Codery: .NET-solution met `Core`, `Modules`, `Server` en `Tests`.
