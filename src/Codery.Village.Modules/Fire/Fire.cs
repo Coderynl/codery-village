@@ -69,7 +69,7 @@ public sealed class Fire : IModule
                 if (structure.Anchor == reached.At && _fires.TryGetValue(structure.Id, out var fire) && fire.Asked is not null)
                 {
                     fire.Asked = null;
-                    Tend(village, fire, structure.Island);
+                    Tend(village, fire, structure.Island, structure.Anchor);
                 }
         }
 
@@ -113,18 +113,18 @@ public sealed class Fire : IModule
             Sink(fire);
             return;
         }
-        if (doing is { Walk: null, Inside: false } && doing.At == spot) Tend(village, fire, island);
+        if (doing is { Walk: null, Inside: false } && doing.At == spot) Tend(village, fire, island, spot);
         else if (doing.Activity != Activity.Sleep && day.Send(keeper, new Errand(Activity.Tend, spot))) fire.Asked = now;
         else Sink(fire);
     }
 
     // a piece of fuel brings it back to full, if the homes keep what they need; else it sinks
-    private void Tend(ModuleContext village, Hearth fire, int island)
+    private void Tend(ModuleContext village, Hearth fire, int island, Cell spot)
     {
         var stock = village.Find<IStock>();
         var fuel = _fuel.FirstOrDefault(material => stock?.Count(island, material) > 0);
         var spare = stock is null ? 0 : _fuel.Sum(material => stock.Count(island, material)) - Reserve(village, island);
-        if (fuel is not null && spare > 0 && stock!.TryTake(island, new Dictionary<string, int> { [fuel] = 1 })) fire.Strength = Full;
+        if (fuel is not null && spare > 0 && stock!.TryTake(island, new Dictionary<string, int> { [fuel] = 1 }, spot)) fire.Strength = Full;
         else Sink(fire);
     }
 

@@ -220,6 +220,30 @@ public class BuildingTests
     }
 
     [Fact]
+    public void A_builder_waits_for_a_material_no_one_has()
+    {
+        // a hut whose foundation is of stones, which nothing on West has or makes
+        var village = Builders.Start(1, June(1, 9), Builders.Data(catalog: catalog =>
+            catalog["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "hut")!["phases"]![0]!["cost"] = new JsonObject { ["stones"] = 2 }));
+        village.Run(1);
+        Assert.Null(((IStock)village.Work).SourceOf(West, "stones", new Cell(5, 8)));
+        var id = village.PlaceNearHeart("hut", West);
+
+        // the builders come to the site and stay there: nobody walks off to fetch what no one has
+        village.JumpTo(June(1, 10));
+        for (var tick = 0; tick < 2000; tick++)
+        {
+            village.Run(1);
+            Assert.DoesNotContain(village.People.All, resident => village.Day.Of(resident.Id).Activity == Activity.Fetch);
+        }
+        var site = village.Get(id);
+        Assert.Equal((0, 0), (site.Phase, site.Progress));
+        Assert.Equal("materials", site.Waiting);
+        Assert.Equal("materials", Assert.Single(village.Heard<ConstructionWaiting>(), e => e.Structure == id).Reason);
+        Assert.DoesNotContain(village.Heard<Reached>(), e => e.Errand == Activity.Fetch);
+    }
+
+    [Fact]
     public void A_two_tile_shape_needs_two_free_tiles()
     {
         var map = MapText.Parse("""

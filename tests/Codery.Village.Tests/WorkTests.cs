@@ -475,13 +475,48 @@ public class WorkTests
         Assert.True(branches >= 2 && reed >= 3 && stones > 0);
         Assert.Equal(0, stock.Count(West, "stones"));
 
-        Assert.False(stock.TryTake(West, new Dictionary<string, int> { ["branches"] = 2, ["stones"] = 1 }));
+        Assert.False(stock.TryTake(West, new Dictionary<string, int> { ["branches"] = 2, ["stones"] = 1 }, new Cell(5, 8)));
         Assert.Equal(branches, stock.Count(West, "branches"));
-        Assert.True(stock.TryTake(West, new Dictionary<string, int> { ["branches"] = 2, ["reed"] = 3 }));
+        Assert.True(stock.TryTake(West, new Dictionary<string, int> { ["branches"] = 2, ["reed"] = 3 }, new Cell(5, 8)));
         Assert.Equal(branches - 2, stock.Count(West, "branches"));
         Assert.Equal(reed - 3, village.Work.Stock(West)["reed"]);
         Assert.Equal(stones, stock.Count(Oost, "stones"));
     }
+
+    [Fact]
+    public void The_start_holdings_lie_at_the_workplaces_that_make_them_and_are_taken_nearest_first()
+    {
+        // two brushwood spots on West, far apart; nothing on West makes reed
+        var (north, south) = (new Cell(2, 4), new Cell(8, 2));
+        var village = Start(1, June(1, 10), standing: [Built(1, "brushwood", West, north.Row, north.Col), Built(2, "brushwood", West, south.Row, south.Col)]);
+        village.Run(1);
+        IStock stock = village.Work;
+        var start = EconomyData("start")["stock"]!["West"]!;
+        var (firewood, branches, reed) = ((int)start["firewood"]!, (int)start["branches"]!, (int)start["reed"]!);
+
+        // what the brushwood makes is spread over both, and nothing of it is where the island gathers
+        Assert.Equal(firewood, village.Work.StockAt(1)["firewood"] + village.Work.StockAt(2)["firewood"]);
+        Assert.Equal(branches, village.Work.StockAt(1)["branches"] + village.Work.StockAt(2)["branches"]);
+        Assert.Equal(firewood, stock.Count(West, "firewood"));
+        Assert.Equal(north, stock.SourceOf(West, "firewood", north));
+        Assert.Equal(south, stock.SourceOf(West, "firewood", south));
+        // the reed lies where the island gathers
+        var gathering = stock.SourceOf(West, "reed", north);
+        Assert.NotNull(gathering);
+        Assert.NotEqual(north, gathering);
+        Assert.NotEqual(south, gathering);
+        Assert.Equal(reed, stock.Count(West, "reed"));
+        Assert.Null(stock.SourceOf(West, "stones", north));
+
+        // taken near the south spot: all it has there first, the rest from the north
+        var atSouth = village.Work.StockAt(2)["firewood"];
+        Assert.True(stock.TryTake(West, new Dictionary<string, int> { ["firewood"] = atSouth + 1 }, south));
+        Assert.False(village.Work.StockAt(2).ContainsKey("firewood"));
+        Assert.Equal(firewood - atSouth - 1, village.Work.StockAt(1)["firewood"]);
+        Assert.Equal(north, stock.SourceOf(West, "firewood", south));
+    }
+
+    private static JsonNode EconomyData(string key) => JsonNode.Parse(File.ReadAllText(Path.Combine(Folder, "economy.json")))![key]!;
 
     [Fact]
     public void At_midnight_the_island_settles_its_day()

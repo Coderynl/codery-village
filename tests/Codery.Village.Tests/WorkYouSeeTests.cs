@@ -28,15 +28,30 @@ public class WorkYouSeeTests
     [Fact]
     public void Builders_fetch_before_they_build()
     {
-        var village = Builders.Start(1, June(1, 9));
+        // West has no branches but those of its brushwood, which makes a batch in 30 ticks
+        var village = Builders.Start(1, June(1, 9), Builders.Data(
+            economy: economy => economy["start"]!["stock"]!["West"]!.AsObject().Remove("branches"),
+            catalog: catalog => Blueprint(catalog, "brushwood")["recipe"]!["ticks"] = 30));
         village.Run(1);
-        var branches = village.Work.Count(West, "branches");
+        var brushwood = village.PlaceNearHeart("brushwood", West);
+        village.JumpTo(June(1, 10));
+        village.Run(400);
+        Assert.True(village.Get(brushwood).Done);
+        village.Run(1);
+        village.JumpTo(June(1, 10, 45));
+        var ticks = 0;
+        while (village.Work.StockAt(brushwood).GetValueOrDefault("branches") < 2 && ticks++ < 5000) village.Run(1);
+
+        // in the evening a hut is placed; the branches are where they were made
+        village.JumpTo(June(1, 20));
         var id = village.PlaceNearHeart("hut", West);
         var site = village.Get(id);
-        var store = Store(village, West);
+        var store = ((IStock)village.Work).SourceOf(West, "branches", site.Anchor);
+        Assert.Equal(village.Get(brushwood).Anchor, store);
+        var branches = village.Work.Count(West, "branches");
 
-        // the morning after: the builders come to the site, the foundation is paid, and they go to the store for it
-        village.JumpTo(June(1, 10));
+        // the morning after: the builders come to the site, the foundation is paid, and they go to the brushwood for it
+        village.JumpTo(June(2, 10));
         var builders = village.People.All.Where(resident => village.Work.JobOf(resident.Id) is { Role: "builder" } && resident.Island == West).ToList();
         Assert.Equal(3, builders.Count);
         Assert.Equal(branches - 2, village.Work.Count(West, "branches"));
@@ -53,7 +68,7 @@ public class WorkYouSeeTests
 
         // back with the branches on their backs; the phase grows only once they are back
         var carried = false;
-        var ticks = 0;
+        ticks = 0;
         while (site.Progress == 0 && ticks++ < 2000)
         {
             Assert.Equal(0, site.Phase);
@@ -78,14 +93,13 @@ public class WorkYouSeeTests
         Assert.Null(site.Waiting);
     }
 
+    private static JsonNode Blueprint(JsonObject catalog, string id) =>
+        catalog["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == id)!;
+
     [Fact]
-    public void Gatherers_bring_their_batch_to_the_store()
+    public void Gatherers_bring_their_batch_to_their_workplace()
     {
-        var data = Builders.Data(catalog: catalog =>
-        {
-            var patch = catalog["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "berry-patch")!;
-            patch["recipe"]!["ticks"] = 30;
-        });
+        var data = Builders.Data(catalog: catalog => Blueprint(catalog, "berry-patch")["recipe"]!["ticks"] = 30);
         var village = Builders.Start(1, June(1, 9), data);
         village.Run(1);
         var id = village.PlaceNearHeart("berry-patch", West);
@@ -101,11 +115,18 @@ public class WorkYouSeeTests
         var spots = gatherers.ToDictionary(gatherer => gatherer.Id, gatherer => village.Work.JobOf(gatherer.Id)!.Place);
         Assert.All(gatherers, gatherer => Assert.Equal(new Doing(Activity.Work, spots[gatherer.Id], spots[gatherer.Id]), village.Day.Of(gatherer.Id)));
 
+        var before = village.Work.StockAt(id).ToDictionary();
         var ticks = 0;
         while (!village.Heard<Produced>().Any(e => e.Material == "berries") && ticks++ < 100) village.Run(1);
-        // the batch is done in the tick before the ear hears it: they are on their way with it
-        var store = Store(village, West);
-        Assert.All(gatherers, gatherer =>
+        // the batch is in the stock of the patch, at the patch
+        var stock = village.Work.StockAt(id);
+        Assert.Equal(before.GetValueOrDefault("berries") + 2, stock["berries"]);
+        Assert.Equal(before.GetValueOrDefault("roots") + 1, stock["roots"]);
+        // the batch is done in the tick before the ear hears it: who is not at the patch is on his way there with it
+        var store = patch.Anchor;
+        var bringing = gatherers.Where(gatherer => spots[gatherer.Id] != store).ToList();
+        Assert.NotEmpty(bringing);
+        Assert.All(bringing, gatherer =>
         {
             var doing = village.Day.Of(gatherer.Id);
             Assert.Equal(Activity.Bring, doing.Activity);
@@ -113,13 +134,53 @@ public class WorkYouSeeTests
             Assert.Equal("berries", doing.Carry);
         });
 
+        // each of them brings it there and goes back to his own tile (who is back first makes the next batch, and
+        // brings that too)
         ticks = 0;
-        while (gatherers.Any(gatherer => village.Day.Of(gatherer.Id).Activity == Activity.Bring) && ticks++ < 2000) village.Run(1);
-        village.Run(1);
-        Assert.All(gatherers, gatherer => Assert.Equal(new Doing(Activity.Work, spots[gatherer.Id], spots[gatherer.Id]), village.Day.Of(gatherer.Id)));
-        Assert.Equal(gatherers.Count, village.Heard<Reached>().Count(e => e.Errand == Activity.Bring && e.At == store && e.Carry == "berries"));
-        Assert.All(gatherers, gatherer =>
-            Assert.Single(village.Heard<Returned>(), e => e.Resident == gatherer.Id && e.Errand == Activity.Bring && e.At == spots[gatherer.Id]));
+        while (bringing.Any(gatherer => !village.Heard<Returned>().Any(e => e.Resident == gatherer.Id && e.Errand == Activity.Bring)) && ticks++ < 2000) village.Run(1);
+        Assert.All(bringing, gatherer =>
+        {
+            Assert.Equal(new Reached(0, gatherer.Id, Activity.Bring, store, "berries"),
+                village.Heard<Reached>().First(e => e.Resident == gatherer.Id && e.Errand == Activity.Bring) with { Tick = 0 });
+            Assert.Equal(spots[gatherer.Id], village.Heard<Returned>().First(e => e.Resident == gatherer.Id && e.Errand == Activity.Bring).At);
+        });
+    }
+
+    [Fact]
+    public void A_workplace_fetches_its_input_at_the_source()
+    {
+        // a berry patch that makes its batch from a bundle of reed, as a bakery from grain
+        var data = Builders.Data(catalog: catalog =>
+        {
+            var recipe = Blueprint(catalog, "berry-patch")["recipe"]!;
+            recipe["ticks"] = 30;
+            recipe["in"] = new JsonObject { ["reed"] = 1 };
+        });
+        var (village, id) = PatchFrom(June(1, 9), data);
+        // the reed West starts with is where the island gathers: no workplace makes it
+        var source = ((IStock)village.Work).SourceOf(West, "reed", village.Get(id).Anchor);
+        Assert.Equal(Store(village, West), source);
+        var reed = village.Work.Count(West, "reed");
+        var gatherers = WorkersOf(village, id);
+
+        // before the batch one of them fetches it there, and the batch waits for him
+        var fetchers = new HashSet<int>();
+        var ticks = 0;
+        while (!village.Heard<Produced>().Any(e => e.Material == "berries") && ticks++ < 5000)
+        {
+            village.Run(1);
+            var away = gatherers.Where(gatherer => village.Day.Of(gatherer).Activity == Activity.Fetch).ToList();
+            fetchers.UnionWith(away);
+            // taken in the tick he is back, not before
+            if (fetchers.Count == 0 || away.Count > 0) Assert.Equal(reed, village.Work.Count(West, "reed"));
+        }
+        var fetcher = Assert.Single(fetchers);
+        Assert.Single(village.Heard<Reached>(), e => e.Resident == fetcher && e.Errand == Activity.Fetch && e.At == source);
+        var back = Assert.Single(village.Heard<Returned>(), e => e.Resident == fetcher && e.Errand == Activity.Fetch);
+        Assert.Equal("reed", back.Carry);
+        Assert.True(village.Heard<Produced>().First(e => e.Material == "berries").Tick > back.Tick);
+        // the batch took it from the stock
+        Assert.Equal(reed - 1, village.Work.Count(West, "reed"));
     }
 
     // a berry patch near the heart of West, standing, on Monday the first of June just after ten
@@ -630,7 +691,7 @@ public class WorkYouSeeTests
         village.Run(20 * 60 * 4);
         Assert.Equal(3, fire.Strength(campfire.Id));
         var households = village.People.On(West).Select(resident => resident.Household ?? -1 - resident.Id).Distinct().Count();
-        Assert.True(village.Work.TryTake(West, new Dictionary<string, int> { ["firewood"] = village.Work.Count(West, "firewood") - households }));
+        Assert.True(village.Work.TryTake(West, new Dictionary<string, int> { ["firewood"] = village.Work.Count(West, "firewood") - households }, campfire.Anchor));
         var seen = new List<int>();
         for (var step = 0; step < 6 * 15 * 60 * 4; step++)
         {

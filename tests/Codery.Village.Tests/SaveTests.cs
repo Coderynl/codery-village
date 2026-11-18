@@ -371,4 +371,49 @@ public class SaveTests
         Assert.All(area, cell => Assert.Equal(100, old.Work.YieldOf(cell)));
         Assert.Empty(old.Work.Bare);
     }
+
+    [Fact]
+    public void A_village_with_one_shared_stock_loads_with_stores()
+    {
+        // a village saved as before there were stores: a berry patch stands on West, and every island keeps one stock
+        var data = Builders.Data();
+        var (village, patch) = WorkYouSeeTests.PatchFrom(Builders.June(1, 9), data);
+        var counts = Builders.RealMap.Islands.ToDictionary(island => island.Id, island => village.Work.Stock(island.Id).ToDictionary());
+        Assert.True(counts[Builders.West]["berries"] > 0);
+        var saved = Written(village.Engine.Save());
+        foreach (var island in Part(saved, "work").Data["islands"]!.AsArray())
+        {
+            var shared = new JsonObject();
+            foreach (var store in island!["stores"]!.AsArray())
+                foreach (var (material, amount) in store!["stock"]!.AsObject())
+                    shared[material] = (shared[material]?.GetValue<int>() ?? 0) + amount!.GetValue<int>();
+            island.AsObject().Remove("stores");
+            island["stock"] = shared;
+        }
+        saved = saved with { Modules = [.. saved.Modules.Select(part => part.Name == "work" ? part with { Version = 1 } : part)] };
+
+        // every island has what it had
+        var old = Builders.Load(Written(saved), data);
+        Assert.All(counts, count => Assert.Equal(count.Value, old.Work.Stock(count.Key).ToDictionary()));
+
+        // the berries lie at the patch, which makes them; the rest where the island gathers
+        old.Run(1);
+        Codery.Village.Modules.Contracts.IStock stock = old.Work;
+        var anchor = old.Get(patch).Anchor;
+        Assert.Equal(counts[Builders.West]["berries"], old.Work.StockAt(patch)["berries"]);
+        foreach (var (island, count) in counts)
+        {
+            var gathering = ((Codery.Village.Modules.Contracts.IPlaces)old.Building).GatheringOn(island);
+            foreach (var material in count.Keys.Where(material => material != "berries"))
+                Assert.Equal(gathering, stock.SourceOf(island, material, anchor));
+            Assert.Equal(count, old.Work.Stock(island).ToDictionary());
+        }
+
+        // and building goes on
+        var hut = old.PlaceNearHeart("hut", Builders.West);
+        old.JumpTo(Builders.June(1, 11));
+        old.Run(2000);
+        Assert.True(old.Get(hut).Progress > 0 || old.Get(hut).Phase > 0, "the hut did not get going");
+        Assert.Empty(old.Engine.Stopped);
+    }
 }

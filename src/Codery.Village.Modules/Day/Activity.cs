@@ -37,7 +37,7 @@ public sealed record Trip(Errand Errand, Activity Was, Cell Home, bool Back);
 public sealed record DoingChanged(long Tick, int Resident, Doing Doing) : VillageEvent(Tick);
 
 /// <summary>A resident on an errand has come to its target, with what he carried there.</summary>
-public sealed record Reached(long Tick, int Resident, Activity Errand, Cell At, string? Carry) : VillageEvent(Tick);
+public sealed record Reached(long Tick, int Resident, Activity Errand, Cell At, string? Carry = null) : VillageEvent(Tick);
 
 /// <summary>A resident is back from an errand at the place he left, with what he carried back.</summary>
-public sealed record Returned(long Tick, int Resident, Activity Errand, Cell At, string? Carry) : VillageEvent(Tick);
+public sealed record Returned(long Tick, int Resident, Activity Errand, Cell At, string? Carry = null) : VillageEvent(Tick);
