@@ -21,7 +21,7 @@ using WishesModule = Codery.Village.Modules.Wishes.Wishes;
 namespace Codery.Village.Server.Feed;
 
 /// <summary>
-/// Turns the village into protocol 1: the whole of it for a page that joins, and after every tick what changed
+/// Turns the village into protocol 2: the whole of it for a page that joins, and after every tick what changed
 /// since the tick before. It remembers what it sent, so it sends nothing twice. Numbers that change a little all
 /// the time are rounded first: happiness to 5, the progress of a site to steps of 10, the calendar to the quarter.
 /// </summary>
@@ -260,9 +260,10 @@ public sealed class VillageFeed
                 // he came this tick and has no plan yet
                 continue;
             }
+            var activity = JsonNamingPolicy.CamelCase.ConvertName(doing.Activity.ToString());
             yield return doing.Walk is { } walk
-                ? new Move(resident.Id, [Flat(doing.At), .. walk.Cells.Select(Flat)], walk.StartTick, walk.TicksPerCell, Inside: false, doing.Carry)
-                : new Move(resident.Id, [Flat(doing.At)], now.Tick, _ticksPerCell, doing.Inside);
+                ? new Move(resident.Id, [Flat(doing.At), .. walk.Cells.Select(Flat)], walk.StartTick, walk.TicksPerCell, Inside: false, doing.Carry, activity)
+                : new Move(resident.Id, [Flat(doing.At)], now.Tick, _ticksPerCell, doing.Inside, Doing: activity);
         }
     }
 
@@ -320,12 +321,12 @@ public sealed class VillageFeed
 
     private static int Round(int value, int step) => (int)Math.Round(value / (double)step, MidpointRounding.AwayFromZero) * step;
 
-    // a still resident who stands where the last move ended, as he was, is no news
+    // a still resident who stands where the last move ended, as he was and doing what he did, is no news
     private static bool Same(Move sent, Move now) =>
         now.Cells.Count == 1
-            ? sent.Cells[^1] == now.Cells[0] && sent.Inside == now.Inside
+            ? sent.Cells[^1] == now.Cells[0] && sent.Inside == now.Inside && sent.Doing == now.Doing
             : sent.Start == now.Start && sent.TicksPerCell == now.TicksPerCell && sent.Inside == now.Inside && sent.Carry == now.Carry
-              && sent.Cells.SequenceEqual(now.Cells);
+              && sent.Doing == now.Doing && sent.Cells.SequenceEqual(now.Cells);
 
     private static bool Same(Person a, Person b) =>
         a with { Notable = b.Notable, Wishes = b.Wishes } == b && a.Notable.SequenceEqual(b.Notable) && a.Wishes.SequenceEqual(b.Wishes);

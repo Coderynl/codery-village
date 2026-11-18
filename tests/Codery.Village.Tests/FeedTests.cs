@@ -17,7 +17,7 @@ using PeopleModule = Codery.Village.Modules.People.People;
 
 namespace Codery.Village.Tests;
 
-/// <summary>Protocol 1: what a page gets, how little of it, and that it adds up to the village.</summary>
+/// <summary>Protocol 2: what a page gets, how little of it, and that it adds up to the village.</summary>
 public class FeedTests(ITestOutputHelper output)
 {
     private static readonly DataSet Data = VillageSetup.Data([]);
@@ -143,7 +143,7 @@ public class FeedTests(ITestOutputHelper output)
         // everyone stands, or walks, where the join puts him
         Assert.Equal(now.Moves.Select(move => move.Person).Order(), moves.Keys.Order());
         foreach (var move in now.Moves)
-            Assert.Equal(Where(move, now.Tick), Where(moves[move.Person], now.Tick));
+            Assert.Equal((Where(move, now.Tick), move.Doing), (Where(moves[move.Person], now.Tick), moves[move.Person].Doing));
         Assert.True(walked);
     }
 
@@ -231,14 +231,14 @@ public class FeedTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void A_page_that_joins_gets_protocol_1_and_the_whole_map()
+    public void A_page_that_joins_gets_protocol_2_and_the_whole_map()
     {
         var village = Start(Builders.June(1, 10));
         village.Run(10);
 
         var join = village.Feed.Join(village.Engine);
 
-        Assert.Equal(1, join.Protocol);
+        Assert.Equal(2, join.Protocol);
         Assert.Equal(4, join.TicksPerSecond);
         Assert.Equal(village.Engine.Tick, join.Tick);
         var rows = File.ReadAllLines(Path.Combine(VillageSetup.Folder, "map.txt"))
@@ -275,6 +275,23 @@ public class FeedTests(ITestOutputHelper output)
         Assert.NotEmpty(join.Things);
         Assert.Equal("2026-06-01T10:00", join.Calendar.Local);
         Assert.False(join.Calendar.Night);
+    }
+
+    [Fact]
+    public void A_move_says_what_the_resident_is_doing()
+    {
+        // a Monday morning: most grown-ups are at work, walking there or standing at it
+        var village = Start(Builders.June(1, 11));
+        village.Run(1);
+        var day = village.Module<DayModule>();
+
+        var join = village.Feed.Join(village.Engine);
+
+        var working = join.Moves.Where(move => day.Of(move.Person).Activity == Activity.Work).ToList();
+        Assert.NotEmpty(working);
+        Assert.All(working, move => Assert.Equal("work", move.Doing));
+        Assert.Contains(working, move => move.Cells.Count == 1);
+        Assert.Contains("\"doing\":\"work\"", Json(working[0]));
     }
 
     [Fact]
@@ -363,8 +380,8 @@ public class FeedTests(ITestOutputHelper output)
 
             var start = JsonSerializer.Deserialize<JoinMessage>(File.ReadAllText(Path.Combine(folder, "start.json")), Protocol.Json)!;
             var grown = JsonSerializer.Deserialize<JoinMessage>(File.ReadAllText(Path.Combine(folder, "grown.json")), Protocol.Json)!;
-            Assert.Equal((1, 0L), (start.Protocol, start.Tick));
-            Assert.Equal((1, 10L * 60 * 4), (grown.Protocol, grown.Tick));
+            Assert.Equal((2, 0L), (start.Protocol, start.Tick));
+            Assert.Equal((2, 10L * 60 * 4), (grown.Protocol, grown.Tick));
             Assert.NotEmpty(start.People);
             Assert.Equal(start.Map.Ground, grown.Map.Ground);
             Assert.DoesNotContain("null", File.ReadAllText(Path.Combine(folder, "grown.json")));
@@ -394,7 +411,7 @@ public class FeedTests(ITestOutputHelper output)
             Assert.Equal(grown.Tick, join.Tick);
             Assert.Equal(Enumerable.Range(1, 40).Select(i => join.Tick + i), ticks.Select(tick => tick.Tick));
             Assert.Equal(join.Tick + 40, last.Tick);
-            Assert.Equal(1, last.Protocol);
+            Assert.Equal(2, last.Protocol);
         }
         finally
         {

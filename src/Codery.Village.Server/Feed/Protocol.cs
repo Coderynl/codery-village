@@ -4,8 +4,9 @@ using Codery.Village.Core.Data;
 
 namespace Codery.Village.Server.Feed;
 
-// Protocol 1: what a page gets from the village. In JSON every name is in camelCase, and what is null is left
-// out, so a quiet tick is only its number. A tile is one number, row * cols + col.
+// Protocol 2: what a page gets from the village (2 added what a resident is doing to every move). In JSON every
+// name is in camelCase, and what is null is left out, so a quiet tick is only its number. A tile is one number,
+// row * cols + col.
 
 /// <summary>
 /// What a page gets when it joins: the whole village as it stands. <see cref="Moves"/> says where everyone is,
@@ -55,8 +56,11 @@ public sealed record TickMessage(
 /// tile per <see cref="TicksPerCell"/> ticks. A resident who stands still has one cell. <see cref="Inside"/>: he
 /// is inside a building there, out of sight. <see cref="Carry"/> (added to protocol 1): the material he carries
 /// on his back while he walks, by id, as on an errand to or from the store; left out when his hands are empty.
+/// <see cref="Doing"/> (protocol 2): what he is doing, on a walk and on a stay alike, as the activity of his day in
+/// camelCase: <c>work</c>, <c>leisure</c>, <c>help</c>, <c>fetch</c>, <c>bring</c>, <c>tend</c>, <c>visit</c>,
+/// <c>wander</c>, <c>home</c> and so on.
 /// </summary>
-public sealed record Move(int Person, IReadOnlyList<int> Cells, long Start, int TicksPerCell, bool Inside, string? Carry = null);
+public sealed record Move(int Person, IReadOnlyList<int> Cells, long Start, int TicksPerCell, bool Inside, string? Carry = null, string Doing = "home");
 
 /// <summary>
 /// A resident as a page shows him. <see cref="Sex"/> is <c>man</c> or <c>woman</c>, <see cref="Phase"/> <c>child</c>,
@@ -140,7 +144,7 @@ public sealed record NameView(string Id, string Nl, string En);
 /// <summary>The version of the protocol and how it is written.</summary>
 public static class Protocol
 {
-    public const int Version = 1;
+    public const int Version = 2;
 
     /// <summary>camelCase, and null left out.</summary>
     public static JsonSerializerOptions Json { get; } = Configure(new JsonSerializerOptions(JsonSerializerDefaults.Web));
