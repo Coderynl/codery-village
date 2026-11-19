@@ -120,7 +120,9 @@ public sealed record Said(int A, int? B, IReadOnlyList<string> Nl, IReadOnlyList
 /// The ground and what can stand on it. <see cref="Ground"/> has one letter per tile, row after row, as in
 /// <c>map.txt</c>. The names of roles, wishes and things are for what a page shows of a resident or a thing.
 /// <see cref="Paths"/> (added to protocol 1) has the tiles that are worn into a path when the page joins, <see cref="Bare"/>
-/// (added to protocol 2) the tiles that are worked bare or felled then.
+/// (added to protocol 2) the tiles that are worked bare or felled then. <see cref="Levels"/> (added to protocol 2; a page that
+/// does not know it draws the map flat) has one digit per tile, row after row as <see cref="Ground"/>: how many terraces the
+/// tile stands above the sea, water at 0.
 /// </summary>
 public sealed record MapView(
     int Rows,
@@ -132,7 +134,8 @@ public sealed record MapView(
     IReadOnlyList<NameView> Wishes,
     IReadOnlyList<NameView> Things,
     IReadOnlyList<int>? Paths = null,
-    IReadOnlyList<int>? Bare = null);
+    IReadOnlyList<int>? Bare = null,
+    string? Levels = null);
 
 /// <summary>An island and its tiles; <see cref="Eddie"/> for Eddie's islet.</summary>
 public sealed record IslandView(int Id, string Name, bool Eddie, IReadOnlyList<int> Cells);

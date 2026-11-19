@@ -297,10 +297,16 @@ public class FeedTests(ITestOutputHelper output)
         Assert.Equal(2, join.Protocol);
         Assert.Equal(4, join.TicksPerSecond);
         Assert.Equal(village.Engine.Tick, join.Tick);
-        var rows = File.ReadAllLines(Path.Combine(VillageSetup.Folder, "map.txt"))
+        var lines = File.ReadAllLines(Path.Combine(VillageSetup.Folder, "map.txt"))
             .Where(line => line.Length > 0 && !line.StartsWith('#') && !line.StartsWith("island ")).ToList();
+        var rows = lines.TakeWhile(line => line != "levels").ToList();
+        var levels = lines.SkipWhile(line => line != "levels").Skip(1).ToList();
         Assert.Equal((rows.Count, rows[0].Length), (join.Map.Rows, join.Map.Cols));
         Assert.Equal(string.Concat(rows), join.Map.Ground);
+        // the hills as the map draws them, water at 0
+        Assert.Equal(rows.Count, levels.Count);
+        Assert.Contains('2', join.Map.Levels!);
+        Assert.Equal(string.Concat(levels).Replace('~', '0'), join.Map.Levels);
         Assert.Equal(["West", "Oost", "Eddie"], join.Map.Islands.Select(island => island.Name));
         Assert.True(Assert.Single(join.Map.Islands, island => island.Eddie).Cells.Count > 0);
         var catalog = Data.Section<Catalog>("catalog");

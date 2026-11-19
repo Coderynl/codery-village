@@ -432,7 +432,9 @@ internal sealed class Sections
         for (var i = 0; i < lines.Length; i++)
         {
             var line = lines[i].TrimEnd('\r');
-            if (line.Length == 0 || line.StartsWith('#') || line.StartsWith("island ")) continue;
+            // the levels and the island lines follow the tiles
+            if (line == "levels" || line.StartsWith("island ")) break;
+            if (line.Length == 0 || line.StartsWith('#')) continue;
             var tiles = line.ToCharArray();
             for (var col = 0; col < tiles.Length; col++)
             {

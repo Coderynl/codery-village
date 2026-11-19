@@ -351,8 +351,11 @@ public sealed class VillageFeed
     private static MapView View(IslandMap map, Catalog catalog, IReadOnlyList<Wish> wishes)
     {
         var ground = new char[map.Rows * map.Cols];
+        var levels = new char[map.Rows * map.Cols];
         for (var row = 0; row < map.Rows; row++)
             for (var col = 0; col < map.Cols; col++)
+            {
+                levels[row * map.Cols + col] = (char)('0' + map.LevelOf(new Cell(row, col)));
                 ground[row * map.Cols + col] = map.At(new Cell(row, col)) switch
                 {
                     Ground.Water => '~',
@@ -364,6 +367,7 @@ public sealed class VillageFeed
                     Ground.Lot => 'h',
                     _ => '.',
                 };
+            }
         return new MapView(
             map.Rows,
             map.Cols,
@@ -373,7 +377,8 @@ public sealed class VillageFeed
                 [.. blueprint.Phases.Select(phase => phase.Id)], [.. blueprint.Phases.Select(phase => new NameView(phase.Id, phase.Nl, phase.En))]))],
             [.. catalog.Roles.Select(role => new NameView(role.Id, role.Nl, role.En))],
             [.. wishes.Select(wish => new NameView(wish.Id, wish.Nl, wish.En))],
-            [.. catalog.Things.Select(thing => new NameView(thing.Id, thing.Nl, thing.En))]);
+            [.. catalog.Things.Select(thing => new NameView(thing.Id, thing.Nl, thing.En))],
+            Levels: new string(levels));
     }
 
     /// <summary>The modules the feed reads, as they run now; a module that stopped is not there.</summary>

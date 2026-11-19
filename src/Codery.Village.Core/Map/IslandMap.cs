@@ -14,11 +14,13 @@ public sealed class IslandMap
 {
     private readonly Ground[,] _ground;
     private readonly int?[,] _island;
+    private readonly int[,] _level;
 
-    internal IslandMap(Ground[,] ground, int?[,] island, IReadOnlyList<Island> islands)
+    internal IslandMap(Ground[,] ground, int?[,] island, IReadOnlyList<Island> islands, int[,] level)
     {
         _ground = ground;
         _island = island;
+        _level = level;
         Islands = islands;
     }
 
@@ -30,6 +32,9 @@ public sealed class IslandMap
     public Ground At(Cell cell) => Contains(cell) ? _ground[cell.Row, cell.Col] : Ground.Water;
 
     public bool IsWalkable(Cell cell) => IsLand(At(cell));
+
+    /// <summary>How many terraces a tile stands above the sea; water and outside the map are 0.</summary>
+    public int LevelOf(Cell cell) => Contains(cell) ? _level[cell.Row, cell.Col] : 0;
 
     /// <summary>The id of the island a tile belongs to, or null for water.</summary>
     public int? IslandOf(Cell cell) => Contains(cell) ? _island[cell.Row, cell.Col] : null;

@@ -5,14 +5,19 @@ namespace Codery.Village.Core.Map;
 /// <summary>
 /// Reads a map from text. First the tiles, one character per tile and one line per row:
 /// <c>~</c> water, <c>v</c> fishing ground, <c>.</c> land, <c>T</c> forest, <c>F</c> fertile ground,
-/// <c>R</c> rock, <c>C</c> clay, <c>h</c> lot. Then one line per island, <c>island &lt;row&gt; &lt;col&gt; &lt;name&gt; [eddie]</c>,
-/// naming the island that holds that tile. Lines starting with <c>#</c> explain and blank lines are skipped.
+/// <c>R</c> rock, <c>C</c> clay, <c>h</c> lot. Then, if the map is not flat, a line <c>levels</c> and the same rows again
+/// with a digit per land tile for its level and <c>~</c> per water tile; land next to water is at 0, and neighbours differ by
+/// at most one level. Without that block every tile is at 0. Then one line per island,
+/// <c>island &lt;row&gt; &lt;col&gt; &lt;name&gt; [eddie]</c>, naming the island that holds that tile. Lines starting with
+/// <c>#</c> explain and blank lines are skipped.
 /// </summary>
 public static class MapText
 {
     public static IslandMap Parse(string text)
     {
         var rows = new List<(int Line, string Tiles)>();
+        var levels = new List<(int Line, string Tiles)>();
+        int? levelsAt = null;
         var names = new List<(int Line, string[] Words)>();
         var lines = text.Split('\n');
         for (var i = 0; i < lines.Length; i++)
@@ -22,13 +27,16 @@ public static class MapText
             if (line.StartsWith("island ", StringComparison.Ordinal))
                 names.Add((i + 1, line.Split(' ', StringSplitOptions.RemoveEmptyEntries)));
             else if (names.Count > 0)
-                throw Mistake(i + 1, "tiles come before the island lines");
+                throw Mistake(i + 1, "tiles and levels come before the island lines");
+            else if (levelsAt is null && line == "levels")
+                levelsAt = i + 1;
             else
-                rows.Add((i + 1, line));
+                (levelsAt is null ? rows : levels).Add((i + 1, line));
         }
         if (rows.Count == 0) throw Mistake(1, "the map has no tiles");
 
         var ground = ReadTiles(rows);
+        var level = levelsAt is { } at ? ReadLevels(at, levels, ground) : new int[ground.GetLength(0), ground.GetLength(1)];
         var (island, firsts) = FloodFill(ground);
         var named = new (string Name, bool Eddie)?[firsts.Count];
         foreach (var (line, words) in names) Name(line, words, ground, island, named);
@@ -40,7 +48,49 @@ public static class MapText
             if (named[id] is not { } name) throw Mistake(rows[first.Row].Line, $"the island at {first} has no name");
             islands.Add(new Island(id, name.Name, cells, name.Eddie));
         }
-        return new IslandMap(ground, island, islands);
+        return new IslandMap(ground, island, islands, level);
+    }
+
+    private static int[,] ReadLevels(int at, List<(int Line, string Tiles)> rows, Ground[,] ground)
+    {
+        var (height, width) = (ground.GetLength(0), ground.GetLength(1));
+        if (rows.Count != height)
+            throw Mistake(rows.Count > height ? rows[height].Line : at, $"{rows.Count} rows of levels where the map has {height}");
+        var level = new int[height, width];
+        for (var row = 0; row < height; row++)
+        {
+            var (line, tiles) = rows[row];
+            if (tiles.Length != width) throw Mistake(line, $"{tiles.Length} levels where the map has {width} tiles in a row");
+            for (var col = 0; col < width; col++)
+            {
+                var land = IslandMap.IsLand(ground[row, col]);
+                switch (tiles[col])
+                {
+                    case '~' when land: throw Mistake(line, $"the tile at ({row},{col}) is land but has no level");
+                    case '~': break;
+                    case >= '0' and <= '9' when !land: throw Mistake(line, $"the tile at ({row},{col}) is water but has a level");
+                    case >= '0' and <= '9' and var digit: level[row, col] = digit - '0'; break;
+                    case var other: throw Mistake(line, $"unknown level '{other}'");
+                }
+            }
+        }
+
+        // the coast is at 0 and a terrace is one level high: everything stays walkable
+        for (var row = 0; row < height; row++)
+        for (var col = 0; col < width; col++)
+        {
+            if (level[row, col] == 0) continue;
+            var cell = new Cell(row, col);
+            foreach (var next in cell.Neighbours())
+            {
+                var inside = next.Row >= 0 && next.Row < height && next.Col >= 0 && next.Col < width;
+                if (!inside || !IslandMap.IsLand(ground[next.Row, next.Col]))
+                    throw Mistake(rows[row].Line, $"the tile at {cell} is next to water but at level {level[row, col]}");
+                if (level[row, col] - level[next.Row, next.Col] > 1)
+                    throw Mistake(rows[row].Line, $"the tile at {cell} is {level[row, col] - level[next.Row, next.Col]} levels above its neighbour at {next}");
+            }
+        }
+        return level;
     }
 
     private static Ground[,] ReadTiles(List<(int Line, string Tiles)> rows)

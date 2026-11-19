@@ -84,8 +84,73 @@ public class MapTests
     [InlineData("~.\nisland 0 1 Een vreemd\n", 2)]
     [InlineData("~.~.\nisland 0 1 Een\n", 1)]
     [InlineData("~.\nisland 0 1 Een\n~.\n", 3)]
+    [InlineData("~.\nisland 0 1 Een\nlevels\n~0\n", 3)]
     public void A_mistake_names_its_line(string text, int line)
     {
+        var error = Assert.Throws<FormatException>(() => MapText.Parse(text));
+        Assert.Contains($"line {line}", error.Message);
+    }
+
+    // an island that rises from its coast to a hill in the middle
+    private const string Hill = """
+        ~~~~~~~
+        ~.....~
+        ~.....~
+        ~..T..~
+        ~.....~
+        ~.....~
+        ~~~~~~~
+        levels
+        ~~~~~~~
+        ~00000~
+        ~01110~
+        ~01210~
+        ~01110~
+        ~00000~
+        ~~~~~~~
+        island 3 3 Heuvel
+        """;
+
+    [Fact]
+    public void Each_tile_has_the_level_of_the_levels_block()
+    {
+        var map = MapText.Parse(Hill);
+
+        Assert.Equal(2, map.LevelOf(new Cell(3, 3)));
+        Assert.Equal(1, map.LevelOf(new Cell(2, 2)));
+        Assert.Equal(1, map.LevelOf(new Cell(4, 4)));
+        Assert.Equal(0, map.LevelOf(new Cell(1, 1)));
+        Assert.Equal(0, map.LevelOf(new Cell(0, 0)));
+        Assert.Equal(0, map.LevelOf(new Cell(-1, 9)));
+        // the levels are not tiles: the map is as big as without them
+        Assert.Equal((7, 7), (map.Rows, map.Cols));
+        Assert.Equal(Ground.Forest, map.At(new Cell(3, 3)));
+    }
+
+    [Fact]
+    public void A_map_without_levels_is_flat()
+    {
+        var map = MapText.Parse(ThreePieces);
+
+        for (var row = 0; row < map.Rows; row++)
+            for (var col = 0; col < map.Cols; col++)
+                Assert.Equal(0, map.LevelOf(new Cell(row, col)));
+    }
+
+    // lines 1-5 the tiles, line 6 "levels", lines 7-11 the levels, line 12 the island
+    [Theory]
+    [InlineData("~~~~~|~000~|~000~|~000~", 6)]                 // a row of levels too few
+    [InlineData("~~~~~|~000~|~000~|~000~|~~~~~|~~~~~", 12)]    // a row of levels too many
+    [InlineData("~~~~~|~00~|~000~|~000~|~~~~~", 8)]            // a row too short
+    [InlineData("~~~~~|~000~|~0a0~|~000~|~~~~~", 9)]           // not a digit, so no level above 9
+    [InlineData("~~0~~|~000~|~000~|~000~|~~~~~", 7)]           // a level on water
+    [InlineData("~~~~~|~0~0~|~000~|~000~|~~~~~", 8)]           // land without a level
+    [InlineData("~~~~~|~100~|~000~|~000~|~~~~~", 8)]           // land on the coast above 0
+    [InlineData("~~~~~|~000~|~020~|~000~|~~~~~", 9)]           // two levels above its neighbours
+    public void A_wrong_level_names_its_line(string levels, int line)
+    {
+        var text = "~~~~~\n~...~\n~...~\n~...~\n~~~~~\nlevels\n" + levels.Replace('|', '\n') + "\nisland 2 2 Een\n";
+
         var error = Assert.Throws<FormatException>(() => MapText.Parse(text));
         Assert.Contains($"line {line}", error.Message);
     }
