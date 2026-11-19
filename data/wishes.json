@@ -63,6 +63,8 @@
     { "id": "vegetables", "nl": "groente uit eigen tuin", "en": "vegetables from their own garden", "label": "vegetables", "weight": 1, "afterDays": 3,
       "who": { "interests": ["gardening", "cooking"], "phases": ["working", "retired"] } },
     { "id": "orchard", "nl": "een boomgaard", "en": "an orchard", "label": "orchard", "weight": 1, "afterDays": 4, "after": ["grapes"],
-      "who": { "phases": ["working", "retired"], "traits": { "comfort": 55 } } }
+      "who": { "phases": ["working", "retired"], "traits": { "comfort": 55 } } },
+    { "id": "meat", "nl": "vlees", "en": "meat", "label": "meat", "weight": 1.5, "afterDays": 4,
+      "who": { "interests": ["animals"], "phases": ["working", "retired"] } }
   ]
 }

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Codery.Village.Core;
 using Codery.Village.Core.Data;
@@ -25,7 +26,7 @@ public class WorkTests
 
     /// <summary>The real data with the whole ladder of releases, changed as the test needs.</summary>
     private static DataSet Data(Action<JsonObject>? economy = null, Action<JsonObject>? people = null, Action<JsonObject>? life = null,
-        Action<JsonObject>? catalog = null)
+        Action<JsonObject>? catalog = null, Action<JsonObject>? releases = null)
     {
         JsonObject Read(string name) => JsonNode.Parse(File.ReadAllText(Path.Combine(Folder, name + ".json")))!.AsObject();
         var economyJson = Read("economy");
@@ -43,7 +44,13 @@ public class WorkTests
             ["day"] = Read("day").ToJsonString(),
             ["catalog"] = catalogJson.ToJsonString(),
             ["economy"] = economyJson.ToJsonString(),
-        }, Ladder.All());
+        }, [.. Ladder.All().Select(text =>
+        {
+            if (releases is null) return text;
+            var release = JsonNode.Parse(text)!.AsObject();
+            releases(release);
+            return release.ToJsonString();
+        })]);
     }
 
     private static StructureView Built(int id, string blueprint, int island, int row, int col)
@@ -239,7 +246,109 @@ public class WorkTests
         // and it goes on, and saves in the form of now
         loaded.Run(2000);
         Assert.Empty(loaded.Engine.Stopped);
-        Assert.Equal(3, Assert.Single(loaded.Engine.Save().Modules, module => module.Name == "work").Version);
+        Assert.Equal(4, Assert.Single(loaded.Engine.Save().Modules, module => module.Name == "work").Version);
+    }
+
+    // Risk: the village saved on production before game had a layer of its own (Work version 3) loses what its land has left.
+    [Fact]
+    public void A_work_save_of_version_3_keeps_what_its_land_has_left()
+    {
+        var data = Data();
+        IModule[] Modules()
+        {
+            var structures = new FakeStructures();
+            structures.Standing.AddRange(Economy());
+            return [new People(), structures, new Day(), new Work(), new Ear()];
+        }
+        var time = new SimulatedTime(June(1, 10));
+        var modules = Modules();
+        var running = new Engine(modules, data, RealMap, 7, time);
+        running.Start();
+        running.Step();
+
+        // as version 3 wrote it: a fertile tile of West worked down to 10, without a layer
+        var cell = new Cell(9, 6);
+        Assert.Equal(Ground.Fertile, RealMap.At(cell));
+        var saved = SaveJson.FromJson(SaveJson.ToJson(running.Save()));
+        var tile = JsonSerializer.SerializeToNode(new NatureTile(cell, 10, Ground.Fertile, 0), SaveJson.Options)!.AsObject();
+        tile.Remove("layer");
+        Assert.Single(saved.Modules, part => part.Name == "work").Data["nature"]!["tiles"]!.AsArray().Add(tile);
+        saved = saved with { Modules = [.. saved.Modules.Select(module => module.Name == "work" ? module with { Version = 3 } : module)] };
+
+        var loadedModules = Modules();
+        var loaded = Of(Engine.Load(SaveJson.FromJson(SaveJson.ToJson(saved)), loadedModules, data, RealMap, new SimulatedTime(saved.Calendar)), new SimulatedTime(saved.Calendar), loadedModules);
+
+        // the tile keeps its yield as what the ground itself has left, and has all its game
+        Assert.Equal(10, loaded.Work.YieldOf(cell));
+        Assert.Contains(cell, loaded.Work.Bare);
+        Assert.Equal(Nature.Full, loaded.Work.YieldOf(cell, "game"));
+        loaded.Run(1);
+        Assert.Empty(loaded.Engine.Stopped);
+        Assert.Equal(4, Assert.Single(loaded.Engine.Save().Modules, module => module.Name == "work").Version);
+    }
+
+    /// <summary>The real data with a hunters' lodge that makes a batch in 30 ticks, and no builders.</summary>
+    private static DataSet QuickHunting() => Data(
+        economy: e => e["builders"] = 0,
+        releases: release =>
+        {
+            foreach (var blueprint in release["blueprints"]?.AsArray() ?? [])
+                if ((string)blueprint!["id"]! == "hunters-lodge") blueprint["recipe"]!["ticks"] = 30;
+        });
+
+    // a lodge on the land of West, next to its forest
+    private static StructureView[] Lodge() => [Built(1, "hunters-lodge", West, 4, 5)];
+
+    // a while in every quarter of the day shift, from 10:15 until five; stops early when done says so
+    private static void HuntADay(Village village, Func<bool>? done = null)
+    {
+        for (var quarter = June(1, 10, 15); quarter < June(1, 17); quarter += TimeSpan.FromMinutes(15))
+        {
+            village.JumpTo(quarter);
+            for (var tick = 0; tick < 300; tick++)
+            {
+                if (done?.Invoke() == true) return;
+                village.Engine.Step();
+            }
+        }
+    }
+
+    // Risk: hunters strip the forest of what the gatherers and woodcutters live on, or hunt on without the game running out.
+    [Fact]
+    public void Hunting_takes_game_not_the_forest()
+    {
+        var village = Start(1, June(1, 10), QuickHunting(), Lodge());
+        var area = village.Work.WorkAreaOf(1);
+        Assert.NotEmpty(area);
+        Assert.All(area, cell => Assert.Equal(Ground.Forest, RealMap.At(cell)));
+
+        HuntADay(village);
+
+        Assert.NotEmpty(village.InRole("hunter"));
+        Assert.Contains(village.Ear.Heard, e => e is Produced { Material: "game" });
+        Assert.Contains(area, cell => village.Work.YieldOf(cell, "game") < Nature.Full);
+        Assert.All(area, cell => Assert.Equal(Nature.Full, village.Work.YieldOf(cell)));
+        Assert.DoesNotContain(area, village.Work.Bare.Contains);
+    }
+
+    // Risk: game hunted out never comes back, and the lodge stands idle for good.
+    [Fact]
+    public void Game_grows_back()
+    {
+        var village = Start(1, June(1, 10), QuickHunting(), Lodge());
+        var area = village.Work.WorkAreaOf(1);
+        Cell? Bare() => area.Where(cell => village.Work.YieldOf(cell, "game") < Nature.Low).Select(cell => (Cell?)cell).FirstOrDefault();
+        HuntADay(village, () => Bare() is not null);
+        var bare = Bare() ?? throw new Xunit.Sdk.XunitException("no tile was hunted bare");
+
+        var regrow = (int)JsonNode.Parse(File.ReadAllText(Path.Combine(Folder, "economy.json")))!["nature"]!["game"]!["regrowDays"]!;
+        Assert.True(regrow >= 2, $"game grows back in {regrow} days");
+        // a night later it is growing, after regrowDays it is full
+        var left = village.Work.YieldOf(bare, "game");
+        village.JumpTo(June(2, 1));
+        Assert.InRange(village.Work.YieldOf(bare, "game"), left + 1, Nature.Full - 1);
+        village.JumpTo(June(1 + regrow, 1));
+        Assert.Equal(Nature.Full, village.Work.YieldOf(bare, "game"));
     }
 
     [Theory]

@@ -23,7 +23,8 @@ public sealed record ThingKind(string Id, string Nl, string En);
 /// Something the village can build. It stands on tiles of the grounds in <see cref="On"/>, covering
 /// <see cref="Shape"/> (axial offsets <c>[row,col]</c> from the anchor; one tile when absent), and goes up in
 /// <see cref="Phases"/>. A dwelling has <see cref="Homes"/>, a workplace <see cref="Jobs"/> and perhaps a
-/// <see cref="Recipe"/>; a building that fulfils a wish <see cref="Serves"/> its label within <see cref="Range"/>.
+/// <see cref="Recipe"/>; a building that fulfils a wish <see cref="Serves"/> its label within <see cref="Range"/>. One
+/// that stands <see cref="Near"/> a ground fits only where a tile of it lies next to a tile of that ground.
 /// </summary>
 public sealed record Blueprint(
     string Id,
@@ -37,7 +38,8 @@ public sealed record Blueprint(
     IReadOnlyList<Job>? Jobs = null,
     Recipe? Recipe = null,
     string? Serves = null,
-    int? Range = null)
+    int? Range = null,
+    Ground? Near = null)
 {
     /// <summary>The tiles it covers relative to its anchor, as the map turns and places them.</summary>
     [JsonIgnore]
@@ -61,5 +63,9 @@ public enum Shift { Day, Early, Night }
 /// <summary>
 /// What a workplace makes: <see cref="In"/> from the stock becomes <see cref="Out"/> after <see cref="Ticks"/>. Nature
 /// has no <see cref="In"/>. A recipe that <see cref="Fells"/> takes a standing tree near the workplace for every batch.
+/// One that <see cref="Takes"/> from a yield of its own (an id under <c>economy.nature</c>, such as game) takes every
+/// batch from that yield of the tiles it is worked on, not from what their ground has left, and is worked in the forest
+/// within <c>forestRange</c>.
 /// </summary>
-public sealed record Recipe(IReadOnlyDictionary<string, int> In, IReadOnlyDictionary<string, int> Out, int Ticks, bool Fells = false);
+public sealed record Recipe(IReadOnlyDictionary<string, int> In, IReadOnlyDictionary<string, int> Out, int Ticks, bool Fells = false,
+    string? Takes = null);

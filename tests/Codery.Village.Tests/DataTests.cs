@@ -226,6 +226,7 @@ public class DataTests
         { Catalog($"[{Hut("""[{ "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 10, "cost": { "wood": -2 } }]""")}]"), Wishes, "-2 wood" },
         { Catalog($"[{Hut(more: """, "recipe": { "in": {}, "out": { "wood": 1 }, "ticks": 0 }""")}]"), Wishes, "0 ticks" },
         { Catalog($"[{Hut(more: """, "recipe": { "in": {}, "out": { "wood": 0 }, "ticks": 5 }""")}]"), Wishes, "0 wood" },
+        { Catalog($"[{Hut(more: """, "recipe": { "in": {}, "out": { "wood": 1 }, "ticks": 5, "takes": "game" }""")}]"), Wishes, "'game'" },
         { Catalog($"[{Hut(more: """, "jobs": [{ "role": "carpenter", "count": 0, "shift": "day", "outdoor": false }]""")}]"), Wishes, "0 carpenter" },
         { Catalog($"[{Hut(more: """, "homes": 0""")}]"), Wishes, "0 homes" },
         { Catalog($"[{Hut(more: """, "serves": "cafe", "range": 0""")}]"), Wishes, "range 0" },

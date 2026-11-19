@@ -161,6 +161,53 @@ public class ScenarioTests(ITestOutputHelper output)
             $"fewer than {Growing}; not in seeds {string.Join(", ", without)}");
     }
 
+    // Risk: on the live ladder West never hunts (nobody wishes for meat, the lodge stands out of reach of the forest, or
+    // nobody works it), or its hunters take the hands that gather firewood, so that West goes a whole day without heat.
+    // A West of fewer than twenty residents often has no worker left to give the lodge within two weeks, so many seeds
+    // go without a hunt; none goes without firewood.
+    [Fact]
+    public void West_hunts_and_still_has_firewood()
+    {
+        const int Days = 14;
+        const int Hunting = 12;
+        var sections = Sections.Of(VillageSetup.Live());
+        // per seed, the first day the lodge stood on West and West had game in stock, and the longest it went without firewood, in quarters
+        var stood = new ConcurrentDictionary<ulong, int>();
+        var hunted = new ConcurrentDictionary<ulong, int>();
+        var cold = new ConcurrentDictionary<ulong, int>();
+
+        try
+        {
+            EverySeed(seed =>
+            {
+                var scenario = Scenario.Start(seed, sections);
+                var west = scenario.Ordinary.Single(island => island.Name == "West").Id;
+                var (quarter, without, longest) = (0, 0, 0);
+                scenario.Days(Days, each: village =>
+                {
+                    var day = (++quarter + 95) / 96;
+                    if (village.Building.All.Any(structure => structure.Island == west && structure.Done && structure.Blueprint == "hunters-lodge"))
+                        stood.TryAdd(seed, day);
+                    if (village.Work.Count(west, "game") > 0) hunted.TryAdd(seed, day);
+                    without = village.Work.Count(west, "firewood") > 0 ? 0 : without + 1;
+                    longest = Math.Max(longest, without);
+                });
+                cold[seed] = longest;
+                Assert.True(longest < 96, $"West went {longest} quarters without firewood");
+                Assert.Empty(scenario.Engine.Stopped);
+            });
+        }
+        finally
+        {
+            output.WriteLine($"a lodge standing on West by day 7 in {stood.Values.Count(day => day <= 7)} of {Seeds} seeds, by day {Days} in {stood.Count}");
+            output.WriteLine($"game on West by day 7 in {hunted.Values.Count(day => day <= 7)} of {Seeds} seeds, by day {Days} in {hunted.Count}");
+            output.WriteLine($"the longest West went without firewood: {(cold.IsEmpty ? 0 : cold.Values.Max())} quarters");
+        }
+        var without = Enumerable.Range(1, Seeds).Select(seed => (ulong)seed).Where(seed => !hunted.ContainsKey(seed)).ToList();
+        Assert.True(hunted.Count >= Hunting,
+            $"West hunted within {Days} days in {hunted.Count} of {Seeds} seeds, fewer than {Hunting}; not in seeds {string.Join(", ", without)}");
+    }
+
     [Fact]
     public void Everyone_saves()
     {

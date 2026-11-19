@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Codery.Village.Core.Data;
 
 public sealed partial class DataSet
@@ -5,8 +7,8 @@ public sealed partial class DataSet
     /// <summary>
     /// What is wrong with the catalog and the wish list, one sentence each; empty when the data is sound.
     /// Doubled ids, references to materials, roles or wishes that do not exist, ticks and amounts that are not
-    /// positive, a blueprint without phases or look, a shape without its anchor, a wish with an empty <c>after</c>,
-    /// and a release that adds to a
+    /// positive, a blueprint without phases or look, a shape without its anchor, a wish with an empty <c>after</c>, a
+    /// recipe that takes from a yield <c>economy.nature</c> does not name, and a release that adds to a
     /// list the catalog does not have. The server does not start on data with a problem.
     /// </summary>
     public IReadOnlyList<string> Problems()
@@ -31,12 +33,14 @@ public sealed partial class DataSet
         var materials = catalog.Materials.Select(material => material.Id).ToHashSet();
         var roles = catalog.Roles.Select(role => role.Id).ToHashSet();
         var labels = wishes?.Wishes.Select(wish => wish.Label).ToHashSet();
+        var yields = (Names.Contains("economy") ? TryRead<NatureIds>("economy", problems)?.Nature?.Keys : null)?.ToHashSet() ?? [];
         foreach (var blueprint in catalog.Blueprints)
-            problems.AddRange(ProblemsOf(blueprint, materials, roles, labels));
+            problems.AddRange(ProblemsOf(blueprint, materials, roles, labels, yields));
         return problems;
     }
 
-    private static IEnumerable<string> ProblemsOf(Blueprint blueprint, IReadOnlySet<string> materials, IReadOnlySet<string> roles, IReadOnlySet<string>? labels)
+    private static IEnumerable<string> ProblemsOf(Blueprint blueprint, IReadOnlySet<string> materials, IReadOnlySet<string> roles, IReadOnlySet<string>? labels,
+        IReadOnlySet<string> yields)
     {
         var owner = $"Blueprint '{blueprint.Id}'";
         if (blueprint.Phases.Count == 0) yield return $"{owner} has no phases.";
@@ -53,6 +57,8 @@ public sealed partial class DataSet
             if (recipe.Ticks <= 0) yield return $"{owner} makes its recipe in {recipe.Ticks} ticks; a recipe takes at least 1.";
             foreach (var problem in Amounts($"{owner} takes", recipe.In, materials)) yield return problem;
             foreach (var problem in Amounts($"{owner} makes", recipe.Out, materials)) yield return problem;
+            if (recipe.Takes is { } takes && !yields.Contains(takes))
+                yield return $"{owner} takes from the yield '{takes}', which economy.nature does not name.";
         }
 
         foreach (var job in blueprint.Jobs ?? [])
@@ -101,6 +107,9 @@ public sealed partial class DataSet
             return null;
         }
     }
+
+    // only what the problems need from economy.json: the yields under nature
+    private sealed record NatureIds(IReadOnlyDictionary<string, JsonElement>? Nature = null);
 
     // only what the problems need from wishes.json; the wishes module reads the rest
     private sealed record WishLabels(IReadOnlyList<WishLabel> Wishes);

@@ -32,7 +32,8 @@ namespace Codery.Village.Modules.Work;
 /// a wage for every tick on the job; an outdoor job with a recipe is done out on its work area, the ground of its blueprint
 /// around the workplace (for one on the water, the shore by it), each worker on a tile of his own for a few quarters,
 /// and walking from one tile to the next is work too. Such an area runs out where it is worked: every batch takes from
-/// the tiles its workers stood on (<see cref="Nature"/>, after <c>nature</c> in the data), a worker moves on from a tile
+/// the tiles its workers stood on (<see cref="Nature"/>, after <c>nature</c> in the data; a hunter's takes from the game of
+/// the forest, a yield of its own, and leaves what the forest gives the gatherers), a worker moves on from a tile
 /// gone bare at the next quarter, a workplace whose whole area is bare stands still with its workers at it, and the tiles
 /// grow back once a day. Once a calendar day, at 00:00, the island settles its day: the start
 /// subsidy comes in, the upkeep of its buildings goes out, children, students and the retired get their money, and who is
@@ -109,16 +110,21 @@ public sealed class Work : IModule, IJobs, IStock
     private readonly SortedDictionary<int, HashSet<Cell>> _stood = [];
     private Nature _nature = new(new Dictionary<Ground, NatureSettings>(), default);
     private Dictionary<Ground, NatureSettings> _natureSettings = [];
+    // every yield under nature by name, for a recipe that takes from a yield of its own
+    private Dictionary<string, NatureSettings> _layers = [];
 
     public string Name => "work";
 
-    public int Version => 3;
+    public int Version => 4;
 
     /// <summary>The forest tiles that are felled now; they grow back after <c>forestRegrowTicks</c>.</summary>
     public IReadOnlyCollection<Cell> Felled => _felled.Keys;
 
     /// <summary>What a tile has left to give, from 100 (full) to 0; a tile nobody worked is full.</summary>
     public int YieldOf(Cell cell) => _nature.YieldOf(cell);
+
+    /// <summary>What a tile has left of a yield of its own, such as game, from 100 (full) to 0.</summary>
+    public int YieldOf(Cell cell, string layer) => _nature.YieldOf(cell, layer);
 
     /// <summary>
     /// The tiles that are bare now: worked below 20, and the felled forest. Forest gathered low keeps its trees: only
@@ -181,7 +187,7 @@ public sealed class Work : IModule, IJobs, IStock
     {
         Read(village);
         _day = Today(village);
-        _nature = new Nature(_natureSettings, _day);
+        _nature = new Nature(_natureSettings, _day, layers: _layers);
         foreach (var island in village.Map.Islands)
         {
             _treasuries[island.Id] = new Treasury { Cash = island.Eddie ? 0 : _settings.Start.Cash };
@@ -427,7 +433,7 @@ public sealed class Work : IModule, IJobs, IStock
         {
             if (structure.Island != seat.Island || !InEconomy(_village!.Map, structure) || !_blueprints.TryGetValue(structure.Blueprint, out var blueprint)) continue;
             var area = AreaOf(structure, blueprint);
-            var yielding = area.Where(cell => cell != gathering && (Fells(blueprint) || _nature.Yields(cell, quarter))).ToList();
+            var yielding = area.Where(cell => cell != gathering && Yields(blueprint, cell, quarter)).ToList();
             if (yielding.Count > 0) workplaces.Add((structure, blueprint, area, yielding));
         }
         if (workplaces.Count == 0) return null;
@@ -455,8 +461,8 @@ public sealed class Work : IModule, IJobs, IStock
     /// <summary>
     /// Where the outdoor jobs of the structure are done: the walkable tiles of its island within <c>workRange</c> whose
     /// ground is one it stands on, and those beside such ground that is water (for a fishing spot: the shore). A
-    /// woodcutter's is the forest within <c>forestRange</c>, where he fells. Empty for a structure without a recipe, or
-    /// with <c>workRange</c> 0: its jobs are done at it.
+    /// woodcutter's is the forest within <c>forestRange</c>, where he fells, and so is a hunter's: of a recipe that takes
+    /// from a yield of its own. Empty for a structure without a recipe, or with <c>workRange</c> 0: its jobs are done at it.
     /// </summary>
     private IReadOnlyList<Cell> AreaOf(StructureView structure, Blueprint blueprint)
     {
@@ -466,7 +472,7 @@ public sealed class Work : IModule, IJobs, IStock
         var on = blueprint.On.ToHashSet();
         bool Ours(Cell cell) => on.Contains(map.At(cell));
         var cells = map.Islands.FirstOrDefault(island => island.Id == structure.Island)?.Cells ?? [];
-        IReadOnlyList<Cell> area = [.. (Fells(blueprint)
+        IReadOnlyList<Cell> area = [.. (InForest(blueprint)
                 ? cells.Where(cell => map.At(cell) == Ground.Forest && cell.DistanceTo(structure.Place) <= _settings.ForestRange)
                 : cells.Where(cell => map.IsWalkable(cell) && cell.DistanceTo(structure.Place) <= _settings.WorkRange
                     && (Ours(cell) || cell.Neighbours().Any(next => !map.IsWalkable(next) && Ours(next)))))
@@ -491,7 +497,7 @@ public sealed class Work : IModule, IJobs, IStock
         var picks = new Dictionary<int, Cell>();
         // the tiles there is work on now: those that still gave as the quarter began (felling has its own logic)
         var quarter = Quarter(_village!);
-        bool Yields(Cell cell) => Fells(blueprint) || _nature.Yields(cell, quarter);
+        bool Yields(Cell cell) => this.Yields(blueprint, cell, quarter);
         var yielding = area.Where(Yields).ToList();
         if (yielding.Count == 0) return picks;
         var stretch = _village!.Clocks.Calendar.Now.ToUnixTimeSeconds() / QuarterSeconds / _settings.StayQuarters;
@@ -659,7 +665,7 @@ public sealed class Work : IModule, IJobs, IStock
                 || !_blueprints.TryGetValue(structure.Blueprint, out var blueprint) || blueprint.Recipe is not { } recipe) continue;
             // the area that runs out as it is worked; one worked bare stands still until a tile of it grows back
             var area = Fells(blueprint) ? [] : AreaOf(structure, blueprint);
-            if (area.Count > 0 && !area.Any(cell => _nature.Yields(cell, quarter))) continue;
+            if (area.Count > 0 && !area.Any(cell => Yields(blueprint, cell, quarter))) continue;
             if (!_batches.TryGetValue(structure.Id, out var worked))
             {
                 // a new batch: a tree to fell, and what goes in, fetched and taken from the stores nearest the workplace
@@ -679,7 +685,7 @@ public sealed class Work : IModule, IJobs, IStock
             _batches.Remove(structure.Id);
             // the batch is taken from every tile it was worked on
             if (_stood.Remove(structure.Id, out var tiles))
-                foreach (var cell in tiles) _nature.Take(cell, GroundOf(village.Map, blueprint, cell), quarter);
+                foreach (var cell in tiles) _nature.Take(cell, GroundOf(village.Map, blueprint, cell), quarter, recipe.Takes);
             foreach (var (material, amount) in recipe.Out.OrderBy(item => item.Key, StringComparer.Ordinal))
             {
                 StoresOf(structure.Island).Add(structure.Id, material, amount);
@@ -745,6 +751,12 @@ public sealed class Work : IModule, IJobs, IStock
 
     // a recipe that fells, such as a woodcutter's; gathering branches leaves the forest standing
     private static bool Fells(Blueprint blueprint) => blueprint.Recipe is { Fells: true };
+
+    // a recipe worked in the forest within forestRange: one that fells, or one that takes from a yield of its own (game)
+    private static bool InForest(Blueprint blueprint) => blueprint.Recipe is { Fells: true } or { Takes: not null };
+
+    // whether the tile still gives what the workplace takes in the quarter (felling has its own logic)
+    private bool Yields(Blueprint blueprint, Cell cell, long quarter) => Fells(blueprint) || _nature.Yields(cell, quarter, blueprint.Recipe?.Takes);
 
     // the nearest standing tree of the island within reach, that no building stands on
     private Cell? Tree(IslandMap map, World world, StructureView hut)
@@ -953,12 +965,14 @@ public sealed class Work : IModule, IJobs, IStock
                     throw new InvalidDataException($"The data section '{Section}' starts {island} with {amount} of '{material}'.");
 
         _natureSettings = [];
+        _layers = [];
         foreach (var (name, nature) in _settings.Nature ?? new Dictionary<string, NatureSettings>())
         {
-            if (!Enum.TryParse<Ground>(name, ignoreCase: true, out var ground) || nature.PerBatch < 0 || nature.RegrowDays < 1
-                || nature.GrowsInMonths?.Any(month => month is < 1 or > 12) == true)
+            if (nature.PerBatch < 0 || nature.RegrowDays < 1 || nature.GrowsInMonths?.Any(month => month is < 1 or > 12) == true)
                 throw new InvalidDataException($"The data section '{Section}' has nature for '{name}' that cannot be.");
-            _natureSettings[ground] = nature;
+            // a ground's is what its tiles have left; every name, also one that is no ground (game), is a yield a recipe may take from
+            if (Enum.TryParse<Ground>(name, ignoreCase: true, out var ground)) _natureSettings[ground] = nature;
+            _layers[name] = nature;
         }
 
         _needs = [];
@@ -1024,8 +1038,8 @@ public sealed class Work : IModule, IJobs, IStock
         _earned.Clear();
         _stood.Clear();
         _fetch.Clear();
-        // a save from before nature ran out has every tile full
-        _nature = saved.Nature is { } nature ? new Nature(_natureSettings, nature.Day, nature.Tiles) : new Nature(_natureSettings, saved.Day);
+        // a save from before nature ran out has every tile full; up to version 3 every tile was of its ground's own layer
+        _nature = saved.Nature is { } nature ? new Nature(_natureSettings, nature.Day, nature.Tiles, _layers) : new Nature(_natureSettings, saved.Day, layers: _layers);
         foreach (var island in village.Map.Islands)
         {
             _treasuries[island.Id] = new Treasury();

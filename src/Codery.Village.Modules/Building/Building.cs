@@ -73,14 +73,16 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
     /// <summary>
     /// Whether the blueprint fits there: every tile of its shape, turned <paramref name="rotation"/> sixths, lies
     /// on the island of the anchor, is a ground of its <c>on</c>, and is free of buildings, loose things and the
-    /// island's gathering tile.
+    /// island's gathering tile; for a blueprint that stands <c>near</c> a ground, one of them lies next to it.
     /// </summary>
     public bool CanPlace(string blueprint, Cell anchor, int rotation)
     {
         if (_village is null || !_blueprints.TryGetValue(blueprint, out var plan) || IslandAt(anchor) is not { } island) return false;
-        foreach (var cell in plan.Footprint.Cover(anchor, rotation))
-            if (IslandAt(cell) != island || !plan.On.Contains(_village.Map.At(cell)) || Taken(cell)) return false;
-        return true;
+        var map = _village.Map;
+        var cover = plan.Footprint.Cover(anchor, rotation).ToList();
+        foreach (var cell in cover)
+            if (IslandAt(cell) != island || !plan.On.Contains(map.At(cell)) || Taken(cell)) return false;
+        return plan.Near is not { } near || cover.Any(cell => cell.Neighbours().Any(next => map.At(next) == near && IslandAt(next) == island));
     }
 
     /// <summary>Starts a site there and gives its id; it begins on the next tick. Throws when it does not fit.</summary>
