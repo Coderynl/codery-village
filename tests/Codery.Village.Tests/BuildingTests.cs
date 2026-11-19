@@ -167,14 +167,17 @@ public class BuildingTests
     [Fact]
     public void No_builders_no_progress_and_nothing_stuck()
     {
-        // newcomers are couples of working age and come every day there is a free home
-        var data = Builders.Data(people: people =>
-        {
-            people["arrivalChance"] = 1;
-            people["arrivalDamping"] = 1e12;
-            people["households"] = Builders.Kind(2, 0);
-            people["adultAges"] = Builders.Band(30, 40);
-        });
+        // newcomers are couples of working age and come every day there is a free home; nobody helps in his free time,
+        // so without builders nobody builds, whatever the free time is spent on
+        var data = Builders.Data(
+            people: people =>
+            {
+                people["arrivalChance"] = 1;
+                people["arrivalDamping"] = 1e12;
+                people["households"] = Builders.Kind(2, 0);
+                people["adultAges"] = Builders.Band(30, 40);
+            },
+            day: day => day["helpFrom"] = 101);
         var village = Builders.Start(3, June(1, 9), data);
         village.Run(1);
         var west = village.PlaceNearHeart("hut", West);
