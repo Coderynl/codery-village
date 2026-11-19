@@ -22,7 +22,7 @@
   "fetchFoodFrom": "12:00",
   "nature": {
     "fertile": { "perBatch": 8, "regrowDays": 2 },
-    "fishing": { "perBatch": 5, "regrowDays": 1 },
+    "fishing": { "perBatch": 4, "regrowDays": 1 },
     "forest": { "perBatch": 15, "regrowDays": 3 },
     "rock": { "perBatch": 10, "regrowDays": 14 },
     "clay": { "perBatch": 10, "regrowDays": 21 }

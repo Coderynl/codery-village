@@ -241,8 +241,9 @@ public class WorkYouSeeTests
     [Fact]
     public void Households_fetch_on_the_way_home_not_at_night()
     {
-        // a fishing spot on Oost, whose fishers work the early shift
-        var village = Builders.Start(1, June(1, 9));
+        // a fishing spot on Oost, whose fishers work the early shift here, whatever the real catalog says
+        var village = Builders.Start(1, June(1, 9), Builders.Data(catalog: catalog =>
+            catalog["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "fishing-spot")!["jobs"]![0]!["shift"] = "early"));
         village.Run(1);
         var spot = village.PlaceNearHeart("fishing-spot", Oost);
         village.JumpTo(June(1, 10));
@@ -371,8 +372,8 @@ public class WorkYouSeeTests
         // the fishers are hired in the tick after it stands
         village.Run(1);
 
-        // the early shift, the next morning
-        village.JumpTo(June(2, 6));
+        // at work, the next weekday morning
+        village.JumpTo(June(2, 10, 45));
         var area = village.Work.WorkAreaOf(id);
         var fishers = WorkersOf(village, id);
         Assert.Equal(3, fishers.Count);

@@ -242,7 +242,7 @@ public class ScenarioTests(ITestOutputHelper output)
 
     // Risk: by day the hero is empty again, the work and the free time out of sight.
     [Fact]
-    public void By_day_more_than_six_are_outside_on_every_island()
+    public void By_day_two_in_five_are_outside_on_every_island()
     {
         var sections = new Sections();
         var counts = new ConcurrentBag<string>();
@@ -267,7 +267,8 @@ public class ScenarioTests(ITestOutputHelper output)
                                 village.Day.Of(resident.Id) is { Inside: false } doing && doing.Place != gathering);
                             var residents = village.People.On(island.Id).Count();
                             seen.Add($"{island.Name} {hour}:00 {outside}/{residents}");
-                            if (outside <= 6) few.Add($"{monday:MMMM} {hour}:00 {island.Name}: {outside} of {residents} outside");
+                            // two in five of the island, so a small island is held to its size
+                            if (outside < residents * 2 / 5) few.Add($"{monday:MMMM} {hour}:00 {island.Name}: {outside} of {residents} outside");
                         }
                     }
                     counts.Add($"{monday:MMM} seed {seed,2}: {string.Join(", ", seen)}");
