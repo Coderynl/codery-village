@@ -245,8 +245,6 @@ public class ScenarioTests(ITestOutputHelper output)
     public void By_day_more_than_six_are_outside_on_every_island()
     {
         var sections = new Sections();
-        // a Monday in June and one in November, at eight in the morning; day 3 is the Wednesday
-        DateTimeOffset[] mondays = [new(2026, 6, 1, 8, 0, 0, TimeSpan.FromHours(2)), new(2026, 11, 2, 8, 0, 0, TimeSpan.FromHours(1))];
         var counts = new ConcurrentBag<string>();
 
         try
@@ -254,16 +252,20 @@ public class ScenarioTests(ITestOutputHelper output)
             EverySeed(seed =>
             {
                 var few = new List<string>();
-                foreach (var monday in mondays)
+                foreach (var monday in Mondays)
                 {
                     var village = Scenario.Start(seed, sections, monday);
                     var seen = new List<string>();
-                    foreach (var hour in new[] { 11, 15 })
+                    foreach (var hour in Hours)
                     {
                         village.RunTo(new DateTimeOffset(monday.Year, monday.Month, monday.Day + 2, hour, 0, 0, monday.Offset));
                         foreach (var island in village.Ordinary)
                         {
-                            var (outside, residents) = (village.People.On(island.Id).Count(resident => !village.Day.Of(resident.Id).Inside), village.People.On(island.Id).Count());
+                            // who stands at the gathering place (the builders and children of old, by the fire) does not count
+                            var gathering = village.Building.GatheringOn(island.Id);
+                            var outside = village.People.On(island.Id).Count(resident =>
+                                village.Day.Of(resident.Id) is { Inside: false } doing && doing.Place != gathering);
+                            var residents = village.People.On(island.Id).Count();
                             seen.Add($"{island.Name} {hour}:00 {outside}/{residents}");
                             if (outside <= 6) few.Add($"{monday:MMMM} {hour}:00 {island.Name}: {outside} of {residents} outside");
                         }
@@ -279,6 +281,86 @@ public class ScenarioTests(ITestOutputHelper output)
             foreach (var line in counts.Order()) output.WriteLine(line);
         }
     }
+
+    // Risk: by day the village looks idle: nobody visibly works out on the land, at any of the hours the hero is shown.
+    [Fact]
+    public void By_day_people_work_out_on_the_land()
+    {
+        var sections = new Sections();
+        var counts = new ConcurrentBag<string>();
+
+        try
+        {
+            EverySeed(seed =>
+            {
+                var few = new List<string>();
+                foreach (var monday in Mondays)
+                {
+                    var village = Scenario.Start(seed, sections, monday);
+                    var seen = new List<string>();
+                    foreach (var hour in Hours)
+                    {
+                        village.RunTo(new DateTimeOffset(monday.Year, monday.Month, monday.Day + 2, hour, 0, 0, monday.Offset));
+                        foreach (var island in village.Ordinary)
+                        {
+                            var structures = village.Building.All.Where(structure => structure.Island == island.Id).ToList();
+                            var sites = structures.Where(structure => !structure.Done).SelectMany(structure => structure.Cells).ToHashSet();
+                            var land = structures.Where(structure => structure.Done).SelectMany(structure => village.Work.WorkAreaOf(structure.Id))
+                                .Where(cell => !sites.Contains(cell) && cell != village.Building.GatheringOn(island.Id)).ToHashSet();
+                            var working = village.People.On(island.Id).Count(resident =>
+                                village.Day.Of(resident.Id) is { Activity: Activity.Work, Inside: false } doing && land.Contains(doing.Place));
+                            seen.Add($"{island.Name} {hour}:00 {working}");
+                            if (working < 4) few.Add($"{monday:MMMM} {hour}:00 {island.Name}: {working} at work on the land");
+                        }
+                    }
+                    counts.Add($"{monday:MMM} seed {seed,2}: {string.Join(", ", seen)}");
+                }
+                Assert.True(few.Count == 0, string.Join("; ", few));
+            });
+        }
+        // the counts per seed, also when the measure fails, to tune by
+        finally
+        {
+            foreach (var line in counts.Order()) output.WriteLine(line);
+        }
+    }
+
+    // Risk: the berries grow back so fast that a picked patch never shows a bare bush.
+    [Fact]
+    public void A_picked_berry_patch_shows_bare_tiles()
+    {
+        var sections = new Sections();
+        var seats = sections["catalog"]["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "berry-patch")!["jobs"]!
+            .AsArray().Sum(job => (int)job!["count"]!);
+        var patches = new ConcurrentBag<(string Where, int Bare, int Gatherers)>();
+
+        EverySeed(seed =>
+        {
+            foreach (var monday in Mondays)
+            {
+                var village = Scenario.Start(seed, sections, monday);
+                village.RunTo(new DateTimeOffset(monday.Year, monday.Month, monday.Day + 2, 13, 0, 0, monday.Offset));
+                foreach (var patch in village.Building.All.Where(structure => structure is { Done: true, Blueprint: "berry-patch" }))
+                {
+                    var bare = village.Work.WorkAreaOf(patch.Id).Count(village.Work.Bare.Contains);
+                    var gatherers = village.People.All.Count(resident => village.Work.JobOf(resident.Id) is { Role: "gatherer" } job && job.Building == patch.Id);
+                    patches.Add(($"{monday:MMM} seed {seed,2} patch {patch.Id}", bare, gatherers));
+                }
+            }
+        });
+        foreach (var (where, bare, gatherers) in patches.OrderBy(patch => patch.Where)) output.WriteLine($"{where}: {bare} bare, {gatherers} gatherers");
+
+        // on day 3 at 13:00 a patch with all its gatherers shows at least two bare tiles, as a rule. Not always, and not
+        // with fewer gatherers: berries that grow back slower still would leave the bigger islands without food in weeks 3 and 4
+        var staffed = patches.Where(patch => patch.Gatherers >= seats).ToList();
+        Assert.NotEmpty(staffed);
+        Assert.True(staffed.Count(patch => patch.Bare >= 2) * 4 >= staffed.Count * 3,
+            $"{staffed.Count(patch => patch.Bare >= 2)} of {staffed.Count} patches with all their gatherers show two bare tiles");
+    }
+
+    // a Monday in June and one in November, at eight in the morning; day 3 is the Wednesday, sampled at these hours
+    private static readonly DateTimeOffset[] Mondays = [new(2026, 6, 1, 8, 0, 0, TimeSpan.FromHours(2)), new(2026, 11, 2, 8, 0, 0, TimeSpan.FromHours(1))];
+    private static readonly int[] Hours = [11, 13, 15];
 
     private static Cell Pick(Rng random, IReadOnlyList<Cell> cells) => cells[random.Next(cells.Count)];
 

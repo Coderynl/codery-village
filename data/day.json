@@ -97,7 +97,7 @@
         { "from": "08:30", "do": "home" },
         { "from": "10:00", "do": "free" },
         { "from": "12:30", "do": "home" },
-        { "from": "13:30", "do": "free" },
+        { "from": "13:00", "do": "free" },
         { "from": "17:30", "do": "home" },
         { "from": "19:00", "do": "out" }
       ]
@@ -128,8 +128,8 @@
         { "from": "00:00", "do": "sleep" },
         { "from": "07:30", "do": "home" },
         { "from": "09:00", "do": "free" },
-        { "from": "12:30", "do": "home" },
-        { "from": "13:30", "do": "free" },
+        { "from": "12:15", "do": "home" },
+        { "from": "12:45", "do": "free" },
         { "from": "17:30", "do": "home" },
         { "from": "19:00", "do": "out" },
         { "from": "22:00", "do": "home" },
@@ -139,8 +139,8 @@
         { "from": "00:00", "do": "sleep" },
         { "from": "08:30", "do": "home" },
         { "from": "10:00", "do": "free" },
-        { "from": "12:30", "do": "home" },
-        { "from": "13:30", "do": "free" },
+        { "from": "12:15", "do": "home" },
+        { "from": "12:45", "do": "free" },
         { "from": "17:30", "do": "home" },
         { "from": "19:00", "do": "out" }
       ]
@@ -150,7 +150,7 @@
         { "from": "08:00", "do": "home" },
         { "from": "09:30", "do": "free" },
         { "from": "12:00", "do": "home" },
-        { "from": "13:30", "do": "free" },
+        { "from": "12:45", "do": "free" },
         { "from": "17:00", "do": "home" },
         { "from": "19:00", "do": "out" },
         { "from": "21:00", "do": "home" },
