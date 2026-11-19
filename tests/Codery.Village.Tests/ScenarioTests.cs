@@ -106,6 +106,61 @@ public class ScenarioTests(ITestOutputHelper output)
             $"West had bread within {Days} days in {baked.Count} of {Seeds} seeds, fewer than {Baking}; none in seeds {string.Join(", ", without)}");
     }
 
+    // Risk: on the live ladder West does not get a vegetable garden and an orchard that bear in its first two weeks, or
+    // they wear its fertile land bare, so that the farm on the same soil no longer harvests. A West of fewer than twenty
+    // residents has no worker left to give them within two weeks, and day 13 and 14 are a weekend, so many seeds go without.
+    [Fact]
+    public void West_grows_vegetables_and_apples()
+    {
+        const int Days = 14;
+        const int Growing = 16;
+        string[] places = ["vegetable-garden", "orchard"];
+        string[] crops = ["vegetables", "apples"];
+        var sections = Sections.Of(VillageSetup.Live());
+        // per seed, the first day each place stood and each crop was in West's stock, and whether the farm harvested after both
+        var stood = new ConcurrentDictionary<(ulong Seed, string Place), int>();
+        var bore = new ConcurrentDictionary<(ulong Seed, string Crop), int>();
+        var harvested = new ConcurrentDictionary<ulong, int>();
+
+        try
+        {
+            EverySeed(seed =>
+            {
+                var scenario = Scenario.Start(seed, sections);
+                var west = scenario.Ordinary.Single(island => island.Name == "West").Id;
+                var (quarter, grain) = (0, 0);
+                scenario.Days(Days, each: village =>
+                {
+                    var day = (++quarter + 95) / 96;
+                    foreach (var place in places)
+                        if (village.Building.All.Any(structure => structure.Island == west && structure.Done && structure.Blueprint == place))
+                            stood.TryAdd((seed, place), day);
+                    foreach (var crop in crops)
+                        if (village.Work.Count(west, crop) > 0) bore.TryAdd((seed, crop), day);
+                    // the farm harvests: West's grain grows, after the garden and the orchard have both borne
+                    var now = village.Work.Count(west, "grain");
+                    if (now > grain && crops.All(crop => bore.ContainsKey((seed, crop)))) harvested.TryAdd(seed, day);
+                    grain = now;
+                });
+                Assert.Empty(scenario.Engine.Stopped);
+            });
+        }
+        finally
+        {
+            foreach (var place in places)
+                output.WriteLine($"{place} standing on West by day 7 in {stood.Count(item => item.Key.Place == place && item.Value <= 7)} of {Seeds} seeds, by day {Days} in {stood.Count(item => item.Key.Place == place)}");
+            foreach (var crop in crops)
+                output.WriteLine($"{crop} in West's stock by day 7 in {bore.Count(item => item.Key.Crop == crop && item.Value <= 7)} of {Seeds} seeds, by day {Days} in {bore.Count(item => item.Key.Crop == crop)}");
+            output.WriteLine($"the farm harvested after both bore in {harvested.Count} of {Seeds} seeds");
+        }
+        var grew = Enumerable.Range(1, Seeds).Select(seed => (ulong)seed)
+            .Where(seed => places.All(place => stood.ContainsKey((seed, place))) && harvested.ContainsKey(seed)).ToList();
+        var without = Enumerable.Range(1, Seeds).Select(seed => (ulong)seed).Except(grew);
+        Assert.True(grew.Count >= Growing,
+            $"West had a garden and an orchard that bore, and a farm that still harvested, within {Days} days in {grew.Count} of {Seeds} seeds, " +
+            $"fewer than {Growing}; not in seeds {string.Join(", ", without)}");
+    }
+
     [Fact]
     public void Everyone_saves()
     {

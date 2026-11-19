@@ -1,0 +1,17 @@
+{
+  "materials": [
+    { "id": "apples", "nl": "appels", "en": "apples", "satisfies": ["food"] }
+  ],
+  "blueprints": [
+    {
+      "id": "orchard", "nl": "boomgaard", "en": "orchard", "on": ["fertile"], "serves": "orchard",
+      "jobs": [{ "role": "gardener", "count": 2, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "apples": 2 }, "ticks": 480 },
+      "phases": [
+        { "id": "clearing", "nl": "open plek", "en": "clearing", "ticks": 200, "cost": {} },
+        { "id": "planting", "nl": "aanplant", "en": "planting", "ticks": 400, "cost": { "branches": 3 } }
+      ],
+      "look": { "form": "kit", "models": ["fruit_trees"] }
+    }
+  ]
+}

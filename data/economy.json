@@ -34,7 +34,7 @@
   },
   "prices": {
     "berries": 200, "roots": 200, "grapes": 200, "fish": 200, "firewood": 75, "driftwood": 75,
-    "bread": 300, "wood": 100, "peat": 100, "flour": 150
+    "bread": 300, "wood": 100, "peat": 100, "flour": 150, "vegetables": 200, "apples": 200
   },
   "fits": {
     "builder": ["crafts", "technology", "numbers"],
@@ -53,7 +53,8 @@
     "peat-cutter": ["nature", "history"],
     "brickmaker": ["crafts", "art"],
     "stoker": ["stars", "reading"],
-    "miller": ["technology", "numbers"]
+    "miller": ["technology", "numbers"],
+    "gardener": ["gardening", "nature", "cooking"]
   },
   "start": {
     "cash": 100000,

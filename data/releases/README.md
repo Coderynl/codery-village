@@ -21,8 +21,10 @@ Each release is named once in this list, with what it brings and the wish it ser
 11. `cafe.json` — café. Wish `cafe`.
 12. `grapes.json` — wild vines (grapes, picked on fertile soil). Wish `fruit`.
 13. `mill.json` — mill (flour from grain), between the farm and the bakery. Wish `flour`.
+14. `vegetable-garden.json` — vegetable garden (vegetables, grown on fertile soil by gardeners). Wish `vegetables`.
+15. `orchard.json` — orchard (apples, grown on fertile soil by the gardeners of `vegetable-garden.json`). Wish `orchard`.
 
-What an island can do with a release depends on its soil: Oost has no forest and no fertile soil, so no lumberyard, farm, mill, bakery or vines; West has no rock, clay or fishing ground.
+What an island can do with a release depends on its soil: Oost has no forest and no fertile soil, so no lumberyard, farm, mill, bakery, vines, vegetable garden or orchard; West has no rock, clay or fishing ground.
 
 The test `Every_release_serves_a_wish_and_loads` derives per release what it depends on, loads it on the base plus that, checks that it serves a wish, and checks that this list names every release once.
 
