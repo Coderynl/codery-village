@@ -20,7 +20,9 @@ public sealed record BuildingSettings(
     // a moved thing in someone's way goes back within so many minutes
     int PutBackMinutes = 5,
     // what a helper does at a site, as a share of a builder
-    double HelpShare = 0.5);
+    double HelpShare = 0.5,
+    // per island by name, the workplaces that stand finished on it in a fresh village, after the fireplace and before the huts
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? StartWorkplaces = null);
 
 /// <summary>How an island decides what to build.</summary>
 public sealed record CommunitySettings(

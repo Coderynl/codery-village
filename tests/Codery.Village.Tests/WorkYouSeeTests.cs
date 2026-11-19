@@ -31,7 +31,7 @@ public class WorkYouSeeTests
         // West has no branches but those of its brushwood, which makes a batch in 30 ticks
         var village = Builders.Start(1, June(1, 9), Builders.Data(
             economy: economy => economy["start"]!["stock"]!["West"]!.AsObject().Remove("branches"),
-            catalog: catalog => Blueprint(catalog, "brushwood")["recipe"]!["ticks"] = 30));
+            catalog: catalog => Blueprint(catalog, "brushwood")["recipe"]!["ticks"] = 30, startWorkplaces: false));
         village.Run(1);
         var brushwood = village.PlaceNearHeart("brushwood", West);
         village.JumpTo(June(1, 10));
@@ -99,7 +99,7 @@ public class WorkYouSeeTests
     [Fact]
     public void Gatherers_bring_their_batch_to_their_workplace()
     {
-        var data = Builders.Data(catalog: catalog => Blueprint(catalog, "berry-patch")["recipe"]!["ticks"] = 30);
+        var data = Builders.Data(catalog: catalog => Blueprint(catalog, "berry-patch")["recipe"]!["ticks"] = 30, startWorkplaces: false);
         var village = Builders.Start(1, June(1, 9), data);
         village.Run(1);
         var id = village.PlaceNearHeart("berry-patch", West);
@@ -155,7 +155,7 @@ public class WorkYouSeeTests
             var recipe = Blueprint(catalog, "berry-patch")["recipe"]!;
             recipe["ticks"] = 30;
             recipe["in"] = new JsonObject { ["reed"] = 1 };
-        });
+        }, startWorkplaces: false);
         var (village, id) = PatchFrom(June(1, 9), data);
         // the reed West starts with is where the island gathers: no workplace makes it
         var source = ((IStock)village.Work).SourceOf(West, "reed", village.Get(id).Anchor);
@@ -318,7 +318,7 @@ public class WorkYouSeeTests
     // a berry patch near the heart of West, standing, on Monday the first of June just after ten
     private static (Builders.Village Village, int Patch) BerryPatch(DataSet? data = null)
     {
-        var village = Builders.Start(1, June(1, 9), data);
+        var village = Builders.Start(1, June(1, 9), data ?? Builders.Data(startWorkplaces: false));
         village.Run(1);
         var id = village.PlaceNearHeart("berry-patch", West);
         village.JumpTo(June(1, 10));
@@ -361,7 +361,7 @@ public class WorkYouSeeTests
     public void A_fisher_works_on_the_shore()
     {
         var map = Builders.RealMap;
-        var village = Builders.Start(1, June(1, 9));
+        var village = Builders.Start(1, June(1, 9), Builders.Data(startWorkplaces: false));
         village.Run(1);
         var id = village.PlaceNearHeart("fishing-spot", Oost);
         village.JumpTo(June(1, 10));
@@ -392,7 +392,7 @@ public class WorkYouSeeTests
     public void A_worker_keeps_his_tile_for_a_while_and_is_paid_while_he_moves()
     {
         // slow walkers, so a walk from one tile to the next takes long enough to show in the wage
-        var (village, id) = BerryPatch(Builders.Data(day: day => day["ticksPerCell"] = 200));
+        var (village, id) = BerryPatch(Builders.Data(day: day => day["ticksPerCell"] = 200, startWorkplaces: false));
         var stay = (int)Economy("stayQuarters");
         var wage = (long)Economy("wagePerHour");
         const int Quarter = 15 * 60 * 4;
@@ -428,7 +428,7 @@ public class WorkYouSeeTests
     public void The_workplace_does_not_move_during_an_errand()
     {
         // a new tile every quarter, so the errand crosses a moment his workplace would move
-        var (village, id) = BerryPatch(Builders.Data(economy: economy => economy["stayQuarters"] = 1));
+        var (village, id) = BerryPatch(Builders.Data(economy: economy => economy["stayQuarters"] = 1, startWorkplaces: false));
         var boundary = June(1, 11);
         village.JumpTo(boundary.AddSeconds(-10));
         var gatherers = WorkersOf(village, id);
@@ -534,6 +534,7 @@ public class WorkYouSeeTests
     /// <summary>The real data with a berry patch that makes a batch in 30 ticks, and the economy changed as the test needs.</summary>
     internal static DataSet QuickBerries(Action<JsonObject>? economy = null) => Builders.Data(
         economy: economy,
+        startWorkplaces: false,
         catalog: catalog => catalog["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "berry-patch")!["recipe"]!["ticks"] = 30);
 
     /// <summary>A berry patch near the heart of West, placed at nine on <paramref name="nine"/> and standing an hour later.</summary>
@@ -624,7 +625,7 @@ public class WorkYouSeeTests
     public void One_tile_gone_bare_moves_only_its_worker()
     {
         // a stretch of a whole day, so the quarters that follow do not move anyone by themselves
-        var data = Builders.Data(economy: economy => economy["stayQuarters"] = 96);
+        var data = Builders.Data(economy: economy => economy["stayQuarters"] = 96, startWorkplaces: false);
         var (village, id) = BerryPatch(data);
         village.JumpTo(June(1, 10, 45));
         var gatherers = WorkersOf(village, id);
@@ -670,6 +671,30 @@ public class WorkYouSeeTests
         summer.JumpTo(June(3, 1));
         Assert.True(summer.Work.YieldOf(grown) >= Low, $"a yield of {summer.Work.YieldOf(grown)}");
         Assert.DoesNotContain(grown, summer.Work.Bare);
+    }
+
+    // Risk: gathering branches strips the forest on the page, as if the gatherers felled it.
+    [Fact]
+    public void A_gathered_forest_is_not_bare()
+    {
+        // the brushwood West starts with, making a batch in 30 ticks
+        var data = Builders.Data(catalog: catalog => Blueprint(catalog, "brushwood")["recipe"]!["ticks"] = 30);
+        var village = Builders.Start(1, June(1, 10, 45), data);
+        village.Run(1);
+        var brushwood = village.Building.All.Single(structure => structure.Island == West && structure.Blueprint == "brushwood").Id;
+
+        var gathered = WorkUntilBare(village, brushwood);
+        Assert.Equal(Ground.Forest, Builders.RealMap.At(gathered));
+        Assert.DoesNotContain(gathered, village.Work.Bare);
+
+        // a felled tree is bare
+        var tree = village.Work.WorkAreaOf(brushwood).First(cell => cell != gathered);
+        var saved = SaveJson.FromJson(SaveJson.ToJson(village.Engine.Save()));
+        saved.Modules.Single(part => part.Name == "work").Data["felled"]!.AsArray()
+            .Add(new JsonObject { ["cell"] = JsonSerializer.SerializeToNode(tree, SaveJson.Options), ["until"] = saved.Tick + 100_000 });
+        var felled = Builders.Load(saved, data);
+        Assert.Contains(tree, felled.Work.Bare);
+        Assert.DoesNotContain(gathered, felled.Work.Bare);
     }
 
     private static Action<JsonObject> Paths(int window, int threshold, int keep, double speed) => day =>
@@ -849,7 +874,8 @@ public class WorkYouSeeTests
             {
                 day["helpFrom"] = helpFrom;
                 day["free"] = new JsonArray(new JsonObject { ["do"] = "leisure", ["weight"] = 1 });
-            }));
+            },
+            startWorkplaces: false));
 
         int Finish(Builders.Village village, out List<int> helpers, out int fullCrewTicks)
         {

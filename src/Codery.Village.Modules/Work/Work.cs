@@ -106,8 +106,12 @@ public sealed class Work : IModule, IJobs, IStock
     /// <summary>What a tile has left to give, from 100 (full) to 0; a tile nobody worked is full.</summary>
     public int YieldOf(Cell cell) => _nature.YieldOf(cell);
 
-    /// <summary>The tiles that are bare now: worked below 20, and the felled forest.</summary>
-    public IReadOnlyCollection<Cell> Bare => _nature.Bare.Concat(_felled.Keys).ToHashSet();
+    /// <summary>
+    /// The tiles that are bare now: worked below 20, and the felled forest. Forest gathered low keeps its trees: only
+    /// felling makes it bare.
+    /// </summary>
+    public IReadOnlyCollection<Cell> Bare =>
+        _nature.Bare.Where(cell => _village?.Map.At(cell) != Ground.Forest).Concat(_felled.Keys).ToHashSet();
 
     /// <summary>Forest on the map that is not felled now.</summary>
     public bool IsForest(Cell cell) => _village is { } village && village.Map.At(cell) == Ground.Forest && !_felled.ContainsKey(cell);

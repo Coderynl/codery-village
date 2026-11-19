@@ -50,12 +50,18 @@ public class FeedTests(ITestOutputHelper output)
     private static DataSet WithDay(Action<JsonObject> change) => With("day", change);
 
     /// <summary>The real data with one section changed as the test needs.</summary>
-    private static DataSet With(string name, Action<JsonObject> change)
+    private static DataSet With(string name, Action<JsonObject> change, Action<JsonObject>? building = null)
     {
         var sections = Directory.GetFiles(VillageSetup.Folder, "*.json").ToDictionary(file => Path.GetFileNameWithoutExtension(file), File.ReadAllText);
         var section = JsonNode.Parse(sections[name])!.AsObject();
         change(section);
         sections[name] = section.ToJsonString();
+        if (building is not null)
+        {
+            var plan = JsonNode.Parse(sections["building"])!.AsObject();
+            building(plan);
+            sections["building"] = plan.ToJsonString();
+        }
         return DataSet.FromTexts(sections, []);
     }
 
@@ -231,7 +237,8 @@ public class FeedTests(ITestOutputHelper output)
     public void Bare_tiles_reach_the_page()
     {
         // a berry patch that makes a batch in 30 ticks works its tiles bare within the hour
-        var data = With("catalog", catalog => catalog["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "berry-patch")!["recipe"]!["ticks"] = 30);
+        var data = With("catalog", catalog => catalog["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "berry-patch")!["recipe"]!["ticks"] = 30,
+            building => building.Remove("startWorkplaces"));
         var village = Start(Builders.June(1, 9), data: data);
         village.Run(1);
         var building = village.Module<BuildingModule>();

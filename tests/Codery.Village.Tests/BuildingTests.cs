@@ -27,10 +27,14 @@ internal static class Builders
     /// <summary>A Dutch summer time on a day of June 2026; the first of June is a Monday.</summary>
     public static DateTimeOffset June(int day, int hour, int minute = 0) => new(2026, 6, day, hour, minute, 0, TimeSpan.FromHours(2));
 
-    /// <summary>The real data, changed as the test needs.</summary>
+    /// <summary>
+    /// The real data, changed as the test needs; without <paramref name="startWorkplaces"/> the islands start with
+    /// only their fireplace and huts, for a test that places its own workplaces.
+    /// </summary>
     public static DataSet Data(Action<JsonObject>? building = null, Action<JsonObject>? economy = null,
         Action<JsonObject>? people = null, Action<JsonObject>? catalog = null, IEnumerable<string>? extras = null,
-        Action<JsonObject>? wishes = null, Action<JsonObject>? life = null, Action<JsonObject>? day = null)
+        Action<JsonObject>? wishes = null, Action<JsonObject>? life = null, Action<JsonObject>? day = null,
+        bool startWorkplaces = true)
     {
         JsonObject Read(string name) => JsonNode.Parse(File.ReadAllText(Path.Combine(Folder, name + ".json")))!.AsObject();
         var sections = new Dictionary<string, JsonObject>
@@ -43,6 +47,7 @@ internal static class Builders
             ["building"] = Read("building"),
             ["wishes"] = Read("wishes"),
         };
+        if (!startWorkplaces) sections["building"].Remove("startWorkplaces");
         building?.Invoke(sections["building"]);
         day?.Invoke(sections["day"]);
         wishes?.Invoke(sections["wishes"]);
@@ -316,7 +321,8 @@ public class BuildingTests
         }
         // finished from the start, not sites; the dwelling the island can pay for, and a campfire
         Assert.All(village.Building.All, structure => Assert.True(structure.Done));
-        var huts = village.Building.All.Where(structure => structure.Island != Islet && structure.Blueprint != "campfire").ToList();
+        var huts = village.Building.All.Where(structure => structure.Island != Islet
+            && structure.Blueprint is not ("campfire" or "berry-patch" or "brushwood" or "fishing-spot" or "driftwood-beach")).ToList();
         Assert.All(huts.Where(structure => structure.Island == West), hut => Assert.Equal("hut", hut.Blueprint));
         Assert.All(huts.Where(structure => structure.Island == Oost), hut => Assert.Equal("stone-hut", hut.Blueprint));
         Assert.All(huts, hut => Assert.Equal(Ground.Lot, Builders.RealMap.At(hut.Anchor)));
@@ -338,6 +344,49 @@ public class BuildingTests
         }
         // someone keeps the fire at night
         Assert.Contains(village.People.All, resident => village.Work.JobOf(resident.Id) is { Role: "fire-keeper", Shift: Shift.Night });
+    }
+
+    // Risk: a fresh village has no work out on the land until a stock runs low, so nobody is seen working outside.
+    [Fact]
+    public void Every_island_starts_with_its_outdoor_workplaces()
+    {
+        var village = Builders.Start(5, June(1, 9));
+        village.Run(1);
+
+        var catalog = JsonNode.Parse(File.ReadAllText(Path.Combine(Builders.Folder, "catalog.json")))!["blueprints"]!.AsArray();
+        int Jobs(string blueprint) => catalog.Single(plan => (string)plan!["id"]! == blueprint)!["jobs"]!.AsArray().Sum(job => (int)job!["count"]!);
+        foreach (var (island, blueprints) in new[] { (West, new[] { "berry-patch", "brushwood" }), (Oost, new[] { "fishing-spot", "driftwood-beach" }) })
+        {
+            // an island has fewer hands than seats: a seat stays open only when nobody on it is left without a job
+            var jobless = village.People.All.Count(resident => resident is { Phase: LifePhase.Working, IsEddie: false } && resident.Island == island
+                && village.Work.JobOf(resident.Id) is null);
+            var workers = 0;
+            foreach (var blueprint in blueprints)
+            {
+                var workplace = Assert.Single(village.Building.All, structure => structure.Island == island && structure.Blueprint == blueprint);
+                Assert.True(workplace.Done, blueprint);
+                var held = village.People.All.Count(resident => village.Work.JobOf(resident.Id) is { } job && job.Building == workplace.Id);
+                Assert.True(held == Jobs(blueprint) || jobless == 0, $"{blueprint}: {held} of {Jobs(blueprint)} jobs held while {jobless} have none");
+                workers += held;
+            }
+            Assert.True(workers > 0);
+        }
+        // the heat the islands start with lies where it is made
+        Assert.True(village.Work.StockAt(village.Building.All.Single(structure => structure.Blueprint == "brushwood").Id).GetValueOrDefault("firewood") > 0);
+        Assert.True(village.Work.StockAt(village.Building.All.Single(structure => structure.Blueprint == "driftwood-beach").Id).GetValueOrDefault("driftwood") > 0);
+        Assert.Empty(village.Engine.Stopped);
+    }
+
+    // Risk: a typo in the data starts a village without its workplaces, and nobody notices.
+    [Fact]
+    public void A_start_workplace_that_is_not_a_blueprint_is_refused()
+    {
+        var village = Builders.Start(5, June(1, 9), Builders.Data(building: building =>
+            building["startWorkplaces"]!["West"]!.AsArray().Add("windmill")));
+
+        var (module, error) = Assert.Single(village.Engine.Stopped);
+        Assert.Equal("building", module);
+        Assert.Contains("windmill", error);
     }
 
     [Fact]

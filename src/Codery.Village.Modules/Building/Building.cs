@@ -22,9 +22,9 @@ namespace Codery.Village.Modules.Building;
 /// is taken in one go. The builders at the site then fetch it from the store where the island gathers, and once
 /// one is back with it the phase goes on while builders are at the site, each builder a crew-th of a tick per tick
 /// and each helper (a resident who spends his free time there) a share of a builder, up to a full crew.
-/// A site that stands still says why, once per reason. Each ordinary island starts with its fireplace and a hut
-/// per household, Eddie with his house and workshop; all finished. Building gives the homes, as People moves households in and
-/// out of them, the places of the day, and the buildings Work staffs. It also keeps the loose things a visitor
+/// A site that stands still says why, once per reason. Each ordinary island starts with its fireplace, its start
+/// workplaces and a hut per household, Eddie with his house and workshop; all finished. Building gives the homes,
+/// as People moves households in and out of them, the places of the day, and the buildings Work staffs. It also keeps the loose things a visitor
 /// can move: a few at the start, and one by every house that is finished.
 /// </summary>
 public sealed class Building : IModule, IHousing, IPlaces, IStructures
@@ -276,6 +276,9 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
             }
             if (_settings.Fireplace is { } fireplace && FindPlace(fireplace, island.Id) is { } hearth)
                 Finish(Add(fireplace, hearth.Anchor, hearth.Rotation));
+            if (_settings.StartWorkplaces?.GetValueOrDefault(island.Name) is { } workplaces)
+                foreach (var workplace in workplaces)
+                    if (FindPlace(workplace, island.Id) is { } place) Finish(Add(workplace, place.Anchor, place.Rotation));
             var households = people?.On(island.Id).Where(resident => resident.Household is not null).Select(resident => resident.Household).Distinct().Count() ?? 0;
             if (StartDwelling(island.Id, stock) is { } dwelling)
                 for (var hut = 0; hut < Math.Min(households, _settings.MaxStartHuts); hut++)
@@ -548,6 +551,8 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
             throw new InvalidDataException($"The data section '{Section}' gives Eddie the unknown blueprint '{blueprint}'.");
         if (_settings.Fireplace is { } fireplace && !_blueprints.ContainsKey(fireplace))
             throw new InvalidDataException($"The data section '{Section}' has the unknown fireplace '{fireplace}'.");
+        foreach (var workplace in (_settings.StartWorkplaces ?? new Dictionary<string, IReadOnlyList<string>>()).Values.SelectMany(names => names).Where(name => !_blueprints.ContainsKey(name)))
+            throw new InvalidDataException($"The data section '{Section}' has the unknown start workplace '{workplace}'.");
         var missing = LogKinds.Where(kind => !_settings.Log.ContainsKey(kind)).ToList();
         if (missing.Count > 0)
             throw new InvalidDataException($"The data section '{Section}' has no log sentence for {string.Join(", ", missing)}.");

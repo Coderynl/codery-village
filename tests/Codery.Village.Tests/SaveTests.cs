@@ -347,6 +347,23 @@ public class SaveTests
         }
     }
 
+    // Risk: loading a running village adds a second set of workplaces, or moves what stands.
+    [Fact]
+    public void A_save_without_start_workplaces_loads_as_it_was()
+    {
+        var village = Builders.Start(2, Builders.June(1, 9), Builders.Data(startWorkplaces: false));
+        village.Run(1);
+        static IEnumerable<string> Standing(Builders.Village village) =>
+            village.Building.All.Select(structure => $"{structure.Id} {structure.Blueprint} {structure.Anchor} {structure.Done}");
+        Assert.DoesNotContain(village.Building.All, structure => structure.Blueprint is "berry-patch" or "brushwood" or "fishing-spot" or "driftwood-beach");
+
+        var loaded = Builders.Load(Written(village.Engine.Save()), Builders.Data());
+        loaded.Run(100);
+
+        Assert.Equal(Standing(village), Standing(loaded));
+        Assert.Empty(loaded.Engine.Stopped);
+    }
+
     [Fact]
     public void Bare_tiles_survive_a_save_and_an_older_save_has_none()
     {
@@ -376,7 +393,7 @@ public class SaveTests
     public void A_village_with_one_shared_stock_loads_with_stores()
     {
         // a village saved as before there were stores: a berry patch stands on West, and every island keeps one stock
-        var data = Builders.Data();
+        var data = Builders.Data(startWorkplaces: false);
         var (village, patch) = WorkYouSeeTests.PatchFrom(Builders.June(1, 9), data);
         var counts = Builders.RealMap.Islands.ToDictionary(island => island.Id, island => village.Work.Stock(island.Id).ToDictionary());
         Assert.True(counts[Builders.West]["berries"] > 0);
