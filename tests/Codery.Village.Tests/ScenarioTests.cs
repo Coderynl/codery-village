@@ -220,6 +220,46 @@ public class ScenarioTests(ITestOutputHelper output)
         });
     }
 
+    // Risk: by day the hero is empty again, the work and the free time out of sight.
+    [Fact]
+    public void By_day_more_than_six_are_outside_on_every_island()
+    {
+        var sections = new Sections();
+        // a Monday in June and one in November, at eight in the morning; day 3 is the Wednesday
+        DateTimeOffset[] mondays = [new(2026, 6, 1, 8, 0, 0, TimeSpan.FromHours(2)), new(2026, 11, 2, 8, 0, 0, TimeSpan.FromHours(1))];
+        var counts = new ConcurrentBag<string>();
+
+        try
+        {
+            EverySeed(seed =>
+            {
+                var few = new List<string>();
+                foreach (var monday in mondays)
+                {
+                    var village = Scenario.Start(seed, sections, monday);
+                    var seen = new List<string>();
+                    foreach (var hour in new[] { 11, 15 })
+                    {
+                        village.RunTo(new DateTimeOffset(monday.Year, monday.Month, monday.Day + 2, hour, 0, 0, monday.Offset));
+                        foreach (var island in village.Ordinary)
+                        {
+                            var (outside, residents) = (village.People.On(island.Id).Count(resident => !village.Day.Of(resident.Id).Inside), village.People.On(island.Id).Count());
+                            seen.Add($"{island.Name} {hour}:00 {outside}/{residents}");
+                            if (outside <= 6) few.Add($"{monday:MMMM} {hour}:00 {island.Name}: {outside} of {residents} outside");
+                        }
+                    }
+                    counts.Add($"{monday:MMM} seed {seed,2}: {string.Join(", ", seen)}");
+                }
+                Assert.True(few.Count == 0, string.Join("; ", few));
+            });
+        }
+        // the counts per seed, also when the measure fails, to tune by
+        finally
+        {
+            foreach (var line in counts.Order()) output.WriteLine(line);
+        }
+    }
+
     private static Cell Pick(Rng random, IReadOnlyList<Cell> cells) => cells[random.Next(cells.Count)];
 
     /// <summary>Runs the check for every seed at once, and names the seeds it failed for.</summary>
@@ -366,17 +406,18 @@ internal sealed class Scenario
     public WorkModule Work => Modules.OfType<WorkModule>().Single();
     public BuildingModule Building => Modules.OfType<BuildingModule>().Single();
     public HappinessModule Happiness => Modules.OfType<HappinessModule>().Single();
+    public DayModule Day => Modules.OfType<DayModule>().Single();
     public IReadOnlyCollection<ResidentLeft> Left => Modules.OfType<Leavers>().Single().Left;
     public IEnumerable<Island> Ordinary => Map.Islands.Where(island => !island.Eddie);
     /// <summary>The calendar, in Dutch summer time: for messages.</summary>
     public DateTimeOffset Now => Time.GetUtcNow().ToOffset(TimeSpan.FromHours(2));
 
-    /// <summary>A new village on a Monday morning in June, with its first quarter run.</summary>
-    public static Scenario Start(ulong seed, Sections sections)
+    /// <summary>A new village, by default on a Monday morning in June, with its first quarter run.</summary>
+    public static Scenario Start(ulong seed, Sections sections, DateTimeOffset? at = null)
     {
         var map = sections.Island();
         var data = sections.Quick(Speed);
-        var time = new SimulatedTime(VillageSetup.ExportStart);
+        var time = new SimulatedTime(at ?? VillageSetup.ExportStart);
         IModule[] modules = [.. VillageSetup.Modules(), new Settler(), new Leavers()];
         var engine = new Engine(modules, data, map, seed, time);
         engine.Start();
@@ -409,6 +450,12 @@ internal sealed class Scenario
             NextQuarter();
             each?.Invoke(this);
         }
+    }
+
+    /// <summary>Runs quarter by quarter until the calendar stands at <paramref name="at"/>.</summary>
+    public void RunTo(DateTimeOffset at)
+    {
+        while (Time.GetUtcNow() < at) NextQuarter();
     }
 
     public int Median(int island)

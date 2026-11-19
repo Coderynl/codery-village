@@ -20,7 +20,7 @@
     { "to": "neighbour", "weight": 2 },
     { "to": "water", "weight": 1 }
   ],
-  "outdoorByMonth": [0.5, 0.6, 0.75, 0.9, 1.05, 1.15, 1.2, 1.15, 1.0, 0.8, 0.6, 0.5],
+  "outdoorByMonth": [0.5, 0.6, 0.75, 0.9, 1.05, 1.15, 1.2, 1.15, 1.0, 0.8, 0.8, 0.5],
   "helpFrom": 70,
   "helpPhases": ["student", "working", "retired"],
   "pathWindowDays": 3,
@@ -29,7 +29,7 @@
   "pathSpeed": 1.5,
   "evening": { "chance": 0.35, "perExtraversion": 0.4, "visit": 0.4 },
   "free": [
-    { "do": "leisure", "weight": 3 },
+    { "do": "leisure", "weight": 4 },
     { "do": "wander", "weight": 2 },
     { "do": "shop", "weight": 1 },
     { "do": "visit", "weight": 1 },
