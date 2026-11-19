@@ -22,7 +22,7 @@
   "fetchFoodFrom": "12:00",
   "nature": {
     "fertile": { "perBatch": 10, "regrowDays": 1 },
-    "fishing": { "perBatch": 10, "regrowDays": 1 },
+    "fishing": { "perBatch": 5, "regrowDays": 1 },
     "forest": { "perBatch": 15, "regrowDays": 3 },
     "rock": { "perBatch": 10, "regrowDays": 14 },
     "clay": { "perBatch": 10, "regrowDays": 21 }
@@ -56,7 +56,7 @@
   "start": {
     "cash": 100000,
     "stock": {
-      "West": { "branches": 40, "firewood": 100, "reed": 20, "berries": 60 },
+      "West": { "branches": 40, "firewood": 60, "reed": 20, "berries": 60 },
       "Oost": { "stones": 30, "loam": 20, "reed": 20, "fish": 60, "driftwood": 60 }
     }
   }

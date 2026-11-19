@@ -383,11 +383,12 @@ public class WorkTests
         var village = Start(1, June(1, 10), data);
         var working = village.People.On(West).Count(resident => resident is { Phase: LifePhase.Working, IsEddie: false });
 
-        // two places per bakery: one or two stay free in the last one
+        // two places per bakery: one or two stay free, in the last ones
         var bakeries = (working + 2) / 2;
         for (var i = 0; i < bakeries; i++) village.Structures.Standing.Add(Built(100 + i, "bakery", West, 4, 13));
         village.Run(5);
-        var last = 100 + bakeries - 1;
+        var open = Enumerable.Range(100, bakeries).Where(bakery => village.People.All.Count(resident => village.Work.JobOf(resident.Id)?.Building == bakery) < 2).ToList();
+        Assert.NotEmpty(open);
         Assert.Equal(working, village.People.All.Count(resident => village.Work.JobOf(resident.Id) is not null));
 
         // a bakery comes later; it is first in the list, but its places are newer
@@ -398,38 +399,27 @@ public class WorkTests
         village.Structures.Standing.RemoveAll(structure => structure.Id == 100);
         village.Run(1);
 
-        Assert.Equal(last, village.Work.JobOf(released[0].Id)?.Building);
+        Assert.Contains(village.Work.JobOf(released[0].Id)!.Building, open);
     }
 
     [Fact]
     public void Builders_work_at_a_site_on_their_island()
     {
         var data = Data(economy: e => e["builders"] = 2);
-        foreach (var places in new[] { false, true })
-        {
-            var village = places ? Start(1, June(1, 10), data, null, new FakePlaces()) : Start(1, June(1, 10), data);
-            var builders = village.InRole("builder").ToList();
-            Assert.Equal(2, builders.Count(resident => resident.Island == West));
-            Assert.Equal(2, builders.Count(resident => resident.Island == Oost));
+        var village = Start(1, June(1, 10), data);
+        // without a site and with no workplace to help at, a builder has no job this quarter, but keeps his seat
+        Assert.Empty(village.InRole("builder"));
 
-            // without a site they wait where the island gathers
-            foreach (var builder in builders)
-            {
-                var job = village.Work.JobOf(builder.Id)!;
-                Assert.Equal(builder.Island, RealMap.IslandOf(job.Place));
-                if (places) Assert.Equal(FakePlaces.Lots(RealMap, builder.Island)[1], job.Place);
-                Assert.True(job.Outdoor);
-                Assert.Equal(Shift.Day, job.Shift);
-            }
-
-            // with sites, on their own island, spread over them
-            village.Structures.Sites.AddRange([Built(7, "house", West, 3, 8), Built(8, "stone-house", Oost, 3, 27), Built(9, "house", West, 4, 9)]);
-            village.Run(1);
-            var west = builders.Where(resident => resident.Island == West).Select(resident => village.Work.JobOf(resident.Id)!).ToList();
-            Assert.Equal([7, 9], west.Select(job => job.Building).Order());
-            Assert.Equal([new Cell(3, 8), new Cell(4, 9)], west.OrderBy(job => job.Building).Select(job => job.Place));
-            Assert.All(builders.Where(resident => resident.Island == Oost), resident => Assert.Equal(new JobPlace(8, new Cell(3, 27), "builder", Shift.Day, true), village.Work.JobOf(resident.Id)));
-        }
+        // with sites, on their own island, spread over them
+        village.Structures.Sites.AddRange([Built(7, "house", West, 3, 8), Built(8, "stone-house", Oost, 3, 27), Built(9, "house", West, 4, 9)]);
+        village.Run(1);
+        var builders = village.InRole("builder").ToList();
+        Assert.Equal(2, builders.Count(resident => resident.Island == West));
+        Assert.Equal(2, builders.Count(resident => resident.Island == Oost));
+        var west = builders.Where(resident => resident.Island == West).Select(resident => village.Work.JobOf(resident.Id)!).ToList();
+        Assert.Equal([7, 9], west.Select(job => job.Building).Order());
+        Assert.Equal([new Cell(3, 8), new Cell(4, 9)], west.OrderBy(job => job.Building).Select(job => job.Place));
+        Assert.All(builders.Where(resident => resident.Island == Oost), resident => Assert.Equal(new JobPlace(8, new Cell(3, 27), "builder", Shift.Day, true), village.Work.JobOf(resident.Id)));
     }
 
     [Fact]

@@ -45,7 +45,11 @@ public class LifeTests
                 checkedOnes++;
                 if (doing.Activity != Activity.Work) continue;
                 var job = village.Work.JobOf(resident.Id);
-                Assert.True(job is not null && job.Place == doing.Place,
+                // a builder helping on the land may stand on another tile of the area, until the quarter after a
+                // gatherer took his
+                var helping = job is { Building: < 0, Role: "builder" } && village.Building.All.Any(structure => structure.Island == resident.Island
+                    && village.Work.WorkAreaOf(structure.Id).Contains(doing.Place));
+                Assert.True(job is not null && (job.Place == doing.Place || helping),
                     $"{village.Time.GetUtcNow().ToOffset(TimeSpan.FromHours(2)):HH:mm} {resident.Name} works at {doing.Place}, his job is at {job?.Place.ToString() ?? "nowhere"}");
             }
         }

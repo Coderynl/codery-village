@@ -697,6 +697,166 @@ public class WorkYouSeeTests
         Assert.DoesNotContain(gathered, felled.Work.Bare);
     }
 
+    // ── builders without a site ──
+
+    private static List<int> BuildersOn(Builders.Village village, int island) =>
+        [.. village.People.All.Where(resident => resident.Island == island && village.Work.JobOf(resident.Id) is { Role: "builder" }).Select(resident => resident.Id)];
+
+    private static List<int> StartWorkplaces(Builders.Village village, int island) =>
+        [.. village.Building.All.Where(structure => structure.Island == island && structure.Done
+            && structure.Blueprint is "berry-patch" or "brushwood" or "fishing-spot" or "driftwood-beach").Select(structure => structure.Id)];
+
+    // Risk: with nothing to build, the builders stand at the fire all day instead of working on the land.
+    [Fact]
+    public void A_builder_without_a_site_helps_on_the_land()
+    {
+        var village = Builders.Start(1, June(1, 9));
+        village.Run(1);
+        Assert.DoesNotContain(village.Building.All, structure => structure.Island == West && !structure.Done);
+        village.JumpTo(June(1, 10, 45));
+
+        var workplaces = StartWorkplaces(village, West);
+        var area = workplaces.SelectMany(village.Work.WorkAreaOf).ToHashSet();
+        var held = workplaces.SelectMany(id => WorkersOf(village, id)).Select(worker => village.Work.JobOf(worker)!.Place).ToHashSet();
+        var builders = BuildersOn(village, West);
+        Assert.Equal(3, builders.Count);
+        var money = builders.ToDictionary(builder => builder, builder => village.People.Get(builder).Money);
+
+        // each at work, standing on a tile of a work area of his own: not the fire, not a gatherer's tile
+        Assert.All(builders, builder =>
+        {
+            var doing = village.Day.Of(builder);
+            Assert.Equal((Activity.Work, (Walk?)null), (doing.Activity, doing.Walk));
+            Assert.Contains(doing.Place, area);
+            Assert.NotEqual(Store(village, West), doing.Place);
+            Assert.DoesNotContain(doing.Place, held);
+        });
+        Assert.Equal(builders.Count, builders.Select(builder => village.Day.Of(builder).Place).Distinct().Count());
+
+        // and paid for it, as at a site
+        village.Run(15 * 60 * 4);
+        Assert.All(builders, builder => Assert.True(village.People.Get(builder).Money > money[builder], "a helper was not paid"));
+    }
+
+    // Risk: helping builders speed up a workplace or wear out its ground, so the economy shifts with every idle builder.
+    [Fact]
+    public void Helping_adds_nothing_to_production()
+    {
+        // berries in batches of 30 ticks, so a morning wears the patch's ground; without paths, so the helpers' walks
+        // do not speed up the gatherers'
+        (int Made, List<int> Yields, int Helped) Morning(string builderShift)
+        {
+            var village = Builders.Start(1, June(1, 9), Builders.Data(
+                economy: economy => economy["builderShift"] = builderShift,
+                day: day => day["pathThreshold"] = 1_000_000,
+                catalog: catalog => Blueprint(catalog, "berry-patch")["recipe"]!["ticks"] = 30));
+            village.Run(1);
+            village.JumpTo(June(1, 10, 45));
+            var patch = village.Building.All.Single(structure => structure.Island == West && structure.Blueprint == "berry-patch").Id;
+            var area = village.Work.WorkAreaOf(patch);
+            var builders = BuildersOn(village, West);
+            var made = village.Heard<Produced>().Count(e => e.Island == West && e.Material == "berries");
+            var helped = 0;
+            for (var tick = 0; tick < 2 * 60 * 60 * 4; tick++)
+            {
+                village.Run(1);
+                helped += builders.Count(builder => village.Day.Of(builder) is { Activity: Activity.Work, Walk: null } doing && area.Contains(doing.Place));
+            }
+            return (village.Heard<Produced>().Count(e => e.Island == West && e.Material == "berries") - made, [.. area.Select(village.Work.YieldOf)], helped);
+        }
+
+        // the builders help by day; on the night shift they sleep while the patch is worked
+        var helped = Morning("day");
+        var alone = Morning("night");
+        Assert.True(helped.Helped > 0, "nobody helped at the patch");
+        Assert.Equal(0, alone.Helped);
+        Assert.True(alone.Made > 0);
+        Assert.Equal(alone.Made, helped.Made);
+        Assert.Equal(alone.Yields, helped.Yields);
+    }
+
+    // Risk: a builder with nothing to do waits at the fire, paid, or loses his place for good.
+    [Fact]
+    public void A_builder_with_nothing_to_help_has_free_time()
+    {
+        // free time by day never goes to the fire or the shop here, so who stands there was sent there
+        var data = Builders.Data(day: day =>
+        {
+            day["outings"] = new JsonArray(
+                new JsonObject { ["to"] = "water", ["weight"] = 3 },
+                new JsonObject { ["to"] = "tree", ["weight"] = 2 },
+                new JsonObject { ["to"] = "neighbour", ["weight"] = 2 });
+            day["free"]!.AsArray().Remove(day["free"]!.AsArray().Single(choice => (string)choice!["do"]! == "shop"));
+        });
+        var start = Builders.Start(1, June(1, 9), data);
+        start.Run(1);
+        start.JumpTo(June(1, 10, 30));
+        var builders = BuildersOn(start, West);
+        Assert.Equal(3, builders.Count);
+
+        // every tile of West's workplaces worked bare, as a save holds it
+        var saved = SaveJson.FromJson(SaveJson.ToJson(start.Engine.Save()));
+        var tiles = saved.Modules.Single(part => part.Name == "work").Data["nature"]!["tiles"]!.AsArray();
+        var area = StartWorkplaces(start, West).SelectMany(start.Work.WorkAreaOf).Distinct().ToList();
+        foreach (var cell in area) tiles.Add(JsonSerializer.SerializeToNode(new NatureTile(cell, 0, Builders.RealMap.At(cell), 0), SaveJson.Options));
+        var village = Builders.Load(saved, data);
+        Assert.All(area, cell => Assert.True(village.Work.YieldOf(cell) < Low));
+
+        // the next quarter they have free time: not at work, not at the fire, and not paid
+        village.JumpTo(June(1, 10, 45));
+        var money = builders.ToDictionary(builder => builder, builder => village.People.Get(builder).Money);
+        for (var minute = 0; minute < 15; minute++)
+        {
+            Assert.All(builders, builder =>
+            {
+                var doing = village.Day.Of(builder);
+                Assert.NotEqual(Activity.Work, doing.Activity);
+                Assert.NotEqual(Store(village, West), doing.Place);
+            });
+            village.Run(60 * 4);
+        }
+        Assert.All(builders, builder => Assert.Equal(money[builder], village.People.Get(builder).Money));
+
+        // once the land has grown back they are builders at work again, from the quarter after it grew
+        village.JumpTo(June(2, 10, 30));
+        village.JumpTo(June(2, 10, 45));
+        Assert.All(builders, builder =>
+        {
+            Assert.Equal("builder", village.Work.JobOf(builder)?.Role);
+            Assert.Equal(Activity.Work, village.Day.Of(builder).Activity);
+        });
+    }
+
+    // Risk: hiring fills the first workplace of an island and leaves the next without anyone for days.
+    [Fact]
+    public void Hiring_spreads_over_the_workplaces()
+    {
+        var catalog = JsonNode.Parse(File.ReadAllText(Path.Combine(Builders.Folder, "catalog.json")))!["blueprints"]!.AsArray();
+        for (ulong seed = 1; seed <= 10; seed++)
+        {
+            var village = Builders.Start(seed, June(1, 9));
+            village.Run(1);
+            foreach (var island in new[] { West, Oost })
+            {
+                var workplaces = StartWorkplaces(village, island).Select(id =>
+                {
+                    var blueprint = village.Get(id).Blueprint;
+                    var seats = catalog.Single(plan => (string)plan!["id"]! == blueprint)!["jobs"]!.AsArray().Sum(job => (int)job!["count"]!);
+                    return (Blueprint: blueprint, Held: WorkersOf(village, id).Count, Seats: seats);
+                }).ToList();
+                Assert.Equal(2, workplaces.Count);
+                var jobless = village.People.All.Count(resident => resident is { Phase: LifePhase.Working, IsEddie: false } && resident.Island == island
+                    && village.Work.JobOf(resident.Id) is null);
+                // every one has a worker while the island has hands left, and none has two more than another that
+                // still has a free seat
+                Assert.All(workplaces, workplace => Assert.True(workplace.Held > 0 || jobless == 0, $"seed {seed}: {workplace.Blueprint} has nobody"));
+                foreach (var full in workplaces)
+                    foreach (var open in workplaces.Where(other => other.Held < other.Seats))
+                        Assert.True(full.Held <= open.Held + 1, $"seed {seed}: {full.Blueprint} has {full.Held}, {open.Blueprint} {open.Held} of {open.Seats}");
+            }
+        }
+    }
+
     private static Action<JsonObject> Paths(int window, int threshold, int keep, double speed) => day =>
     {
         day["pathWindowDays"] = window;

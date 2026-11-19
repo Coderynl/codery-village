@@ -17,7 +17,9 @@ namespace Codery.Village.Modules.Work;
 /// <summary>
 /// Work and money, in their simplest form. A building that stands offers the jobs of its blueprint and each
 /// ordinary island has places for its own builders; a working resident without a job takes the free place on
-/// his island that fits his interests best. A workplace makes its recipe while someone works there, into its own
+/// his island that fits his interests best, the first places of every workplace before the second. A builder without a
+/// site helps out on the land of a workplace (<see cref="Help"/>), paid but adding nothing; with nothing to help he has
+/// no job that quarter. A workplace makes its recipe while someone works there, into its own
 /// store (<see cref="Stores"/>); what goes in, one of its workers fetches first at the store nearest that has it. A
 /// recipe that fells takes a tree nearby, which grows back. After every batch the workers out on its area bring it to
 /// the workplace, and go back. What an island starts with lies at the workplaces that make it, the rest where the
@@ -122,7 +124,7 @@ public sealed class Work : IModule, IJobs, IStock
         // Day may ask before this module has started
         if (_village is null) return null;
         var world = See(_village);
-        if (_jobs.TryGetValue(resident, out var seat)) return PlaceOf(world, resident, seat);
+        if (_jobs.TryGetValue(resident, out var seat)) return PlaceOf(world, resident, seat)?.Job;
         return world.Residents.TryGetValue(resident, out var who) && who.IsEddie ? EddieJob(world, who) : null;
     }
 
@@ -226,7 +228,8 @@ public sealed class Work : IModule, IJobs, IStock
         foreach (var resident in world.People.All)
         {
             if (resident is not { Phase: LifePhase.Working, IsEddie: false } || _jobs.ContainsKey(resident.Id)) continue;
-            // the best fit; of equal fits the place free the longest; of those the first in the list
+            // the best fit; of equal fits the place free the longest; of those the first in the list, so the first
+            // seats of every workplace go before the second
             Opening? best = null;
             var bestFit = -1;
             var bestFreed = long.MaxValue;
@@ -244,7 +247,8 @@ public sealed class Work : IModule, IJobs, IStock
         }
     }
 
-    // the builders of every ordinary island, then the jobs of the buildings that stand, by id
+    // in rounds: the first seat of the builders of every ordinary island and of every job of the buildings that stand
+    // (by id), then the second seat of each, and so on
     private List<Opening> Openings(IslandMap map, World world)
     {
         var openings = new List<Opening>();
@@ -261,37 +265,80 @@ public sealed class Work : IModule, IJobs, IStock
                 for (var index = 0; index < jobs[job].Count; index++)
                     openings.Add(new Opening(new Seat(structure.Island, structure.Id, job, index), jobs[job].Role));
         }
-        return openings;
+        return [.. openings.OrderBy(opening => opening.Seat.Index)];
     }
 
     private int Fit(Resident resident, string role) =>
         _settings.Fits.TryGetValue(role, out var interests) ? resident.Interests.Count(interests.Contains) : 0;
 
-    private JobPlace? PlaceOf(World world, int resident, Seat seat, Dictionary<int, Dictionary<int, Cell>>? picked = null)
+    // the job of the seat now, with the work area where walking from tile to tile is work too; null when there is none
+    // this quarter
+    private (JobPlace Job, IReadOnlyList<Cell> Area)? PlaceOf(World world, int resident, Seat seat, Dictionary<int, Dictionary<int, Cell>>? picked = null)
     {
         if (seat.Structure < 0)
         {
-            // a builder works at a site of his island, the builders spread over them; without one he waits where the island gathers
+            // a builder works at a site of his island, the builders spread over them; without one he helps on the land
             var sites = world.Sites.Where(site => site.Island == seat.Island).ToList();
-            if (sites.Count == 0) return new JobPlace(-1, Gathering(world, seat.Island), _settings.BuilderRole, _settings.BuilderShift, true);
+            if (sites.Count == 0)
+                return Help(world, seat, picked) is var (tile, helped) ? (new JobPlace(-1, tile, _settings.BuilderRole, _settings.BuilderShift, true), helped) : null;
             var site = sites[seat.Index % sites.Count];
-            return new JobPlace(site.Id, Spot(site), _settings.BuilderRole, _settings.BuilderShift, true);
+            return (new JobPlace(site.Id, Spot(site), _settings.BuilderRole, _settings.BuilderShift, true), []);
         }
         var structure = world.Standing.FirstOrDefault(standing => standing.Id == seat.Structure);
         if (structure is null || !_blueprints.TryGetValue(structure.Blueprint, out var blueprint) || blueprint.Jobs is not { } jobs || seat.Job >= jobs.Count) return null;
         var job = jobs[seat.Job];
         var place = Spot(structure);
-        if (job.Outdoor && AreaOf(structure, blueprint) is { Count: > 0 } area)
+        var area = job.Outdoor ? AreaOf(structure, blueprint) : [];
+        if (area.Count > 0 && PicksOf(world, structure, blueprint, area, picked).TryGetValue(resident, out var own)) place = own;
+        return (new JobPlace(structure.Id, place, job.Role, job.Shift, job.Outdoor), area);
+    }
+
+    private Dictionary<int, Cell> PicksOf(World world, StructureView structure, Blueprint blueprint, IReadOnlyList<Cell> area, Dictionary<int, Dictionary<int, Cell>>? picked)
+    {
+        if (picked?.TryGetValue(structure.Id, out var known) == true) return known;
+        var picks = Picks(world, structure, blueprint, area);
+        picked?.Add(structure.Id, picks);
+        return picks;
+    }
+
+    /// <summary>
+    /// Where a builder without a site helps: at one of the outdoor workplaces of his island whose area still yields, the
+    /// builders spread over them by seat, on a tile of it that its own workers do not hold and that is not where the island
+    /// gathers, each helper on his own while there is room, from a hash of his seat and the stretch of <c>stayQuarters</c>
+    /// quarters it is now. He adds nothing to what it makes. Null when there is no such workplace.
+    /// </summary>
+    private (Cell Tile, IReadOnlyList<Cell> Area)? Help(World world, Seat seat, Dictionary<int, Dictionary<int, Cell>>? picked)
+    {
+        var quarter = Quarter(_village!);
+        var gathering = Gathering(world, seat.Island);
+        var workplaces = new List<(StructureView Structure, Blueprint Blueprint, IReadOnlyList<Cell> Area, List<Cell> Yielding)>();
+        foreach (var structure in world.Standing)
         {
-            Dictionary<int, Cell>? picks = null;
-            if (picked?.TryGetValue(structure.Id, out picks) != true)
-            {
-                picks = Picks(world, structure, blueprint, area);
-                picked?.Add(structure.Id, picks);
-            }
-            if (picks!.TryGetValue(resident, out var tile)) place = tile;
+            if (structure.Island != seat.Island || !InEconomy(_village!.Map, structure) || !_blueprints.TryGetValue(structure.Blueprint, out var blueprint)) continue;
+            var area = AreaOf(structure, blueprint);
+            var yielding = area.Where(cell => cell != gathering && (Fells(blueprint) || _nature.Yields(cell, quarter))).ToList();
+            if (yielding.Count > 0) workplaces.Add((structure, blueprint, area, yielding));
         }
-        return new JobPlace(structure.Id, place, job.Role, job.Shift, job.Outdoor);
+        if (workplaces.Count == 0) return null;
+
+        var (workplace, plan, cells, open) = workplaces[seat.Index % workplaces.Count];
+        var held = PicksOf(world, workplace, plan, cells, picked).Values.ToHashSet();
+        var free = open.Where(cell => !held.Contains(cell)).ToList();
+        if (free.Count == 0) free = open;
+        var stretch = _village!.Clocks.Calendar.Now.ToUnixTimeSeconds() / QuarterSeconds / _settings.StayQuarters;
+        // the helpers here before him, by seat, take theirs first
+        var taken = new HashSet<Cell>();
+        var tile = free[0];
+        for (var index = seat.Index % workplaces.Count; index <= seat.Index; index += workplaces.Count)
+        {
+            if (free.All(taken.Contains)) taken.Clear();
+            var key = unchecked((ulong)index * 0x9E3779B97F4A7C15UL ^ (ulong)workplace.Id * 0xC2B2AE3D27D4EB4FUL ^ (ulong)stretch);
+            var at = Rng.For(key, "help on the land").Next(free.Count);
+            while (taken.Contains(free[at])) at = (at + 1) % free.Count;
+            tile = free[at];
+            taken.Add(tile);
+        }
+        return (tile, cells);
     }
 
     /// <summary>
@@ -316,11 +363,6 @@ public sealed class Work : IModule, IJobs, IStock
         _areas[structure.Id] = (structure.Place, area);
         return area;
     }
-
-    private IReadOnlyList<Cell> AreaOf(World world, Seat seat) =>
-        world.Standing.FirstOrDefault(standing => standing.Id == seat.Structure) is { } structure && _blueprints.TryGetValue(structure.Blueprint, out var blueprint)
-            ? AreaOf(structure, blueprint)
-            : [];
 
     /// <summary>
     /// The tile of the area each outdoor worker of the structure works on now: from a hash of who he is, the structure
@@ -440,8 +482,9 @@ public sealed class Work : IModule, IJobs, IStock
         var working = new SortedSet<int>();
         foreach (var (resident, seat) in _jobs)
         {
-            if (PlaceOf(world, resident, seat, picked) is not { } job) continue;
-            if (!AtWork(day, resident, job.Place, job.Outdoor ? AreaOf(world, seat) : [], _working.Contains(resident)))
+            // without a job this quarter, such as a builder with nothing to help, he is not paid
+            if (PlaceOf(world, resident, seat, picked) is not var (job, area)) continue;
+            if (!AtWork(day, resident, job.Place, area, _working.Contains(resident)))
             {
                 if (day.TripOf(resident) is { Errand.Kind: Activity.Fetch or Activity.Bring, Was: Activity.Work } trip && trip.Home == job.Place)
                 {
