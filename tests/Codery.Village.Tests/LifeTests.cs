@@ -94,6 +94,32 @@ public class LifeTests
         Assert.True(july > january, $"{july:0.0} outside in July, {january:0.0} in January");
     }
 
+    // Risk: just as it gets dark, those already at the fire get up and walk away from it.
+    [Fact]
+    public void Who_sits_at_the_fire_at_dusk_stays_there()
+    {
+        var sitters = 0;
+        foreach (var seed in Enumerable.Range(1, 10).Select(seed => (ulong)seed))
+        {
+            // a Wednesday in September: out from seven while it is light, dark at five to eight
+            var village = Builders.Start(seed, At(9, 2, 18));
+            for (var at = At(9, 2, 18, 15); at <= At(9, 2, 19, 45); at += TimeSpan.FromMinutes(15)) village.JumpTo(at);
+            var atTheFire = village.People.All.Where(resident => village.Building.GatheringOn(resident.Island) is { } fire
+                    && village.Day.Of(resident.Id) is { Activity: Activity.Leisure } doing && doing.Place.DistanceTo(fire) <= 1)
+                .ToDictionary(resident => resident, resident => village.Day.Of(resident.Id).Place);
+
+            village.JumpTo(At(9, 2, 20));
+            foreach (var (resident, place) in atTheFire)
+            {
+                var doing = village.Day.Of(resident.Id);
+                Assert.True(doing.Activity == Activity.Leisure && doing.Place == place,
+                    $"seed {seed}: {resident.Name} left the fire at {place} (fire {village.Building.GatheringOn(resident.Island)}) at dusk for {doing.Activity} at {doing.Place}");
+                sitters++;
+            }
+        }
+        Assert.True(sitters > 0, "nobody sat at the fire before dusk");
+    }
+
     // Risk: visits by day happen out of sight, inside; or after dark on the doorstep.
     [Fact]
     public void A_daytime_visit_is_a_chat_at_the_door()

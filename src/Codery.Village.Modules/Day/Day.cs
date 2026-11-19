@@ -201,7 +201,13 @@ public sealed class Day : IModule
             }
             else if (doing.Activity == Activity.Work && PlaceOf(now, resident, Activity.Work, job) is var (working, moved, indoors) && (working != Activity.Work || moved != doing.Place))
                 Go(now, resident, key, working, moved, indoors);
-            else if (doing.Activity == Activity.Leisure && newQuarter && FallsDark()) Go(now, resident, key, Activity.Leisure, PlaceToGo(now, resident), inside: false);
+            else if (doing.Activity == Activity.Leisure && newQuarter && FallsDark())
+            {
+                // the place is always drawn, so the stream does not depend on where he sits; who sits at the fire, on
+                // its tile or beside it, stays
+                var next = PlaceToGo(now, resident);
+                Go(now, resident, key, Activity.Leisure, doing.Place.DistanceTo(Gathering(now, resident.Island)) <= 1 ? doing.Place : next, inside: false);
+            }
             else if (doing.Activity == Activity.Visit && !plan.InsideThere && newQuarter && IsDark() == true && HostBy(now, resident, doing.Place) is { } host)
                 Go(now, resident, key, Activity.Visit, host, inside: true);
             else Go(now, resident, key, doing.Activity, doing.Place, plan.InsideThere);
