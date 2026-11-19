@@ -937,7 +937,7 @@ public sealed class Work : IModule, IJobs, IStock
         var day = village.Data.Names.Contains("day") ? village.Data.Section<WorkDay>("day") : null;
         _night = day?.Night is { } night ? (Time(night.From), Time(night.To)) : null;
         // workers move when the day shift starts work on a weekday; without that rhythm, at midnight
-        _moveAt = day?.Rhythms?.GetValueOrDefault(nameof(Shift.Day).ToLowerInvariant())?.Weekday.FirstOrDefault(block => block.Do == WorkBlock)?.From is { } from
+        _moveAt = day?.Rhythms?.GetValueOrDefault(nameof(Shift.Day).ToLowerInvariant())?.Weekday?.FirstOrDefault(block => block.Do == WorkBlock)?.From is { } from
             ? Time(from) : TimeOnly.MinValue;
         var catalog = village.Data.Section<Catalog>("catalog");
         _blueprints = catalog.Blueprints.ToDictionary(blueprint => blueprint.Id);
@@ -1088,7 +1088,7 @@ public sealed class Work : IModule, IJobs, IStock
     /// <summary>What Work reads from the section "day": the night, "HH:mm" from and to, and the rhythms of the shifts.</summary>
     private sealed record WorkDay(NightHours? Night = null, IReadOnlyDictionary<string, ShiftRhythm>? Rhythms = null);
 
-    private sealed record ShiftRhythm(IReadOnlyList<ShiftBlock> Weekday);
+    private sealed record ShiftRhythm(IReadOnlyList<ShiftBlock>? Weekday = null);
 
     private sealed record ShiftBlock(string From, string Do);
 

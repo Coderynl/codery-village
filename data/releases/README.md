@@ -2,7 +2,7 @@
 
 The village starts prehistoric: the base (`catalog.json`) knows fire pits, huts, gathering, fishing from the shore, reed, loam, stones and driftwood. Every step forward is a release: a wish of the residents that Eddie builds. The live village loads the base and every release in this folder; a new release is simply a new file here.
 
-A release adds lists to the catalog (`materials`, `roles`, `blueprints`, `things`) and changes nothing that already exists, so the order in which the releases load does not matter. A release may use what another release adds (the sawmill saws the wood of the lumberyard). Every release serves a wish from `wishes.json` with `serves`; the base never does.
+A release adds lists to the catalog (`materials`, `roles`, `blueprints`, `things`) and changes nothing that already exists (one exception: `bakery.json`, ours, bakes from the flour of `mill.json` instead of grain), so the order in which the releases load does not matter. A release may use what another release adds (the sawmill saws the wood of the lumberyard). Every release serves a wish from `wishes.json` with `serves`; the base never does.
 
 ## The releases
 

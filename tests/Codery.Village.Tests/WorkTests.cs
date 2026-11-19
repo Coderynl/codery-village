@@ -468,6 +468,38 @@ public class WorkTests
         Assert.Equal([2, 3], new[] { At(1), At(2) }.Order());
     }
 
+    // Risk: with no workplace to give, the move takes the island's last builder, and nothing gets built any more.
+    [Fact]
+    public void Builders_give_a_worker_only_while_one_stays()
+    {
+        // berry patches of one place each, as many as West has workers besides its two builders: none can give
+        void OneSeat(JsonObject c) =>
+            c["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "berry-patch")!["jobs"]![0]!["count"] = 1;
+        var working = Start(1, June(1, 10)).People.On(West).Count(resident => resident is { Phase: LifePhase.Working, IsEddie: false });
+        Assert.True(working >= 3, $"{working} working on West");
+        var data = Data(economy: e =>
+        {
+            e["builders"] = 2;
+            e["fits"] = new JsonObject();
+            e["start"]!["stock"]!["West"] = new JsonObject { ["berries"] = 1000 };
+        }, catalog: OneSeat);
+        var fertile = RealMap.Islands.Single(island => island.Id == West).Cells.Where(cell => RealMap.At(cell) == Ground.Fertile).ToList();
+        var patches = Enumerable.Range(0, working - 2).Select(i => Built(1 + i, "berry-patch", West, fertile[i % fertile.Count].Row, fertile[i % fertile.Count].Col)).ToArray();
+        var village = Start(1, June(1, 10), data, patches);
+        village.Run(2);
+        Assert.Equal(2, village.InRole("builder").Count(resident => resident.Island == West));
+        Assert.All(village.People.On(West).Where(resident => resident is { Phase: LifePhase.Working, IsEddie: false }),
+            resident => Assert.NotNull(village.Work.JobOf(resident.Id)));
+
+        // two empty workplaces come; the next day one of them gets a builder, and the island keeps the other
+        village.Structures.Standing.AddRange([Built(100, "bakery", West, 4, 13), Built(101, "mill", West, 4, 12)]);
+        village.JumpTo(June(2, 12));
+        village.Run(2);
+
+        Assert.Single(village.InRole("builder"), resident => resident.Island == West);
+        Assert.Equal(1, village.People.All.Count(resident => village.Work.JobOf(resident.Id)?.Building is 100 or 101));
+    }
+
     [Fact]
     public void Of_equal_places_the_one_free_the_longest_goes_first()
     {
