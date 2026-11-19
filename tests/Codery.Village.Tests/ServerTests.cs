@@ -55,7 +55,7 @@ public class ServerTests(WebApplicationFactory<Program> factory) : IClassFixture
         await using var connection = HostTests.Connect(factory);
         await connection.StartAsync();
         var join = await connection.InvokeAsync<JoinMessage>("Join");
-        Assert.Equal(1, join.Protocol);
+        Assert.Equal(2, join.Protocol);
         Assert.Equal(14, join.Map.Rows);
         Assert.NotEmpty(join.People);
         Assert.NotEmpty(join.Sites);
@@ -301,7 +301,7 @@ public class ServerTests(WebApplicationFactory<Program> factory) : IClassFixture
         var state = JsonDocument.Parse(await client.GetStringAsync("/state")).RootElement;
 
         Assert.Contains("<canvas", page);
-        Assert.Equal(1, state.GetProperty("join").GetProperty("protocol").GetInt32());
+        Assert.Equal(2, state.GetProperty("join").GetProperty("protocol").GetInt32());
         Assert.Equal(0, state.GetProperty("speed").GetInt32());
         Assert.Equal(JsonValueKind.Array, state.GetProperty("said").ValueKind);
     }

@@ -374,6 +374,71 @@ public class HostTests
         Assert.InRange(calendar, Builders.June(1, 23), Builders.June(1, 23, 1));
     }
 
+    // Risk: the hero is judged on a fresh village where nobody works the land, or on days that run on past the start moment.
+    [Fact]
+    public async Task In_development_the_village_can_begin_a_few_days_old_with_its_days_ending_at_the_start()
+    {
+        var start = Builders.June(3, 13);
+        await using var server = Server(time: new SimulatedTime(start), settings: ("Village:Advance", "2d"));
+        var host = await Started(server);
+        host.SetSpeed(0);
+
+        var (tick, calendar, built) = host.Inspect(engine =>
+            (engine.Tick, engine.Save().Calendar, engine.Running.OfType<BuildingModule>().Single().All.Count));
+        var fresh = VillageSetup.Begin(VillageSetup.Data([]), VillageSetup.Map(), 1, new SimulatedTime(start))
+            .Running.OfType<BuildingModule>().Single().All.Count;
+
+        const long twoDays = 2 * 24 * 60 * 60 * VillageFeed.TicksPerSecond;
+        Assert.InRange(tick, twoDays, twoDays + 40);
+        Assert.InRange(calendar, start, start.AddSeconds(10));
+        Assert.True(built > fresh, $"{built} structures after two days, {fresh} in a fresh village");
+    }
+
+    // Risk: a saved village is overwritten by a younger or older one because a development setting was left on.
+    [Fact]
+    public async Task With_a_saved_village_the_saved_one_goes_on_and_Advance_is_ignored()
+    {
+        var store = new FakeStore();
+        const long hour = 60 * 60 * VillageFeed.TicksPerSecond;
+        await using (var first = Server(store, settings: ("Village:Advance", "1h")))
+        {
+            var host = await Started(first);
+            host.SetSpeed(0);
+        }
+        // the empty store got the village an hour old
+        Assert.Equal(hour, store.Villages.Single().Saves[0].Tick);
+
+        var log = new ServerTests.Recorder();
+        await using var second = Server(store, log: log, settings: ("Village:Advance", "2d"));
+        var again = await Started(second);
+        again.SetSpeed(0);
+
+        Assert.Single(store.Villages);
+        Assert.InRange(Tick(again), hour, hour + 40);
+        Assert.Contains(log.Lines, line => line.Text.Contains("Village:Advance"));
+    }
+
+    // Risk: a typo in the setting starts a fresh village unnoticed, and the screenshots judge the wrong thing.
+    [Fact]
+    public async Task A_malformed_Advance_keeps_the_server_from_starting()
+    {
+        await using var server = Server(settings: ("Village:Advance", "two days"));
+
+        var refused = Assert.ThrowsAny<Exception>(() => server.Server);
+
+        Assert.Contains("Village:Advance", refused.ToString());
+    }
+
+    // Risk: the live village spends minutes simulating at start-up and serves days that never happened.
+    [Fact]
+    public async Task Outside_development_Advance_is_ignored()
+    {
+        await using var server = Server(settings: [("environment", "Production"), ("Village:Advance", "2d")]);
+        var host = await Started(server);
+
+        Assert.InRange(Tick(host), 0, 40);
+    }
+
     [Fact]
     public async Task Conversations_are_written_by_the_talker_and_said_in_the_tick()
     {

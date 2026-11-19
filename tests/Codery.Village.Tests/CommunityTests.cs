@@ -7,6 +7,10 @@ using Codery.Village.Modules.Contracts;
 
 namespace Codery.Village.Tests;
 
+/// <summary>
+/// What an island decides to build. The tests of the stock rules start without the start workplaces, so that a low
+/// stock is not already made by one.
+/// </summary>
 public class CommunityTests
 {
     private static readonly int West = Builders.West;
@@ -29,7 +33,7 @@ public class CommunityTests
     public void A_homeless_household_gets_a_house_first()
     {
         // nobody has a home, and there is no food: still the house comes first
-        var data = Builders.Data(
+        var data = Builders.Data(startWorkplaces: false,
             building: building =>
             {
                 building["maxStartHuts"] = 0;
@@ -82,7 +86,7 @@ public class CommunityTests
     public void Low_stock_brings_a_workshop_and_what_it_needs_first()
     {
         // housed, but without food or heat in stock; Oost has reed for one hut
-        var data = Builders.Data(
+        var data = Builders.Data(startWorkplaces: false,
             economy: economy => Stock(economy,
                 new JsonObject { ["branches"] = 40, ["reed"] = 20 },
                 new JsonObject { ["stones"] = 45, ["loam"] = 20, ["reed"] = 3 }));
@@ -113,7 +117,7 @@ public class CommunityTests
     public void Open_sites_keep_what_they_still_need(int reed, string second)
     {
         // the stone hut takes three reed, so the fish trap (two reed) can count only on what is left
-        var data = Builders.Data(
+        var data = Builders.Data(startWorkplaces: false,
             economy: economy => Stock(economy,
                 new JsonObject { ["branches"] = 40, ["reed"] = 20, ["berries"] = 40 },
                 new JsonObject { ["stones"] = 45, ["loam"] = 20, ["reed"] = reed, ["driftwood"] = 40 }));
@@ -130,7 +134,7 @@ public class CommunityTests
     public void Sites_that_wait_for_each_other_get_their_maker_beyond_maxSites()
     {
         // two sites need five reed of the four there are, and fill the two places for sites
-        var data = Builders.Data(
+        var data = Builders.Data(startWorkplaces: false,
             building: building => building["community"]!["maxSites"] = 2,
             economy: economy => Stock(economy,
                 new JsonObject { ["branches"] = 40, ["reed"] = 20, ["berries"] = 40 },

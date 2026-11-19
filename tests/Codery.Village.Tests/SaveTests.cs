@@ -346,4 +346,91 @@ public class SaveTests
             twins.Unload();
         }
     }
+
+    // Risk: loading a running village adds a second set of workplaces, or moves what stands.
+    [Fact]
+    public void A_save_without_start_workplaces_loads_as_it_was()
+    {
+        var village = Builders.Start(2, Builders.June(1, 9), Builders.Data(startWorkplaces: false));
+        village.Run(1);
+        static IEnumerable<string> Standing(Builders.Village village) =>
+            village.Building.All.Select(structure => $"{structure.Id} {structure.Blueprint} {structure.Anchor} {structure.Done}");
+        Assert.DoesNotContain(village.Building.All, structure => structure.Blueprint is "berry-patch" or "brushwood" or "fishing-spot" or "driftwood-beach");
+
+        var loaded = Builders.Load(Written(village.Engine.Save()), Builders.Data());
+        loaded.Run(100);
+
+        Assert.Equal(Standing(village), Standing(loaded));
+        Assert.Empty(loaded.Engine.Stopped);
+    }
+
+    [Fact]
+    public void Bare_tiles_survive_a_save_and_an_older_save_has_none()
+    {
+        var data = WorkYouSeeTests.QuickBerries();
+        var (village, patch) = WorkYouSeeTests.PatchFrom(Builders.June(1, 9), data);
+        WorkYouSeeTests.WorkUntilBare(village, patch);
+        var area = village.Work.WorkAreaOf(patch);
+        var yields = area.Select(village.Work.YieldOf).ToList();
+        Assert.Contains(yields, yield => yield < 100);
+        static IEnumerable<(int, int)> Sorted(IEnumerable<Codery.Village.Core.Map.Cell> cells) => cells.Select(cell => (cell.Row, cell.Col)).Order();
+
+        // saved and loaded, every tile of the area has the yield it had
+        var saved = Written(village.Engine.Save());
+        var loaded = Builders.Load(saved, data);
+        Assert.Equal(yields, area.Select(loaded.Work.YieldOf));
+        Assert.Equal(Sorted(village.Work.Bare), Sorted(loaded.Work.Bare));
+
+        // a save from before nature ran out loads with everything at full
+        var older = Written(village.Engine.Save());
+        Assert.True(Part(older, "work").Data.AsObject().Remove("nature"));
+        var old = Builders.Load(older, data);
+        Assert.All(area, cell => Assert.Equal(100, old.Work.YieldOf(cell)));
+        Assert.Empty(old.Work.Bare);
+    }
+
+    [Fact]
+    public void A_village_with_one_shared_stock_loads_with_stores()
+    {
+        // a village saved as before there were stores: a berry patch stands on West, and every island keeps one stock
+        var data = Builders.Data(startWorkplaces: false);
+        var (village, patch) = WorkYouSeeTests.PatchFrom(Builders.June(1, 9), data);
+        var counts = Builders.RealMap.Islands.ToDictionary(island => island.Id, island => village.Work.Stock(island.Id).ToDictionary());
+        Assert.True(counts[Builders.West]["berries"] > 0);
+        var saved = Written(village.Engine.Save());
+        foreach (var island in Part(saved, "work").Data["islands"]!.AsArray())
+        {
+            var shared = new JsonObject();
+            foreach (var store in island!["stores"]!.AsArray())
+                foreach (var (material, amount) in store!["stock"]!.AsObject())
+                    shared[material] = (shared[material]?.GetValue<int>() ?? 0) + amount!.GetValue<int>();
+            island.AsObject().Remove("stores");
+            island["stock"] = shared;
+        }
+        saved = saved with { Modules = [.. saved.Modules.Select(part => part.Name == "work" ? part with { Version = 1 } : part)] };
+
+        // every island has what it had
+        var old = Builders.Load(Written(saved), data);
+        Assert.All(counts, count => Assert.Equal(count.Value, old.Work.Stock(count.Key).ToDictionary()));
+
+        // the berries lie at the patch, which makes them; the rest where the island gathers
+        old.Run(1);
+        Codery.Village.Modules.Contracts.IStock stock = old.Work;
+        var anchor = old.Get(patch).Anchor;
+        Assert.Equal(counts[Builders.West]["berries"], old.Work.StockAt(patch)["berries"]);
+        foreach (var (island, count) in counts)
+        {
+            var gathering = ((Codery.Village.Modules.Contracts.IPlaces)old.Building).GatheringOn(island);
+            foreach (var material in count.Keys.Where(material => material != "berries"))
+                Assert.Equal(gathering, stock.SourceOf(island, material, anchor));
+            Assert.Equal(count, old.Work.Stock(island).ToDictionary());
+        }
+
+        // and building goes on
+        var hut = old.PlaceNearHeart("hut", Builders.West);
+        old.JumpTo(Builders.June(1, 11));
+        old.Run(2000);
+        Assert.True(old.Get(hut).Progress > 0 || old.Get(hut).Phase > 0, "the hut did not get going");
+        Assert.Empty(old.Engine.Stopped);
+    }
 }

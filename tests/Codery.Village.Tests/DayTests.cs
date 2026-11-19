@@ -82,7 +82,7 @@ public class DayTests
 
     [Theory]
     [MemberData(nameof(Seeds))]
-    public void Someone_is_outside_every_hour(ulong seed)
+    public void By_day_some_are_always_outside(ulong seed)
     {
         var village = Start(seed, June(1, 0));
 
@@ -90,19 +90,19 @@ public class DayTests
         {
             if (quarter > 0) village.SettleNextQuarter();
             var time = village.Now.TimeOfDay;
-            var byDay = time >= TimeSpan.FromHours(8) && time < TimeSpan.FromHours(18);
+            // the night is honest: nobody is pulled out of bed to fill it
+            if (time < TimeSpan.FromHours(8) || time >= TimeSpan.FromHours(18)) continue;
             foreach (var island in Ordinary)
             {
                 var on = village.People.On(island).ToList();
                 var outside = on.Count(resident => !village.Day.Of(resident.Id).Inside);
-                var least = byDay ? 3 : 1;
-                Assert.True(outside >= least, $"{village.Now:ddd HH:mm} island {island}: {outside} outside of {on.Count}, at least {least}");
+                Assert.True(outside >= 3, $"{village.Now:ddd HH:mm} island {island}: {outside} outside of {on.Count}, at least 3");
             }
         }
     }
 
     [Fact]
-    public void Eddie_sleeps_at_night_while_the_islands_stay_lively()
+    public void Eddie_sleeps_at_night_and_is_up_on_his_islet_by_day()
     {
         foreach (var fakes in new[] { true, false })
         {
@@ -112,13 +112,11 @@ public class DayTests
             var doing = village.Day.Of(eddie.Id);
             Assert.Equal(Activity.Sleep, doing.Activity);
             Assert.True(doing.Inside);
-            foreach (var island in Ordinary)
-                Assert.Contains(village.People.On(island), resident => !village.Day.Of(resident.Id).Inside);
 
-            // by day he works on his islet
+            // by day he is up on his islet; without a workshop he has no work to go to
             village.Time.Advance(TimeSpan.FromHours(8));
             village.Day.Settle(village.Probe.Context);
-            Assert.Equal(Activity.Work, village.Day.Of(eddie.Id).Activity);
+            Assert.NotEqual(Activity.Sleep, village.Day.Of(eddie.Id).Activity);
             Assert.Equal(eddie.Island, RealMap.IslandOf(village.Day.Of(eddie.Id).Place));
         }
     }
@@ -345,7 +343,8 @@ public class DayTests
     [Fact]
     public void A_free_choice_holds_until_its_block_ends()
     {
-        // one free block a day: what someone picks stays all day, unless he is sent out for a wander
+        // one free block a day: what someone picks stays all day, unless he is sent out for a wander; when it gets
+        // dark, at ten, one out of doors picks a place again and a chat at the door goes inside, and that holds
         var data = Data(day =>
         {
             foreach (var (_, rhythm) in day["rhythms"]!.AsObject())
@@ -368,6 +367,7 @@ public class DayTests
                 kinds.Add(doing.Activity);
                 if (doing.Activity == Activity.Wander) continue;
                 Assert.Equal(first[resident.Id].Activity, doing.Activity);
+                if (village.Now.TimeOfDay == TimeSpan.FromHours(22)) first[resident.Id] = doing;
                 Assert.Equal(first[resident.Id].Place, doing.Place);
             }
         }
@@ -456,8 +456,8 @@ public class DayTests
             var doing = village.Day.Of(resident.Id);
             Assert.True(RealMap.IsWalkable(doing.Place));
             Assert.Equal(resident.Island, RealMap.IslandOf(doing.Place));
-            if (resident.IsEddie) Assert.Equal(Activity.Work, doing.Activity);
-            else Assert.NotEqual(Activity.Work, doing.Activity);
+            // without a job nobody works, Eddie neither
+            Assert.NotEqual(Activity.Work, doing.Activity);
         }
 
         // at night a household sleeps under one roof
@@ -499,6 +499,19 @@ public class DayTests
         var village = Start(1, June(1, 11));
 
         Assert.Throws<KeyNotFoundException>(() => village.Day.Of(9999));
+    }
+
+    // Risk: work as a free choice sends one without a job round in circles until the server falls over.
+    [Fact]
+    public void Work_as_free_time_is_refused_when_the_data_is_read()
+    {
+        var data = Data(day => day["free"]!.AsArray().Add(new JsonObject { ["do"] = "work", ["weight"] = 1 }));
+
+        var village = Start(1, June(1, 11), data: data);
+
+        var (module, error) = Assert.Single(village.Engine.Stopped);
+        Assert.Equal("day", module);
+        Assert.Contains("work among its free choices", error);
     }
 }
 

@@ -98,8 +98,8 @@
     },
     {
       "id": "fishing-spot", "nl": "visplek", "en": "fishing spot", "on": ["fishing"],
-      "jobs": [{ "role": "fisher", "count": 3, "shift": "early", "outdoor": true }],
-      "recipe": { "in": {}, "out": { "fish": 2 }, "ticks": 6500 },
+      "jobs": [{ "role": "fisher", "count": 3, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "fish": 2 }, "ticks": 4200 },
       "phases": [
         { "id": "trap", "nl": "fuik", "en": "fish trap", "ticks": 300, "cost": { "reed": 2 } }
       ],

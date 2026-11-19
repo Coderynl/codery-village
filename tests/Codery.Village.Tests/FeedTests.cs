@@ -14,10 +14,11 @@ using BuildingModule = Codery.Village.Modules.Building.Building;
 using DayModule = Codery.Village.Modules.Day.Day;
 using FireModule = Codery.Village.Modules.Fire.Fire;
 using PeopleModule = Codery.Village.Modules.People.People;
+using WorkModule = Codery.Village.Modules.Work.Work;
 
 namespace Codery.Village.Tests;
 
-/// <summary>Protocol 1: what a page gets, how little of it, and that it adds up to the village.</summary>
+/// <summary>Protocol 2: what a page gets, how little of it, and that it adds up to the village.</summary>
 public class FeedTests(ITestOutputHelper output)
 {
     private static readonly DataSet Data = VillageSetup.Data([]);
@@ -46,12 +47,21 @@ public class FeedTests(ITestOutputHelper output)
     }
 
     /// <summary>The real data with the section "day" changed as the test needs.</summary>
-    private static DataSet WithDay(Action<JsonObject> change)
+    private static DataSet WithDay(Action<JsonObject> change) => With("day", change);
+
+    /// <summary>The real data with one section changed as the test needs.</summary>
+    private static DataSet With(string name, Action<JsonObject> change, Action<JsonObject>? building = null)
     {
         var sections = Directory.GetFiles(VillageSetup.Folder, "*.json").ToDictionary(file => Path.GetFileNameWithoutExtension(file), File.ReadAllText);
-        var day = JsonNode.Parse(sections["day"])!.AsObject();
-        change(day);
-        sections["day"] = day.ToJsonString();
+        var section = JsonNode.Parse(sections[name])!.AsObject();
+        change(section);
+        sections[name] = section.ToJsonString();
+        if (building is not null)
+        {
+            var plan = JsonNode.Parse(sections["building"])!.AsObject();
+            building(plan);
+            sections["building"] = plan.ToJsonString();
+        }
         return DataSet.FromTexts(sections, []);
     }
 
@@ -143,7 +153,7 @@ public class FeedTests(ITestOutputHelper output)
         // everyone stands, or walks, where the join puts him
         Assert.Equal(now.Moves.Select(move => move.Person).Order(), moves.Keys.Order());
         foreach (var move in now.Moves)
-            Assert.Equal(Where(move, now.Tick), Where(moves[move.Person], now.Tick));
+            Assert.Equal((Where(move, now.Tick), move.Doing), (Where(moves[move.Person], now.Tick), moves[move.Person].Doing));
         Assert.True(walked);
     }
 
@@ -223,6 +233,52 @@ public class FeedTests(ITestOutputHelper output)
         Assert.True(paths.Count < now.Map.Paths!.Count);
     }
 
+    [Fact]
+    public void Bare_tiles_reach_the_page()
+    {
+        // a berry patch that makes a batch in 30 ticks works its tiles bare within the hour
+        var data = With("catalog", catalog => catalog["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "berry-patch")!["recipe"]!["ticks"] = 30,
+            building => building.Remove("startWorkplaces"));
+        var village = Start(Builders.June(1, 9), data: data);
+        village.Run(1);
+        var building = village.Module<BuildingModule>();
+        var work = village.Module<WorkModule>();
+        var (anchor, rotation) = building.FindPlace("berry-patch", Builders.West)!.Value;
+        var patch = building.Place("berry-patch", anchor, rotation);
+        village.Time.Advance(TimeSpan.FromHours(1));
+        village.Run(1000);
+        Assert.True(building.All.Single(structure => structure.Id == patch).Done);
+        int Flat(Cell cell) => cell.Row * Map.Cols + cell.Col;
+
+        var join = village.Feed.Join(village.Engine);
+        Assert.Empty(join.Map.Bare ?? []);
+        var bare = new HashSet<int>(join.Map.Bare ?? []);
+        void Follow(TickMessage message)
+        {
+            foreach (var cell in message.Bare ?? []) Assert.True(bare.Add(cell));
+            foreach (var cell in message.BareGone ?? []) Assert.True(bare.Remove(cell));
+        }
+        for (var tick = 0; tick < 20_000 && work.Bare.Count == 0; tick++)
+        {
+            village.Run(1);
+            Follow(village.Feed.Next(village.Engine));
+        }
+        Assert.NotEmpty(work.Bare);
+        Assert.Equal(work.Bare.Select(Flat).Order(), bare.Order());
+
+        // a page that joins now gets them
+        var now = village.Feed.Join(village.Engine);
+        Assert.Equal(work.Bare.Select(Flat).Order(), now.Map.Bare!.Order());
+
+        // days later it has grown back
+        village.Time.Advance(TimeSpan.FromDays(3));
+        village.Run(1);
+        var grown = village.Feed.Next(village.Engine);
+        Follow(grown);
+        Assert.NotEmpty(grown.BareGone ?? []);
+        Assert.Equal(work.Bare.Select(Flat).Order(), bare.Order());
+    }
+
     /// <summary>Where a move has someone at a tick, and whether he is inside then.</summary>
     private static (int Cell, bool Inside) Where(Move move, long tick)
     {
@@ -231,20 +287,26 @@ public class FeedTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void A_page_that_joins_gets_protocol_1_and_the_whole_map()
+    public void A_page_that_joins_gets_protocol_2_and_the_whole_map()
     {
         var village = Start(Builders.June(1, 10));
         village.Run(10);
 
         var join = village.Feed.Join(village.Engine);
 
-        Assert.Equal(1, join.Protocol);
+        Assert.Equal(2, join.Protocol);
         Assert.Equal(4, join.TicksPerSecond);
         Assert.Equal(village.Engine.Tick, join.Tick);
-        var rows = File.ReadAllLines(Path.Combine(VillageSetup.Folder, "map.txt"))
+        var lines = File.ReadAllLines(Path.Combine(VillageSetup.Folder, "map.txt"))
             .Where(line => line.Length > 0 && !line.StartsWith('#') && !line.StartsWith("island ")).ToList();
+        var rows = lines.TakeWhile(line => line != "levels").ToList();
+        var levels = lines.SkipWhile(line => line != "levels").Skip(1).ToList();
         Assert.Equal((rows.Count, rows[0].Length), (join.Map.Rows, join.Map.Cols));
         Assert.Equal(string.Concat(rows), join.Map.Ground);
+        // the hills as the map draws them, water at 0
+        Assert.Equal(rows.Count, levels.Count);
+        Assert.Contains('2', join.Map.Levels!);
+        Assert.Equal(string.Concat(levels).Replace('~', '0'), join.Map.Levels);
         Assert.Equal(["West", "Oost", "Eddie"], join.Map.Islands.Select(island => island.Name));
         Assert.True(Assert.Single(join.Map.Islands, island => island.Eddie).Cells.Count > 0);
         var catalog = Data.Section<Catalog>("catalog");
@@ -275,6 +337,23 @@ public class FeedTests(ITestOutputHelper output)
         Assert.NotEmpty(join.Things);
         Assert.Equal("2026-06-01T10:00", join.Calendar.Local);
         Assert.False(join.Calendar.Night);
+    }
+
+    [Fact]
+    public void A_move_says_what_the_resident_is_doing()
+    {
+        // a Monday morning: most grown-ups are at work, walking there or standing at it
+        var village = Start(Builders.June(1, 11));
+        village.Run(1);
+        var day = village.Module<DayModule>();
+
+        var join = village.Feed.Join(village.Engine);
+
+        var working = join.Moves.Where(move => day.Of(move.Person).Activity == Activity.Work).ToList();
+        Assert.NotEmpty(working);
+        Assert.All(working, move => Assert.Equal("work", move.Doing));
+        Assert.Contains(working, move => move.Cells.Count == 1);
+        Assert.Contains("\"doing\":\"work\"", Json(working[0]));
     }
 
     [Fact]
@@ -363,8 +442,8 @@ public class FeedTests(ITestOutputHelper output)
 
             var start = JsonSerializer.Deserialize<JoinMessage>(File.ReadAllText(Path.Combine(folder, "start.json")), Protocol.Json)!;
             var grown = JsonSerializer.Deserialize<JoinMessage>(File.ReadAllText(Path.Combine(folder, "grown.json")), Protocol.Json)!;
-            Assert.Equal((1, 0L), (start.Protocol, start.Tick));
-            Assert.Equal((1, 10L * 60 * 4), (grown.Protocol, grown.Tick));
+            Assert.Equal((2, 0L), (start.Protocol, start.Tick));
+            Assert.Equal((2, 10L * 60 * 4), (grown.Protocol, grown.Tick));
             Assert.NotEmpty(start.People);
             Assert.Equal(start.Map.Ground, grown.Map.Ground);
             Assert.DoesNotContain("null", File.ReadAllText(Path.Combine(folder, "grown.json")));
@@ -394,7 +473,7 @@ public class FeedTests(ITestOutputHelper output)
             Assert.Equal(grown.Tick, join.Tick);
             Assert.Equal(Enumerable.Range(1, 40).Select(i => join.Tick + i), ticks.Select(tick => tick.Tick));
             Assert.Equal(join.Tick + 40, last.Tick);
-            Assert.Equal(1, last.Protocol);
+            Assert.Equal(2, last.Protocol);
         }
         finally
         {

@@ -65,6 +65,9 @@ public sealed class Structure
     // a builder has brought the cost of the phase going on from the store to the site
     internal bool Delivered { get; set; }
 
+    // the store the most of the cost of the phase going on was taken from, to fetch it there; null before it is paid
+    internal Cell? Source { get; set; }
+
     // the reasons it has been told to wait for
     internal SortedSet<string> Told { get; } = new(StringComparer.Ordinal);
 

@@ -16,6 +16,17 @@
   "eddieWorkshop": "eddie-workshop",
   "forestRegrowTicks": 43200,
   "forestRange": 3,
+  "workRange": 3,
+  "stayQuarters": 6,
+  "fetchFood": true,
+  "fetchFoodFrom": "12:00",
+  "nature": {
+    "fertile": { "perBatch": 8, "regrowDays": 2 },
+    "fishing": { "perBatch": 4, "regrowDays": 1 },
+    "forest": { "perBatch": 15, "regrowDays": 3 },
+    "rock": { "perBatch": 10, "regrowDays": 14 },
+    "clay": { "perBatch": 10, "regrowDays": 21 }
+  },
   "needs": {
     "food": { "perPerson": 1 },
     "heat": { "perHousehold": 1 }

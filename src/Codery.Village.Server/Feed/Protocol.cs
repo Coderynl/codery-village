@@ -4,8 +4,9 @@ using Codery.Village.Core.Data;
 
 namespace Codery.Village.Server.Feed;
 
-// Protocol 1: what a page gets from the village. In JSON every name is in camelCase, and what is null is left
-// out, so a quiet tick is only its number. A tile is one number, row * cols + col.
+// Protocol 2: what a page gets from the village (2 added what a resident is doing to every move). In JSON every
+// name is in camelCase, and what is null is left out, so a quiet tick is only its number. A tile is one number,
+// row * cols + col.
 
 /// <summary>
 /// What a page gets when it joins: the whole village as it stands. <see cref="Moves"/> says where everyone is,
@@ -31,7 +32,8 @@ public sealed record JoinMessage(
 /// residents and the buildings that are no longer there. <see cref="NoTask"/> is true when the open task closed
 /// and no other is open; a new task comes as <see cref="Task"/>. Added to protocol 1: <see cref="Fires"/> has the
 /// fireplaces whose fire burns stronger or weaker than before, <see cref="Paths"/> the tiles that became a path and
-/// <see cref="PathsGone"/> the paths that grew over.
+/// <see cref="PathsGone"/> the paths that grew over. Added to protocol 2: <see cref="Bare"/> the tiles that were worked
+/// bare (or felled) and <see cref="BareGone"/> the bare tiles that grew back.
 /// </summary>
 public sealed record TickMessage(
     long Tick,
@@ -48,15 +50,20 @@ public sealed record TickMessage(
     IReadOnlyList<FeedEvent>? Events = null,
     IReadOnlyList<FireView>? Fires = null,
     IReadOnlyList<int>? Paths = null,
-    IReadOnlyList<int>? PathsGone = null);
+    IReadOnlyList<int>? PathsGone = null,
+    IReadOnlyList<int>? Bare = null,
+    IReadOnlyList<int>? BareGone = null);
 
 /// <summary>
 /// Where a resident goes: over <see cref="Cells"/>, the first being where he stands at <see cref="Start"/>, one
 /// tile per <see cref="TicksPerCell"/> ticks. A resident who stands still has one cell. <see cref="Inside"/>: he
 /// is inside a building there, out of sight. <see cref="Carry"/> (added to protocol 1): the material he carries
 /// on his back while he walks, by id, as on an errand to or from the store; left out when his hands are empty.
+/// <see cref="Doing"/> (protocol 2): what he is doing, on a walk and on a stay alike, as the activity of his day in
+/// camelCase: <c>work</c>, <c>leisure</c>, <c>help</c>, <c>fetch</c>, <c>bring</c>, <c>tend</c>, <c>visit</c>,
+/// <c>wander</c>, <c>home</c> and so on.
 /// </summary>
-public sealed record Move(int Person, IReadOnlyList<int> Cells, long Start, int TicksPerCell, bool Inside, string? Carry = null);
+public sealed record Move(int Person, IReadOnlyList<int> Cells, long Start, int TicksPerCell, bool Inside, string? Carry = null, string Doing = "home");
 
 /// <summary>
 /// A resident as a page shows him. <see cref="Sex"/> is <c>man</c> or <c>woman</c>, <see cref="Phase"/> <c>child</c>,
@@ -112,7 +119,10 @@ public sealed record Said(int A, int? B, IReadOnlyList<string> Nl, IReadOnlyList
 /// <summary>
 /// The ground and what can stand on it. <see cref="Ground"/> has one letter per tile, row after row, as in
 /// <c>map.txt</c>. The names of roles, wishes and things are for what a page shows of a resident or a thing.
-/// <see cref="Paths"/> (added to protocol 1) has the tiles that are worn into a path when the page joins.
+/// <see cref="Paths"/> (added to protocol 1) has the tiles that are worn into a path when the page joins, <see cref="Bare"/>
+/// (added to protocol 2) the tiles that are worked bare or felled then. <see cref="Levels"/> (added to protocol 2; a page that
+/// does not know it draws the map flat) has one digit per tile, row after row as <see cref="Ground"/>: how many terraces the
+/// tile stands above the sea, water at 0.
 /// </summary>
 public sealed record MapView(
     int Rows,
@@ -123,7 +133,9 @@ public sealed record MapView(
     IReadOnlyList<NameView> Roles,
     IReadOnlyList<NameView> Wishes,
     IReadOnlyList<NameView> Things,
-    IReadOnlyList<int>? Paths = null);
+    IReadOnlyList<int>? Paths = null,
+    IReadOnlyList<int>? Bare = null,
+    string? Levels = null);
 
 /// <summary>An island and its tiles; <see cref="Eddie"/> for Eddie's islet.</summary>
 public sealed record IslandView(int Id, string Name, bool Eddie, IReadOnlyList<int> Cells);
@@ -140,7 +152,7 @@ public sealed record NameView(string Id, string Nl, string En);
 /// <summary>The version of the protocol and how it is written.</summary>
 public static class Protocol
 {
-    public const int Version = 1;
+    public const int Version = 2;
 
     /// <summary>camelCase, and null left out.</summary>
     public static JsonSerializerOptions Json { get; } = Configure(new JsonSerializerOptions(JsonSerializerDefaults.Web));

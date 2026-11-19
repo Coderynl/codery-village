@@ -22,9 +22,9 @@ namespace Codery.Village.Modules.Building;
 /// is taken in one go. The builders at the site then fetch it from the store where the island gathers, and once
 /// one is back with it the phase goes on while builders are at the site, each builder a crew-th of a tick per tick
 /// and each helper (a resident who spends his free time there) a share of a builder, up to a full crew.
-/// A site that stands still says why, once per reason. Each ordinary island starts with its fireplace and a hut
-/// per household, Eddie with his house and workshop; all finished. Building gives the homes, as People moves households in and
-/// out of them, the places of the day, and the buildings Work staffs. It also keeps the loose things a visitor
+/// A site that stands still says why, once per reason. Each ordinary island starts with its fireplace, its start
+/// workplaces and a hut per household, Eddie with his house and workshop; all finished. Building gives the homes,
+/// as People moves households in and out of them, the places of the day, and the buildings Work staffs. It also keeps the loose things a visitor
 /// can move: a few at the start, and one by every house that is finished.
 /// </summary>
 public sealed class Building : IModule, IHousing, IPlaces, IStructures
@@ -276,6 +276,9 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
             }
             if (_settings.Fireplace is { } fireplace && FindPlace(fireplace, island.Id) is { } hearth)
                 Finish(Add(fireplace, hearth.Anchor, hearth.Rotation));
+            if (_settings.StartWorkplaces?.GetValueOrDefault(island.Name) is { } workplaces)
+                foreach (var workplace in workplaces)
+                    if (FindPlace(workplace, island.Id) is { } place) Finish(Add(workplace, place.Anchor, place.Rotation));
             var households = people?.On(island.Id).Where(resident => resident.Household is not null).Select(resident => resident.Household).Distinct().Count() ?? 0;
             if (StartDwelling(island.Id, stock) is { } dwelling)
                 for (var hut = 0; hut < Math.Min(households, _settings.MaxStartHuts); hut++)
@@ -371,12 +374,16 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         var phase = plan.Phases[site.Phase];
         if (!site.Paid)
         {
-            if (stock is null ? phase.Cost.Count > 0 : !stock.TryTake(site.Island, phase.Cost))
+            // where the most of what it costs lies, before it is taken from the stores nearest the site
+            var spot = Spot(site);
+            var source = phase.Cost.Count > 0 && stock is not null ? stock.SourceOf(site.Island, Most(phase.Cost), spot) : null;
+            if (stock is null ? phase.Cost.Count > 0 : !stock.TryTake(site.Island, phase.Cost, spot))
             {
                 Wait(village, site, Materials);
                 return;
             }
             site.Paid = true;
+            site.Source = source;
             site.Delivered = phase.Cost.Count == 0;
             village.Publish(new PhaseStarted(tick, site.Id, phase.Id));
         }
@@ -410,18 +417,22 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         site.Progress = 0;
         site.Paid = false;
         site.Delivered = false;
+        site.Source = null;
         if (!site.Done) return;
         village.Publish(new StructureDone(tick, site.Id));
         village.Log(new LogEntry(tick, Built, site.Blueprint, Id(site)));
         if (HomesIn(site) > 0) Scatter(village, site.Island, site.Anchor, _settings.ThingsPerHouse);
     }
 
-    // who is at the site goes to the store for the most of what the phase costs; true while someone is on his way
+    // who is at the site goes for the most of what the phase costs to the store it was taken from, the nearest that
+    // had it (in a save from before there were stores: where the island gathers); true while someone is on his way
     private bool Fetch(ModuleContext village, Structure site, Phase phase, List<(int Resident, int Share)> crew)
     {
-        if (village.Find<DayModule>() is not { } day || GatheringOn(site.Island) is not { } store) return false;
+        if (village.Find<DayModule>() is not { } day || (site.Source ?? GatheringOn(site.Island)) is not { } store) return false;
         var spot = Spot(site);
-        var material = phase.Cost.OrderByDescending(item => item.Value).ThenBy(item => item.Key, StringComparer.Ordinal).First().Key;
+        // a store at the site: it is here already
+        if (store == spot) return false;
+        var material = Most(phase.Cost);
         var sent = false;
         foreach (var (resident, _) in crew) sent |= day.Send(resident, new Errand(Activity.Fetch, store, null, material));
         var fetching = sent || village.Find<PeopleModule>()?.All.Any(resident =>
@@ -429,6 +440,10 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         if (fetching) site.Waiting = null;
         return fetching;
     }
+
+    // the material there is the most of; of equal amounts the first by name
+    private static string Most(IReadOnlyDictionary<string, int> cost) =>
+        cost.OrderByDescending(item => item.Value).ThenBy(item => item.Key, StringComparer.Ordinal).First().Key;
 
     private static void Wait(ModuleContext village, Structure site, string reason)
     {
@@ -536,6 +551,8 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
             throw new InvalidDataException($"The data section '{Section}' gives Eddie the unknown blueprint '{blueprint}'.");
         if (_settings.Fireplace is { } fireplace && !_blueprints.ContainsKey(fireplace))
             throw new InvalidDataException($"The data section '{Section}' has the unknown fireplace '{fireplace}'.");
+        foreach (var workplace in (_settings.StartWorkplaces ?? new Dictionary<string, IReadOnlyList<string>>()).Values.SelectMany(names => names).Where(name => !_blueprints.ContainsKey(name)))
+            throw new InvalidDataException($"The data section '{Section}' has the unknown start workplace '{workplace}'.");
         var missing = LogKinds.Where(kind => !_settings.Log.ContainsKey(kind)).ToList();
         if (missing.Count > 0)
             throw new InvalidDataException($"The data section '{Section}' has no log sentence for {string.Join(", ", missing)}.");
@@ -573,7 +590,7 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
             _nextStructure,
             _nextThing,
             [.. _structures.Select(structure => new SavedStructure(structure.Id, structure.Blueprint, structure.Anchor, structure.Rotation,
-                structure.Phase, structure.Units, structure.Paid, [.. structure.Living], [.. structure.Told], structure.Waiting, structure.Delivered))],
+                structure.Phase, structure.Units, structure.Paid, [.. structure.Living], [.. structure.Told], structure.Waiting, structure.Delivered, structure.Source))],
             [.. _things],
             _inTheWay.Count > 0 ? _inTheWay : null), SaveJson.Options)!;
 
@@ -593,6 +610,7 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
             structure.Progress = structure.Units / (_crew.Crew * Full);
             structure.Paid = part.Paid;
             structure.Delivered = part.Delivered;
+            structure.Source = part.Source;
             structure.Waiting = part.Waiting;
             structure.Living.AddRange(part.Households);
             foreach (var reason in part.Told) structure.Told.Add(reason);
@@ -607,5 +625,5 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         IReadOnlyDictionary<int, long>? InTheWay = null);
 
     private sealed record SavedStructure(int Id, string Blueprint, Cell Anchor, int Rotation, int Phase, int Units, bool Paid,
-        IReadOnlyList<int> Households, IReadOnlyList<string> Told, string? Waiting = null, bool Delivered = false);
+        IReadOnlyList<int> Households, IReadOnlyList<string> Told, string? Waiting = null, bool Delivered = false, Cell? Source = null);
 }

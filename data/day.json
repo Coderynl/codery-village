@@ -1,7 +1,7 @@
 {
   "ticksPerCell": 8,
   "lateMinutes": 60,
-  "outside": { "always": 1, "byDay": 3, "dayFrom": "08:00", "dayTo": "18:00" },
+  "outside": { "always": 0, "byDay": 3, "dayFrom": "08:00", "dayTo": "18:00" },
   "night": { "from": "22:00", "to": "06:00" },
   "dusk": ["16:50", "17:45", "18:35", "20:25", "21:15", "21:55", "21:50", "21:05", "19:55", "18:50", "16:55", "16:30"],
   "dawn": ["08:40", "08:00", "07:05", "06:55", "05:55", "05:20", "05:35", "06:20", "07:15", "08:05", "08:05", "08:40"],
@@ -15,6 +15,12 @@
     { "to": "tree", "weight": 2 },
     { "to": "neighbour", "weight": 2 }
   ],
+  "outingsAfterDark": [
+    { "to": "fire", "weight": 6 },
+    { "to": "neighbour", "weight": 2 },
+    { "to": "water", "weight": 1 }
+  ],
+  "outdoorByMonth": [0.5, 0.6, 0.75, 0.9, 1.05, 1.15, 1.2, 1.15, 1.0, 0.8, 0.8, 0.5],
   "helpFrom": 70,
   "helpPhases": ["student", "working", "retired"],
   "pathWindowDays": 3,
@@ -23,19 +29,19 @@
   "pathSpeed": 1.5,
   "evening": { "chance": 0.35, "perExtraversion": 0.4, "visit": 0.4 },
   "free": [
-    { "do": "leisure", "weight": 3 },
+    { "do": "leisure", "weight": 4 },
     { "do": "wander", "weight": 2 },
     { "do": "shop", "weight": 1 },
     { "do": "visit", "weight": 1 },
-    { "do": "home", "weight": 3 }
+    { "do": "home", "weight": 1 }
   ],
   "rhythms": {
     "toddler": {
       "weekday": [
         { "from": "07:00", "do": "home" },
-        { "from": "10:00", "do": "free" },
+        { "from": "10:00", "do": "leisure" },
         { "from": "12:00", "do": "home" },
-        { "from": "15:00", "do": "free" },
+        { "from": "15:00", "do": "leisure" },
         { "from": "17:30", "do": "home" },
         { "from": "19:30", "do": "sleep" }
       ]
@@ -44,21 +50,22 @@
       "weekday": [
         { "from": "07:00", "do": "home" },
         { "from": "08:30", "do": "school" },
-        { "from": "15:00", "do": "free" },
+        { "from": "15:00", "do": "leisure" },
         { "from": "17:30", "do": "home" },
         { "from": "20:30", "do": "sleep" }
       ],
       "weekend": [
         { "from": "08:00", "do": "home" },
-        { "from": "10:00", "do": "free" },
+        { "from": "10:00", "do": "wander" },
         { "from": "12:00", "do": "home" },
-        { "from": "13:30", "do": "free" },
+        { "from": "13:30", "do": "leisure" },
         { "from": "17:30", "do": "home" },
         { "from": "21:00", "do": "sleep" }
       ]
     },
     "student": {
       "weekday": [
+        { "from": "00:30", "do": "sleep" },
         { "from": "08:00", "do": "home" },
         { "from": "09:00", "do": "study" },
         { "from": "12:00", "do": "free" },
@@ -77,6 +84,7 @@
     },
     "day": {
       "weekday": [
+        { "from": "00:00", "do": "sleep" },
         { "from": "07:00", "do": "home" },
         { "from": "08:30", "do": "work" },
         { "from": "17:30", "do": "home" },
@@ -89,7 +97,7 @@
         { "from": "08:30", "do": "home" },
         { "from": "10:00", "do": "free" },
         { "from": "12:30", "do": "home" },
-        { "from": "13:30", "do": "free" },
+        { "from": "13:00", "do": "free" },
         { "from": "17:30", "do": "home" },
         { "from": "19:00", "do": "out" }
       ]
@@ -117,10 +125,11 @@
     },
     "idle": {
       "weekday": [
+        { "from": "00:00", "do": "sleep" },
         { "from": "07:30", "do": "home" },
         { "from": "09:00", "do": "free" },
-        { "from": "12:30", "do": "home" },
-        { "from": "13:30", "do": "free" },
+        { "from": "12:15", "do": "home" },
+        { "from": "12:45", "do": "free" },
         { "from": "17:30", "do": "home" },
         { "from": "19:00", "do": "out" },
         { "from": "22:00", "do": "home" },
@@ -130,8 +139,8 @@
         { "from": "00:00", "do": "sleep" },
         { "from": "08:30", "do": "home" },
         { "from": "10:00", "do": "free" },
-        { "from": "12:30", "do": "home" },
-        { "from": "13:30", "do": "free" },
+        { "from": "12:15", "do": "home" },
+        { "from": "12:45", "do": "free" },
         { "from": "17:30", "do": "home" },
         { "from": "19:00", "do": "out" }
       ]
@@ -141,7 +150,7 @@
         { "from": "08:00", "do": "home" },
         { "from": "09:30", "do": "free" },
         { "from": "12:00", "do": "home" },
-        { "from": "13:30", "do": "free" },
+        { "from": "12:45", "do": "free" },
         { "from": "17:00", "do": "home" },
         { "from": "19:00", "do": "out" },
         { "from": "21:00", "do": "home" },

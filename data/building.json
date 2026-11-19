@@ -2,6 +2,10 @@
   "maxStartHuts": 20,
   "eddie": ["eddie-house", "eddie-workshop"],
   "fireplace": "campfire",
+  "startWorkplaces": {
+    "West": ["berry-patch", "brushwood"],
+    "Oost": ["fishing-spot", "driftwood-beach"]
+  },
   "thingsAtStart": 3,
   "thingsPerHouse": 1,
   "putBackMinutes": 5,
