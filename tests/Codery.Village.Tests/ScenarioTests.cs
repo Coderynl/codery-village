@@ -7,6 +7,7 @@ using Codery.Village.Core.Map;
 using Codery.Village.Core.Modules;
 using Codery.Village.Core.Save;
 using Codery.Village.Core.Time;
+using Codery.Village.Modules.Day;
 using Codery.Village.Modules.People;
 using Codery.Village.Server;
 using Xunit.Abstractions;
@@ -218,6 +219,25 @@ public class ScenarioTests(ITestOutputHelper output)
                 Assert.Equal(JsonSerializer.Serialize(part, SaveJson.Options), JsonSerializer.Serialize(actual.Modules.Single(other => other.Name == part.Name), SaveJson.Options));
             Assert.Equal(SaveJson.ToJson(expected), SaveJson.ToJson(actual));
         });
+    }
+
+    // Risk: Eddie, the one orange figure, is not at his workbench by day.
+    [Fact]
+    public void Eddie_is_at_his_workshop_by_day()
+    {
+        var sections = new Sections();
+        foreach (var seed in new ulong[] { 1, 2, 3 })
+        {
+            // the first of June is a Monday
+            var village = Scenario.Start(seed, sections);
+            village.RunTo(new DateTimeOffset(2026, 6, 1, 11, 0, 0, TimeSpan.FromHours(2)));
+            var eddie = village.People.All.Single(resident => resident.IsEddie);
+            var job = village.Work.JobOf(eddie.Id);
+            Assert.NotNull(job);
+            var doing = village.Day.Of(eddie.Id);
+            Assert.Equal(Activity.Work, doing.Activity);
+            Assert.Equal(job.Place, doing.Place);
+        }
     }
 
     // Risk: by day the hero is empty again, the work and the free time out of sight.

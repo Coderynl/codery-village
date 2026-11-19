@@ -500,6 +500,19 @@ public class DayTests
 
         Assert.Throws<KeyNotFoundException>(() => village.Day.Of(9999));
     }
+
+    // Risk: work as a free choice sends one without a job round in circles until the server falls over.
+    [Fact]
+    public void Work_as_free_time_is_refused_when_the_data_is_read()
+    {
+        var data = Data(day => day["free"]!.AsArray().Add(new JsonObject { ["do"] = "work", ["weight"] = 1 }));
+
+        var village = Start(1, June(1, 11), data: data);
+
+        var (module, error) = Assert.Single(village.Engine.Stopped);
+        Assert.Equal("day", module);
+        Assert.Contains("work among its free choices", error);
+    }
 }
 
 /// <summary>Holds on to its context, so a test can hand it to <see cref="Day.Settle"/>.</summary>

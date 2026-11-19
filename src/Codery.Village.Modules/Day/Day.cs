@@ -476,7 +476,7 @@ public sealed class Day : IModule
     /// <summary>
     /// Too few outside on an ordinary island: the most outgoing one who is inside and awake goes for a wander; when
     /// nobody is free, someone of the night shift, and else whoever is most outgoing. He wanders until his
-    /// block ends.
+    /// block ends; one with a job whose block is work goes back to work the next quarter.
     /// </summary>
     private void KeepOutside(Now now)
     {
@@ -529,6 +529,9 @@ public sealed class Day : IModule
         if (_settings.TicksPerCell <= 0) throw new InvalidDataException("The data section 'day' needs ticksPerCell above 0.");
         if (_settings.Free.Count == 0 || _settings.Free.Any(choice => choice.Weight <= 0))
             throw new InvalidDataException("The data section 'day' needs free choices with weights above 0.");
+        // work without a job turns into free time, so free time may not be work: it would go round in circles
+        if (_settings.Free.Any(choice => choice.Do == Activity.Work))
+            throw new InvalidDataException("The data section 'day' may not have work among its free choices.");
         if (new[] { _settings.Outings, _settings.OutingsAfterDark }.Any(outings => outings?.Any(choice => choice.Weight <= 0) == true))
             throw new InvalidDataException("The data section 'day' needs outings with weights above 0.");
         if (_settings.OutdoorByMonth is { } months && (months.Count != 12 || months.Any(factor => factor < 0)))
