@@ -38,12 +38,17 @@ public sealed class Day : IModule
     private ModuleContext? _village;
     // the quarter the activities belong to
     private DateTimeOffset _quarter;
+    // started, and not yet stepped; not saved
+    private bool _started;
     private DaySettings _settings = null!;
     private LifeCourse _course = null!;
     private Dictionary<string, Schedule> _rhythms = [];
     private Dictionary<int, Grounds> _grounds = [];
     private TimeOnly _dayFrom;
     private TimeOnly _dayTo;
+    // per month, when it gets dark and light; null when the data does not say
+    private TimeOnly[]? _dusk;
+    private TimeOnly[]? _dawn;
 
     public string Name => "day";
 
@@ -90,12 +95,20 @@ public sealed class Day : IModule
         Read(village);
         _wear.Load(null);
         Settle(village);
+        _started = true;
     }
 
     public void Step(ModuleContext village)
     {
         _village = village;
         _back.Clear();
+        if (_started)
+        {
+            // at the start the modules after Day had not started yet: now that the jobs are known, everyone does what
+            // they ask; in a new quarter that follows below anyway
+            _started = false;
+            if (QuarterOf(village) == _quarter) Choose(village, walk: false, newQuarter: false);
+        }
         var tick = village.Clocks.Tick;
         var today = DateOnly.FromDateTime(village.Clocks.Calendar.Now.DateTime);
         _wear.Turn(today, _settings.PathWindowDays, _settings.PathKeep);
@@ -170,17 +183,27 @@ public sealed class Day : IModule
 
         if (plan is not null && plan.Block == key)
         {
-            // the same block goes on; a wanderer wanders on to another place each quarter, a helper goes where the
-            // work is now, and a worker whose work moved, such as a builder sent to a new site, goes to where it is now
+            // the same block goes on; one who had no job when it began goes to work once he has one, a wanderer
+            // wanders on to another place each quarter, a helper goes where the work is now, a worker whose work
+            // moved, such as a builder sent to a new site, goes to where it is now; when it gets dark, one out for
+            // his free time picks a place again, mostly the fire, and a chat at the door goes inside
             var doing = plan.Doing;
-            if (doing.Activity == Activity.Wander && newQuarter) Go(now, resident, key, Activity.Wander, PlaceToGo(now, resident), inside: false);
+            if (job is not null && doing.Activity != Activity.Work && IsWork(block))
+            {
+                var (working, there, indoors) = PlaceOf(now, resident, Activity.Work, job);
+                Go(now, resident, key, working, there, indoors);
+            }
+            else if (doing.Activity == Activity.Wander && newQuarter) Go(now, resident, key, Activity.Wander, PlaceToGo(now, resident), inside: false);
             else if (doing.Activity == Activity.Help && newQuarter && now.Places?.HelpOn(resident.Island) != doing.Place)
             {
                 var (free, there, indoors) = PlaceOf(now, resident, Activity.Leisure, job);
                 Go(now, resident, key, free, there, indoors);
             }
-            else if (doing.Activity == Activity.Work && PlaceOf(now, resident, Activity.Work, job) is var (_, moved, indoors) && moved != doing.Place)
-                Go(now, resident, key, Activity.Work, moved, indoors);
+            else if (doing.Activity == Activity.Work && PlaceOf(now, resident, Activity.Work, job) is var (working, moved, indoors) && (working != Activity.Work || moved != doing.Place))
+                Go(now, resident, key, working, moved, indoors);
+            else if (doing.Activity == Activity.Leisure && newQuarter && FallsDark()) Go(now, resident, key, Activity.Leisure, PlaceToGo(now, resident), inside: false);
+            else if (doing.Activity == Activity.Visit && !plan.InsideThere && newQuarter && IsDark() == true && HostBy(now, resident, doing.Place) is { } host)
+                Go(now, resident, key, Activity.Visit, host, inside: true);
             else Go(now, resident, key, doing.Activity, doing.Place, plan.InsideThere);
             return;
         }
@@ -191,9 +214,31 @@ public sealed class Day : IModule
             Out => GoOut(now.Random, resident),
             var named => Enum.Parse<Activity>(named, ignoreCase: true),
         };
+        // outside an "out" block, free time out of doors follows the month too: one draw, always made, keeps the rest
+        // at home, so the stream does not depend on the outcome
+        var stays = block.Do != Out && _settings.OutdoorByMonth is not null && now.Random.NextDouble() >= Outdoors();
         var (chosen, place, inside) = PlaceOf(now, resident, activity, job);
+        if (stays && chosen is Activity.Leisure or Activity.Wander) (chosen, place, inside) = PlaceOf(now, resident, Activity.Home, job);
         Go(now, resident, key, chosen, place, inside);
     }
+
+    private static bool IsWork(Block block) => string.Equals(block.Do, nameof(Activity.Work), StringComparison.OrdinalIgnoreCase);
+
+    // whether it is dark this quarter, or at another moment; null when the data has no dusk and dawn
+    private bool? IsDark() => IsDark(_quarter);
+
+    private bool? IsDark(DateTimeOffset at)
+    {
+        if (_dusk is null || _dawn is null) return null;
+        var time = TimeOnly.FromDateTime(at.DateTime);
+        return time >= _dusk[at.Month - 1] || time < _dawn[at.Month - 1];
+    }
+
+    // whether this is the first dark quarter of the evening
+    private bool FallsDark() => IsDark() == true && IsDark(_quarter - Quarter) == false;
+
+    // how much free time out of doors this month has, against an ordinary one
+    private double Outdoors() => _settings.OutdoorByMonth is { } months ? months[_quarter.Month - 1] : 1;
 
     private Activity PickFree(Rng random)
     {
@@ -210,7 +255,7 @@ public sealed class Day : IModule
     private Activity GoOut(Rng random, Resident resident)
     {
         var evening = _settings.Evening;
-        var chance = Math.Clamp(evening.Chance + evening.PerExtraversion * (resident.Traits.Extraversion - 50) / 50.0, 0, 1);
+        var chance = Math.Clamp((evening.Chance + evening.PerExtraversion * (resident.Traits.Extraversion - 50) / 50.0) * Outdoors(), 0, 1);
         var goes = random.NextDouble() < chance;
         var visits = random.NextDouble() < evening.Visit;
         return !goes ? Activity.Home : visits ? Activity.Visit : Activity.Leisure;
@@ -260,7 +305,10 @@ public sealed class Day : IModule
 
     // ── places ──
 
-    /// <summary>Where the activity is done and whether that is inside; a visit without anyone to visit stays home.</summary>
+    /// <summary>
+    /// Where the activity is done and whether that is inside. Work without a job is free time; a visit is a chat at
+    /// the host's door while it is light and inside after dark; a visit without anyone to visit stays home.
+    /// </summary>
     private (Activity Activity, Cell Place, bool Inside) PlaceOf(Now now, Resident resident, Activity activity, JobPlace? job)
     {
         var island = resident.Island;
@@ -268,11 +316,13 @@ public sealed class Day : IModule
         var (chosen, place, inside) = activity switch
         {
             Activity.Sleep or Activity.Home or Activity.Study => (activity, home, true),
-            // without a job, he works at home, in the yard
-            Activity.Work => job is null ? (activity, home, false) : (activity, job.Place, !job.Outdoor),
+            // without a job, he has free time
+            Activity.Work => job is null ? PlaceOf(now, resident, PickFree(now.Random), job) : (activity, job.Place, !job.Outdoor),
             Activity.School => now.Places?.SchoolOn(island) is { } school ? (activity, school, true) : (activity, Gathering(now, island), false),
             Activity.Shop => (activity, Gathering(now, island), true),
-            Activity.Visit => VisitFrom(now, resident) is { } host ? (activity, host, true) : (Activity.Home, home, true),
+            Activity.Visit => VisitFrom(now, resident) is not { } host ? (Activity.Home, home, true)
+                : IsDark() == false && DoorOf(now, host, island) is { } door ? (activity, door, false)
+                : (activity, host, true),
             // free time: a friendly one helps where the island builds, the others go where there is something
             Activity.Leisure or Activity.Help => resident.Traits.Agreeableness >= _settings.HelpFrom && (_settings.HelpPhases ?? Grown).Contains(resident.Phase)
                 && now.Places?.HelpOn(island) is { } site
@@ -314,7 +364,8 @@ public sealed class Day : IModule
     {
         var grounds = _grounds[resident.Island];
         var options = new List<(int Weight, IReadOnlyList<Cell> Cells)>();
-        foreach (var choice in _settings.Outings ?? AtTheWater)
+        var outings = IsDark() == true && _settings.OutingsAfterDark is { } afterDark ? afterDark : _settings.Outings ?? AtTheWater;
+        foreach (var choice in outings)
         {
             IReadOnlyList<Cell> cells = choice.To switch
             {
@@ -339,24 +390,41 @@ public sealed class Day : IModule
         return HomeOf(now, resident);
     }
 
-    // the tiles by the doors of the homes of other households of the island: land beside the home that is no lot
-    private List<Cell> Doors(Now now, Resident resident)
+    // the tiles by the doors of the homes of other households of the island
+    private static List<Cell> Doors(Now now, Resident resident)
+    {
+        var doors = new List<Cell>();
+        foreach (var home in HomesOfOthers(now, resident))
+            if (DoorOf(now, home, resident.Island) is { } door && !doors.Contains(door)) doors.Add(door);
+        return doors;
+    }
+
+    // the homes of other households of the island, once each
+    private static IEnumerable<Cell> HomesOfOthers(Now now, Resident resident)
     {
         var own = resident.Household ?? -1 - resident.Id;
-        var doors = new List<Cell>();
         var homes = new HashSet<Cell>();
         foreach (var other in now.People.All)
         {
             if (other.Island != resident.Island || (other.Household ?? -1 - other.Id) == own) continue;
-            if (now.Places?.HomeOf(other.Id) is not { } home || !homes.Add(home)) continue;
-            foreach (var next in home.Neighbours())
-                if (now.Map.IsWalkable(next) && now.Map.IslandOf(next) == resident.Island && now.Map.At(next) != Ground.Lot)
-                {
-                    if (!doors.Contains(next)) doors.Add(next);
-                    break;
-                }
+            if (now.Places?.HomeOf(other.Id) is { } home && homes.Add(home)) yield return home;
         }
-        return doors;
+    }
+
+    // the tile by the door of a home: the first land beside it of the island that is no lot
+    private static Cell? DoorOf(Now now, Cell home, int island)
+    {
+        foreach (var next in home.Neighbours())
+            if (now.Map.IsWalkable(next) && now.Map.IslandOf(next) == island && now.Map.At(next) != Ground.Lot) return next;
+        return null;
+    }
+
+    // the home of another household by whose door the visitor stands
+    private static Cell? HostBy(Now now, Resident resident, Cell door)
+    {
+        foreach (var home in HomesOfOthers(now, resident))
+            if (DoorOf(now, home, resident.Island) == door) return home;
+        return null;
     }
 
     // ── going there ──
@@ -455,8 +523,14 @@ public sealed class Day : IModule
         if (_settings.TicksPerCell <= 0) throw new InvalidDataException("The data section 'day' needs ticksPerCell above 0.");
         if (_settings.Free.Count == 0 || _settings.Free.Any(choice => choice.Weight <= 0))
             throw new InvalidDataException("The data section 'day' needs free choices with weights above 0.");
-        if (_settings.Outings is { } outings && outings.Any(choice => choice.Weight <= 0))
+        if (new[] { _settings.Outings, _settings.OutingsAfterDark }.Any(outings => outings?.Any(choice => choice.Weight <= 0) == true))
             throw new InvalidDataException("The data section 'day' needs outings with weights above 0.");
+        if (_settings.OutdoorByMonth is { } months && (months.Count != 12 || months.Any(factor => factor < 0)))
+            throw new InvalidDataException("The data section 'day' needs outdoorByMonth as twelve factors of 0 or more.");
+        if ((_settings.Dusk is null) != (_settings.Dawn is null) || _settings.Dusk is { Count: not 12 } || _settings.Dawn is { Count: not 12 })
+            throw new InvalidDataException("The data section 'day' needs dusk and dawn for twelve months, or neither.");
+        _dusk = _settings.Dusk?.Select(Time).ToArray();
+        _dawn = _settings.Dawn?.Select(Time).ToArray();
         if (_settings.PathWindowDays < 1 || _settings.PathThreshold < 0 || _settings.PathKeep < 0 || _settings.PathSpeed <= 0)
             throw new InvalidDataException("The data section 'day' has a number for paths out of range.");
         _dayFrom = Time(_settings.Outside.DayFrom);

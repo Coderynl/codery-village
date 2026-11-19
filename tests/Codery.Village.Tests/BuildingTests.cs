@@ -461,7 +461,8 @@ public class BuildingTests
     [Fact]
     public void The_nearest_awake_resident_is_on_the_island_and_not_asleep()
     {
-        var village = Builders.Start(1, June(1, 3));
+        // late in the evening: the little ones sleep, the grown-ups are up; deep in the night all of West may sleep
+        var village = Builders.Start(1, June(1, 22));
         village.Run(1);
         var map = Builders.RealMap;
         var thing = village.Building.Things.First(thing => map.IslandOf(thing.At) == West);

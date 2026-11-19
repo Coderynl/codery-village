@@ -25,7 +25,15 @@ public sealed record DaySettings(
     // a walk over a path goes this many times as fast
     double PathSpeed = 1,
     // the phases of life that help build; children do not
-    IReadOnlyList<LifePhase>? HelpPhases = null);
+    IReadOnlyList<LifePhase>? HelpPhases = null,
+    // where free time and wandering go between dusk and dawn, by weight; without it, the same as by day
+    IReadOnlyList<OutingChoice>? OutingsAfterDark = null,
+    // per month from January, how much more or less outdoor free time and going out there is; without it, 1
+    IReadOnlyList<double>? OutdoorByMonth = null,
+    // per month from January, "HH:mm": when it gets dark and when light again (the fire reads them too); without
+    // them day and night are not told apart: a visit stays inside and the outings are those by day
+    IReadOnlyList<string>? Dusk = null,
+    IReadOnlyList<string>? Dawn = null);
 
 /// <summary>A kind of place to go in free time, and how often it is chosen.</summary>
 public sealed record OutingChoice(Outing To, int Weight);
@@ -41,8 +49,8 @@ public sealed record OutsideRule(int Always, int ByDay, string DayFrom, string D
 
 /// <summary>
 /// An "out" block: he goes out with chance <paramref name="Chance"/> plus <paramref name="PerExtraversion"/>
-/// times (extraversion − 50) / 50; out, he visits someone with chance <paramref name="Visit"/>, else he goes
-/// to the water. Otherwise he stays home.
+/// times (extraversion − 50) / 50, times the month's <c>outdoorByMonth</c>; out, he visits someone with chance
+/// <paramref name="Visit"/>, else he goes where there is something. Otherwise he stays home.
 /// </summary>
 public sealed record EveningRule(double Chance, double PerExtraversion, double Visit);
 
