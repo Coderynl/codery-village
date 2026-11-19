@@ -14,7 +14,7 @@ if (args is ["export", _, ..])
 {
     string[] words = [.. args.Skip(1).Where(arg => !arg.StartsWith("--", StringComparison.Ordinal))];
     var settings = new ConfigurationBuilder().AddCommandLine([.. args.Where(arg => arg.StartsWith("--", StringComparison.Ordinal))]).Build();
-    var duration = words.Length > 1 ? Duration(words[1]) : TimeSpan.FromDays(7);
+    var duration = words.Length > 1 ? VillageSetup.Duration(words[1]) : TimeSpan.FromDays(7);
     var feedTicks = settings.GetValue<int?>("feed") ?? 0;
     VillageSetup.Export(words[0], duration, settings.GetValue<ulong?>("Village:Seed") ?? 1, settings.GetSection("Village:Extras").Get<string[]>() ?? [], feedTicks);
     Console.WriteLine($"Wrote start.json and grown.json ({duration}){(feedTicks > 0 ? $" and feed.json ({feedTicks} ticks)" : "")} to {Path.GetFullPath(words[0])}");
@@ -110,15 +110,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.Run();
-
-// 7d, 12h, 30m, or a TimeSpan such as 7.00:00:00
-static TimeSpan Duration(string text) => text[^1] switch
-{
-    'd' => TimeSpan.FromDays(double.Parse(text[..^1], CultureInfo.InvariantCulture)),
-    'h' => TimeSpan.FromHours(double.Parse(text[..^1], CultureInfo.InvariantCulture)),
-    'm' => TimeSpan.FromMinutes(double.Parse(text[..^1], CultureInfo.InvariantCulture)),
-    _ => TimeSpan.Parse(text, CultureInfo.InvariantCulture),
-};
 
 internal sealed record SpeedRequest(int Value);
 

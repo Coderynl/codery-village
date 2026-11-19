@@ -1,3 +1,4 @@
+using System.Globalization;
 using Codery.Village.Core;
 using Codery.Village.Core.Data;
 using Codery.Village.Core.Map;
@@ -61,13 +62,7 @@ public static class VillageSetup
         Directory.CreateDirectory(folder);
         File.WriteAllText(Path.Combine(folder, "start.json"), ProtocolJson.Write(new VillageFeed(data, map, time).Join(engine)));
 
-        var ticks = (long)(duration.TotalSeconds * Clocks.TicksPerSecond);
-        for (var tick = 1; tick <= ticks; tick++)
-        {
-            engine.Step();
-            // as the host does when it saves
-            if (tick % 240 == 0) engine.Forget();
-        }
+        Grow(engine, duration);
         File.WriteAllText(Path.Combine(folder, "grown.json"), ProtocolJson.Write(new VillageFeed(data, map, time).Join(engine)));
         if (feedTicks <= 0) return;
 
@@ -82,6 +77,52 @@ public static class VillageSetup
         }
         var last = new VillageFeed(data, map, time).Join(engine);
         File.WriteAllText(Path.Combine(folder, "feed.json"), ProtocolJson.Write(new { join, ticks = recorded, last }));
+    }
+
+    /// <summary>
+    /// A village that began <paramref name="age"/> before what <paramref name="time"/> says now, run on a simulated
+    /// clock up to now, and then going on with <paramref name="time"/>: for a developer who wants to see it lived in.
+    /// </summary>
+    public static Engine Aged(DataSet data, IslandMap map, ulong seed, TimeProvider time, TimeSpan age)
+    {
+        var simulated = new SimulatedTime(time.GetUtcNow() - age);
+        var engine = Begin(data, map, seed, simulated);
+        Grow(engine, age);
+        // taken up again on the given clock, as after a restart
+        return Engine.Load(engine.Save(), Modules(), data, map, time);
+    }
+
+    /// <summary>Runs a village on a simulated clock for <paramref name="duration"/>, as fast as it goes.</summary>
+    private static void Grow(Engine engine, TimeSpan duration)
+    {
+        var ticks = (long)(duration.TotalSeconds * Clocks.TicksPerSecond);
+        for (long tick = 1; tick <= ticks; tick++)
+        {
+            engine.Step();
+            // as the host does when it saves
+            if (tick % 240 == 0) engine.Forget();
+        }
+    }
+
+    /// <summary>A duration as export and <c>Village:Advance</c> write it: 7d, 12h, 30m, or a TimeSpan such as 7.00:00:00.</summary>
+    public static TimeSpan Duration(string text)
+    {
+        try
+        {
+            return text.Trim() is { Length: > 0 } word
+                ? word[^1] switch
+                {
+                    'd' => TimeSpan.FromDays(double.Parse(word[..^1], CultureInfo.InvariantCulture)),
+                    'h' => TimeSpan.FromHours(double.Parse(word[..^1], CultureInfo.InvariantCulture)),
+                    'm' => TimeSpan.FromMinutes(double.Parse(word[..^1], CultureInfo.InvariantCulture)),
+                    _ => TimeSpan.Parse(word, CultureInfo.InvariantCulture),
+                }
+                : throw new FormatException();
+        }
+        catch (Exception exception) when (exception is FormatException or OverflowException)
+        {
+            throw new FormatException($"'{text}' is not a duration: write 3d, 12h, 30m or 3.00:00:00.", exception);
+        }
     }
 }
 

@@ -30,6 +30,7 @@ public sealed class VillageHost(
     TimeProvider time,
     TalkWorker talk,
     TalkBudget budget,
+    IHostEnvironment environment,
     IVillageStore? store = null) : BackgroundService
 {
     private static readonly TimeSpan FirstRetry = TimeSpan.FromSeconds(0.5);
@@ -47,6 +48,8 @@ public sealed class VillageHost(
     private readonly TimeSpan _saveEvery = TimeSpan.FromSeconds(Math.Max(1, configuration.GetValue<double?>("Village:SaveSeconds") ?? 60));
     private readonly List<Said> _said = [];
     private int _speed = Math.Clamp(configuration.GetValue<int?>("Village:Speed") ?? 1, 0, MaxSpeed);
+    // how old a new village begins: on a developer's machine only
+    private TimeSpan? _advance;
     private Engine? _engine;
     private VillageFeed? _feed;
     private Hand? _hand;
@@ -72,8 +75,9 @@ public sealed class VillageHost(
             throw new InvalidOperationException(
                 $"The village does not start: the data with the releases of Village:Extras has {problems.Count} problem(s). {string.Join(" ", problems)}");
         }
+        _advance = Advance();
         _hand = new Hand(data);
-        if (store is null) Use(Begin(_seed), village: null);
+        if (store is null) Use(First(), village: null);
         return base.StartAsync(cancellationToken);
     }
 
@@ -146,6 +150,34 @@ public sealed class VillageHost(
 
     private Engine Begin(ulong seed) => VillageSetup.Begin(data, map, seed, time);
 
+    /// <summary>
+    /// On a developer's machine Village:Advance (3d, 12h, 3.00:00:00) begins a new village that much older, to see
+    /// it lived in. A value that is not a duration keeps the server from starting; elsewhere the setting is ignored.
+    /// </summary>
+    private TimeSpan? Advance()
+    {
+        if (!environment.IsDevelopment() || configuration["Village:Advance"] is not { Length: > 0 } text) return null;
+        try
+        {
+            return VillageSetup.Duration(text);
+        }
+        catch (FormatException exception)
+        {
+            logger.LogCritical("Village:Advance is not a duration: {Reason}", exception.Message);
+            throw new InvalidOperationException($"The village does not start: Village:Advance {exception.Message}", exception);
+        }
+    }
+
+    /// <summary>The village a server begins with: new, or as old as Village:Advance says, its days run before it serves and ending now.</summary>
+    private Engine First()
+    {
+        if (_advance is not { } age) return Begin(_seed);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var engine = VillageSetup.Aged(data, map, _seed, time, age);
+        logger.LogInformation("Village:Advance: the village begins {Age} old, at tick {Tick}; that took {Seconds:0.0} s.", age, engine.Tick, watch.Elapsed.TotalSeconds);
+        return engine;
+    }
+
     /// <summary>Makes a village the one that runs.</summary>
     private void Use(Engine engine, long? village)
     {
@@ -207,10 +239,12 @@ public sealed class VillageHost(
         else if (latest is { Save: { } save } && Restore(latest.Id, save) is { } restored)
         {
             logger.LogInformation("Village {Village} goes on at tick {Tick}.", latest.Id, restored.Tick);
+            if (_advance is not null)
+                logger.LogInformation("Village:Advance is ignored: village {Village} is saved, and a saved village is never replaced.", latest.Id);
             return (latest.Id, restored);
         }
 
-        var engine = Begin(_seed);
+        var engine = First();
         var village = await store.Begin(_seed, engine.Save(), cancellation);
         logger.LogInformation("Village {Village} begins, with seed {Seed}.", village, _seed);
         return (village, engine);
