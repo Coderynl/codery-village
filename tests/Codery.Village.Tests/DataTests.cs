@@ -34,6 +34,18 @@ public class DataTests
                 Assert.True(blueprints.Contains(blueprint.GetProperty("id").GetString()!), $"{release}: {blueprint.GetProperty("id")} is not in the live catalog");
     }
 
+    // Risk: a typo under economy.nature (such as "forrest") is read as a yield of its own, and that ground never runs out.
+    [Fact]
+    public void Every_yield_under_nature_is_a_ground_or_taken_by_a_recipe()
+    {
+        var live = VillageSetup.Live();
+        var taken = CatalogOf(live).Blueprints.Select(blueprint => blueprint.Recipe?.Takes).OfType<string>().ToHashSet();
+        var names = live.Section<JsonElement>("economy").GetProperty("nature").EnumerateObject().Select(yield => yield.Name);
+
+        Assert.All(names, name => Assert.True(Enum.GetNames<Ground>().Contains(name, StringComparer.OrdinalIgnoreCase) || taken.Contains(name),
+            $"economy.nature has '{name}', which is no ground and no recipe in the live data takes from"));
+    }
+
     [Fact]
     public void Every_json_file_in_the_folder_is_a_section()
     {
