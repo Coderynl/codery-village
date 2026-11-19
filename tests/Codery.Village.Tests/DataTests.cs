@@ -254,6 +254,38 @@ public class DataTests
         Assert.Contains(expected, problem);
     }
 
+    // a hut whose recipe takes from the yield named, and an economy with the nature named
+    private static string Taking(string yield) => Catalog($$"""[{{Hut(more: $$""", "recipe": { "in": {}, "out": { "wood": 1 }, "ticks": 5, "takes": "{{yield}}" }""")}}]""");
+
+    private static string Nature(params string[] names) =>
+        $$"""{ "nature": { {{string.Join(", ", names.Select(name => $$"""
+"{{name}}": { "perBatch": 10, "regrowDays": 2 }
+"""))}} } }""";
+
+    private static DataSet WithEconomy(string catalog, string economy) =>
+        DataSet.FromTexts(new Dictionary<string, string> { ["catalog"] = catalog, ["wishes"] = Wishes, ["economy"] = economy }, []);
+
+    [Fact]
+    public void A_recipe_may_take_from_a_yield_of_its_own()
+    {
+        Assert.Empty(WithEconomy(Taking("game"), Nature("forest", "game")).Problems());
+    }
+
+    public static TheoryData<string, string, string> BrokenNature => new()
+    {
+        // a yield of its own needs a name of its own
+        { Taking("forest"), Nature("forest"), "'forest'" },
+    };
+
+    [Theory]
+    [MemberData(nameof(BrokenNature))]
+    public void Nature_problems_are_found(string catalog, string economy, string expected)
+    {
+        var problem = Assert.Single(WithEconomy(catalog, economy).Problems());
+
+        Assert.Contains(expected, problem);
+    }
+
     [Fact]
     public void A_wish_may_wait_for_what_no_data_knows_yet()
     {
