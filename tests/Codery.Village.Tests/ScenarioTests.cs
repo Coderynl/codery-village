@@ -65,6 +65,43 @@ public class ScenarioTests(ITestOutputHelper output)
         foreach (var seed in ends.Keys.Order().Take(3)) output.WriteLine($"seed {seed} after {Weeks} weeks:{Environment.NewLine}{ends[seed]}");
     }
 
+    // Risk: on the live ladder the bread chain breaks: West, with its fertile soil, does not get from grain to flour to
+    // bread in its first two weeks, or Oost, without fertile soil, puts up a part of the chain it can never feed.
+    [Fact]
+    public void West_bakes_bread_from_its_own_grain()
+    {
+        const int Days = 14;
+        string[] chain = ["farm", "mill", "bakery"];
+        var sections = Sections.Of(VillageSetup.Live());
+        var baked = new ConcurrentDictionary<ulong, int>();
+
+        try
+        {
+            EverySeed(seed =>
+            {
+                var scenario = Scenario.Start(seed, sections);
+                var west = scenario.Ordinary.Single(island => island.Name == "West").Id;
+                var oost = scenario.Ordinary.Single(island => island.Name == "Oost").Id;
+                var quarter = 0;
+                scenario.Days(Days, each: village =>
+                {
+                    quarter++;
+                    if (village.Work.Count(west, "bread") > 0) baked.TryAdd(seed, (quarter + 95) / 96);
+                });
+
+                var standing = scenario.Building.All.Where(structure => structure.Island == west && structure.Done).Select(structure => structure.Blueprint).ToHashSet();
+                Assert.True(chain.All(standing.Contains), $"West after {Days} days has standing: {string.Join(", ", standing.Order())}");
+                Assert.True(baked.ContainsKey(seed), $"West had no bread in stock in its first {Days} days");
+                Assert.DoesNotContain(scenario.Building.All, structure => structure.Island == oost && chain.Contains(structure.Blueprint));
+                Assert.Empty(scenario.Engine.Stopped);
+            });
+        }
+        finally
+        {
+            output.WriteLine($"bread on West by day 7 in {baked.Values.Count(day => day <= 7)} of {Seeds} seeds, by day {Days} in {baked.Count}");
+        }
+    }
+
     [Fact]
     public void Everyone_saves()
     {

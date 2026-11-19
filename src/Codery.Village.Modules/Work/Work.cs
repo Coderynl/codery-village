@@ -19,7 +19,10 @@ namespace Codery.Village.Modules.Work;
 /// ordinary island has places for its own builders; a working resident without a job takes the free place on
 /// his island that fits his interests best, the first places of every workplace before the second; while his island is
 /// short of a need (less in stock than <c>shortDays</c> days of what its households buy), a place that makes it goes
-/// before any other. A builder without a
+/// before any other. Once a day, at the start of the day shift, every workplace without a worker takes one from the
+/// workplace of its island with the most, if that one has two or more and makes nothing the island is short of: the
+/// worker who fits least there, of equals the newest in the job, who takes the new place as a new hire would; when no
+/// workplace can spare one, a builder does, as long as the island keeps one. A builder without a
 /// site helps out on the land of a workplace (<see cref="Help"/>), paid but adding nothing; with nothing to help he has
 /// no job that quarter. A workplace makes its recipe while someone works there, into its own
 /// store (<see cref="Stores"/>); what goes in, one of its workers fetches first at the store nearest that has it. A
@@ -51,6 +54,8 @@ public sealed class Work : IModule, IJobs, IStock
     private const long QuarterSeconds = 15 * 60;
     // the need whose purchase a household fetches
     private const string Food = "food";
+    // the block of a rhythm in which a shift works
+    private const string WorkBlock = "work";
 
     private readonly Dictionary<int, Treasury> _treasuries = [];
     // per island, its stores
@@ -60,6 +65,11 @@ public sealed class Work : IModule, IJobs, IStock
     private bool _spread;
     // who works where, by resident
     private readonly SortedDictionary<int, Seat> _jobs = [];
+    // per worker, the tick he took the job he has
+    private readonly Dictionary<int, long> _since = [];
+    // the calendar day workers last moved to the workplaces without one, and the time of day they do
+    private DateOnly _moved;
+    private TimeOnly _moveAt;
     // per worker, the wage earned that is not yet a whole cent, in 1/TicksPerHour cents
     private readonly Dictionary<int, long> _owed = [];
     // per worker, the wage paid since the last settling of the day, in cents
@@ -102,7 +112,7 @@ public sealed class Work : IModule, IJobs, IStock
 
     public string Name => "work";
 
-    public int Version => 2;
+    public int Version => 3;
 
     /// <summary>The forest tiles that are felled now; they grow back after <c>forestRegrowTicks</c>.</summary>
     public IReadOnlyCollection<Cell> Felled => _felled.Keys;
@@ -201,6 +211,7 @@ public sealed class Work : IModule, IJobs, IStock
         }
         FetchFood(village, world);
         Staff(village, world);
+        Move(village, world);
         Produce(village, world, Labour(world));
         Regrow(village.Clocks.Tick);
     }
@@ -219,6 +230,7 @@ public sealed class Work : IModule, IJobs, IStock
         {
             if (seats.Contains(seat) && world.Residents.TryGetValue(resident, out var who) && who is { Phase: LifePhase.Working, IsEddie: false }) continue;
             _jobs.Remove(resident);
+            _since.Remove(resident);
             _owed.Remove(resident);
             if (seats.Contains(seat)) _vacant[seat] = tick;
         }
@@ -241,12 +253,13 @@ public sealed class Work : IModule, IJobs, IStock
             foreach (var opening in openings)
             {
                 if (opening.Seat.Island != resident.Island || !_vacant.TryGetValue(opening.Seat, out var freed)) continue;
-                var rank = (Meets: wants is not null && opening.Recipe is { } recipe && recipe.Out.Keys.Any(wants.Contains) ? 1 : 0, Fit: Fit(resident, opening.Role));
+                var rank = (Meets: Meets(opening.Recipe, wants) ? 1 : 0, Fit: Fit(resident, opening.Role));
                 if (rank.CompareTo(bestRank) < 0 || rank == bestRank && freed >= bestFreed) continue;
                 (best, bestRank, bestFreed) = (opening, rank, freed);
             }
             if (best is not { } chosen) continue;
             _jobs[resident.Id] = chosen.Seat;
+            _since[resident.Id] = tick;
             _vacant.Remove(chosen.Seat);
             village.Publish(new Hired(tick, resident.Id, resident.Island, chosen.Role));
         }
@@ -290,6 +303,80 @@ public sealed class Work : IModule, IJobs, IStock
             }
         }
         return wanted;
+    }
+
+    // whether the recipe makes something of what the island is short of
+    private static bool Meets(Recipe? recipe, HashSet<string>? wants) =>
+        wants is not null && recipe is not null && recipe.Out.Keys.Any(wants.Contains);
+
+    /// <summary>
+    /// Once a day, at the start of the day shift: every workplace without a worker, in the order they stand, takes one
+    /// from the workplace of its island with the most (of equals the first), when that one has two or more and makes
+    /// nothing the island is short of; when none can, from the builders of the island while it keeps one. Who fits least
+    /// there goes, of equals the newest in the job; he takes the first place of the workplace as a new hire, and his old
+    /// place comes free.
+    /// </summary>
+    private void Move(ModuleContext village, World world)
+    {
+        var now = village.Clocks.Calendar.Moment;
+        if (now.Time < _moveAt || now.Date == _moved) return;
+        _moved = now.Date;
+        var tick = village.Clocks.Tick;
+        var workers = new Dictionary<int, List<int>>();
+        foreach (var (resident, seat) in _jobs)
+        {
+            if (seat.Structure < 0) continue;
+            if (!workers.TryGetValue(seat.Structure, out var at)) workers[seat.Structure] = at = [];
+            at.Add(resident);
+        }
+        var workplaces = world.Standing.Where(structure => InEconomy(village.Map, structure)
+            && _blueprints.TryGetValue(structure.Blueprint, out var blueprint) && blueprint.Jobs?.Any(job => job.Count > 0) == true).ToList();
+        Dictionary<int, HashSet<string>>? wanted = null;
+        foreach (var empty in workplaces)
+        {
+            if (workers.ContainsKey(empty.Id)) continue;
+            wanted ??= Wanted(world);
+            var wants = wanted.GetValueOrDefault(empty.Island);
+            StructureView? from = null;
+            foreach (var other in workplaces)
+            {
+                if (other.Island != empty.Island || !workers.TryGetValue(other.Id, out var there) || there.Count < 2
+                    || Meets(_blueprints[other.Blueprint].Recipe, wants) || from is not null && there.Count <= workers[from.Id].Count) continue;
+                from = other;
+            }
+            List<int> pool;
+            Func<int, string> roleOf;
+            if (from is not null)
+            {
+                var roles = _blueprints[from.Blueprint].Jobs!;
+                pool = workers[from.Id];
+                roleOf = resident => roles[_jobs[resident].Job].Role;
+            }
+            else
+            {
+                // no workplace can spare one: the builders can, as long as the island keeps one
+                pool = [.. _jobs.Where(item => item.Value.Structure < 0 && item.Value.Island == empty.Island).Select(item => item.Key)];
+                if (pool.Count < 2) continue;
+                roleOf = _ => _settings.BuilderRole;
+            }
+            var mover = pool
+                .OrderBy(resident => world.Residents.TryGetValue(resident, out var who) ? Fit(who, roleOf(resident)) : 0)
+                .ThenByDescending(resident => _since.GetValueOrDefault(resident))
+                .ThenByDescending(resident => resident)
+                .First();
+            var jobs = _blueprints[empty.Blueprint].Jobs!;
+            var job = Enumerable.Range(0, jobs.Count).First(index => jobs[index].Count > 0);
+            var seat = new Seat(empty.Island, empty.Id, job, 0);
+            _vacant[_jobs[mover]] = tick;
+            _vacant.Remove(seat);
+            _jobs[mover] = seat;
+            _since[mover] = tick;
+            _owed.Remove(mover);
+            _working.Remove(mover);
+            pool.Remove(mover);
+            workers[empty.Id] = [mover];
+            village.Publish(new Hired(tick, mover, empty.Island, jobs[job].Role));
+        }
     }
 
     private int Fit(Resident resident, string role) =>
@@ -847,7 +934,11 @@ public sealed class Work : IModule, IJobs, IStock
         _village = village;
         _settings = village.Data.Section<EconomySettings>(Section);
         _fetchFrom = Time(_settings.FetchFoodFrom);
-        _night = village.Data.Names.Contains("day") && village.Data.Section<WorkDay>("day").Night is { } night ? (Time(night.From), Time(night.To)) : null;
+        var day = village.Data.Names.Contains("day") ? village.Data.Section<WorkDay>("day") : null;
+        _night = day?.Night is { } night ? (Time(night.From), Time(night.To)) : null;
+        // workers move when the day shift starts work on a weekday; without that rhythm, at midnight
+        _moveAt = day?.Rhythms?.GetValueOrDefault(nameof(Shift.Day).ToLowerInvariant())?.Weekday.FirstOrDefault(block => block.Do == WorkBlock)?.From is { } from
+            ? Time(from) : TimeOnly.MinValue;
         var catalog = village.Data.Section<Catalog>("catalog");
         _blueprints = catalog.Blueprints.ToDictionary(blueprint => blueprint.Id);
         var materials = catalog.Materials.Select(material => material.Id).ToHashSet();
@@ -901,7 +992,7 @@ public sealed class Work : IModule, IJobs, IStock
                 item.Value.Spent, _wages.GetValueOrDefault(item.Key), null, item.Value.Departed,
                 _shopping.TryGetValue(item.Key, out var shopping) ? shopping : null,
                 [.. StoresOf(item.Key).All.Select(store => new SavedStore(store.Store, store.Stock))]))],
-            [.. _jobs.Select(job => new SavedJob(job.Key, job.Value, _owed.GetValueOrDefault(job.Key)))],
+            [.. _jobs.Select(job => new SavedJob(job.Key, job.Value, _owed.GetValueOrDefault(job.Key), _since.GetValueOrDefault(job.Key)))],
             [.. _vacant.OrderBy(item => (item.Key.Island, item.Key.Structure, item.Key.Job, item.Key.Index)).Select(item => new SavedVacancy(item.Key, item.Value))],
             [.. _batches.Select(batch => new SavedBatch(batch.Key, batch.Value))],
             [.. _felled.OrderBy(item => (item.Key.Row, item.Key.Col)).Select(item => new SavedFelled(item.Key, item.Value))],
@@ -912,7 +1003,8 @@ public sealed class Work : IModule, IJobs, IStock
             _spread ? true : null,
             _fetch.Count > 0 ? [.. _fetch.Select(item => new SavedFetch(item.Key, item.Value))] : null,
             _fetchQuarter != 0 ? _fetchQuarter : null,
-            _atHome.Count > 0 ? [.. _atHome] : null), SaveJson.Options)!;
+            _atHome.Count > 0 ? [.. _atHome] : null,
+            _moved != default ? _moved : null), SaveJson.Options)!;
 
     public void Load(ModuleContext village, JsonNode data, int version)
     {
@@ -923,6 +1015,7 @@ public sealed class Work : IModule, IJobs, IStock
         _stores.Clear();
         _wages.Clear();
         _jobs.Clear();
+        _since.Clear();
         _owed.Clear();
         _vacant.Clear();
         _batches.Clear();
@@ -954,6 +1047,8 @@ public sealed class Work : IModule, IJobs, IStock
         {
             _jobs[job.Resident] = job.Seat;
             _owed[job.Resident] = job.Owed;
+            // up to version 2 nobody knew since when he had his job: all as from the start
+            _since[job.Resident] = job.Since ?? 0;
         }
         foreach (var vacancy in saved.Vacant) _vacant[vacancy.Seat] = vacancy.Freed;
         foreach (var batch in saved.Batches) _batches[batch.Structure] = batch.Worked;
@@ -965,6 +1060,8 @@ public sealed class Work : IModule, IJobs, IStock
         foreach (var fetch in saved.Fetch ?? []) _fetch[fetch.Household] = fetch.Material;
         _fetchQuarter = saved.FetchQuarter ?? 0;
         _atHome = [.. saved.AtHome ?? []];
+        // up to version 2 nobody moved: the first day shift after loading they do
+        _moved = saved.Moved ?? default;
     }
 
     /// <summary>A place to work: a builder's of the island (<see cref="Structure"/> −1), or one of a building's jobs.</summary>
@@ -984,12 +1081,16 @@ public sealed class Work : IModule, IJobs, IStock
     private sealed record SavedWork(DateOnly Day, IReadOnlyList<SavedIsland> Islands, IReadOnlyList<SavedJob> Jobs,
         IReadOnlyList<SavedVacancy> Vacant, IReadOnlyList<SavedBatch> Batches, IReadOnlyList<SavedFelled> Felled, IReadOnlyList<SavedEarned>? Earned = null,
         IReadOnlyList<int>? Working = null, SavedNature? Nature = null, IReadOnlyList<SavedStood>? Stood = null, bool? Spread = null,
-        IReadOnlyList<SavedFetch>? Fetch = null, long? FetchQuarter = null, IReadOnlyList<int>? AtHome = null);
+        IReadOnlyList<SavedFetch>? Fetch = null, long? FetchQuarter = null, IReadOnlyList<int>? AtHome = null, DateOnly? Moved = null);
 
     private sealed record SavedFetch(int Household, string Material);
 
-    /// <summary>What Work reads from the section "day": the night, "HH:mm" from and to.</summary>
-    private sealed record WorkDay(NightHours? Night = null);
+    /// <summary>What Work reads from the section "day": the night, "HH:mm" from and to, and the rhythms of the shifts.</summary>
+    private sealed record WorkDay(NightHours? Night = null, IReadOnlyDictionary<string, ShiftRhythm>? Rhythms = null);
+
+    private sealed record ShiftRhythm(IReadOnlyList<ShiftBlock> Weekday);
+
+    private sealed record ShiftBlock(string From, string Do);
 
     private sealed record NightHours(string From, string To);
 
@@ -1005,7 +1106,8 @@ public sealed class Work : IModule, IJobs, IStock
     private sealed record SavedIsland(int Id, long Cash, long Subsidy, long Upkeep, long Spent, long Wages, IReadOnlyDictionary<string, int>? Stock = null, long Departed = 0,
         Shopping? Shopping = null, IReadOnlyList<SavedStore>? Stores = null);
 
-    private sealed record SavedJob(int Resident, Seat Seat, long Owed);
+    // up to version 2 a job had no Since
+    private sealed record SavedJob(int Resident, Seat Seat, long Owed, long? Since = null);
 
     private sealed record SavedVacancy(Seat Seat, long Freed);
 

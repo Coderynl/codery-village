@@ -57,6 +57,8 @@
     { "id": "fruit", "nl": "iets zoets", "en": "something sweet", "label": "fruit", "weight": 0.75, "afterDays": 2,
       "who": { "traits": { "comfort": 45 } } },
     { "id": "wine", "nl": "wijn van eigen druiven", "en": "wine from their own grapes", "label": "wine", "weight": 1.5, "after": ["grapes"],
-      "who": { "phases": ["working", "retired"], "traits": { "extraversion": 45 } } }
+      "who": { "phases": ["working", "retired"], "traits": { "extraversion": 45 } } },
+    { "id": "flour", "nl": "meel om mee te bakken", "en": "flour to bake with", "label": "flour", "weight": 1, "afterDays": 4, "after": ["grain"],
+      "who": { "interests": ["cooking"], "phases": ["working", "retired"] } }
   ]
 }

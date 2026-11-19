@@ -11,7 +11,7 @@ Each release is named once in this list, with what it brings and the wish it ser
 1. `tools.json` — lumberyard (wood). Wish `tools`.
 2. `sawmill.json` — sawmill (planks from wood). Wish `planks`.
 3. `farm.json` — farm (grain). Wish `fields`.
-4. `bakery.json` — bakery (bread from grain). Wish `bread`.
+4. `bakery.json` — bakery (bread from flour). Wish `bread`.
 5. `quarry.json` — quarry (dressed stone). Wish `stone`.
 6. `brickworks.json` — clay pit and brickworks (clay, bricks). Wish `bricks`.
 7. `peat.json` — peat cutter (peat). Wish `peat`.
@@ -20,8 +20,9 @@ Each release is named once in this list, with what it brings and the wish it ser
 10. `jetty.json` — fishing jetty. Wish `jetty`.
 11. `cafe.json` — café. Wish `cafe`.
 12. `grapes.json` — wild vines (grapes, picked on fertile soil). Wish `fruit`.
+13. `mill.json` — mill (flour from grain), between the farm and the bakery. Wish `flour`.
 
-What an island can do with a release depends on its soil: Oost has no forest and no fertile soil, so no lumberyard, farm, bakery or vines; West has no rock, clay or fishing ground.
+What an island can do with a release depends on its soil: Oost has no forest and no fertile soil, so no lumberyard, farm, mill, bakery or vines; West has no rock, clay or fishing ground.
 
 The test `Every_release_serves_a_wish_and_loads` derives per release what it depends on, loads it on the base plus that, checks that it serves a wish, and checks that this list names every release once.
 

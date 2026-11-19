@@ -24,13 +24,16 @@ public class WorkTests
     private static DateTimeOffset June(int day, int hour, int minute = 0) => new(2026, 6, day, hour, minute, 0, TimeSpan.FromHours(2));
 
     /// <summary>The real data with the whole ladder of releases, changed as the test needs.</summary>
-    private static DataSet Data(Action<JsonObject>? economy = null, Action<JsonObject>? people = null, Action<JsonObject>? life = null)
+    private static DataSet Data(Action<JsonObject>? economy = null, Action<JsonObject>? people = null, Action<JsonObject>? life = null,
+        Action<JsonObject>? catalog = null)
     {
         JsonObject Read(string name) => JsonNode.Parse(File.ReadAllText(Path.Combine(Folder, name + ".json")))!.AsObject();
         var economyJson = Read("economy");
         var peopleJson = Read("people");
         var lifeJson = Read("life");
+        var catalogJson = Read("catalog");
         life?.Invoke(lifeJson);
+        catalog?.Invoke(catalogJson);
         economy?.Invoke(economyJson);
         people?.Invoke(peopleJson);
         return DataSet.FromTexts(new Dictionary<string, string>
@@ -38,7 +41,7 @@ public class WorkTests
             ["life"] = lifeJson.ToJsonString(),
             ["people"] = peopleJson.ToJsonString(),
             ["day"] = Read("day").ToJsonString(),
-            ["catalog"] = Read("catalog").ToJsonString(),
+            ["catalog"] = catalogJson.ToJsonString(),
             ["economy"] = economyJson.ToJsonString(),
         }, Ladder.All());
     }
@@ -105,7 +108,7 @@ public class WorkTests
         var data = Data(economy: e =>
         {
             e["builders"] = 0;
-            e["start"]!["stock"]!["West"] = new JsonObject { ["grain"] = 100 };
+            e["start"]!["stock"]!["West"] = new JsonObject { ["flour"] = 100 };
         });
         var village = Start(1, June(1, 14), data, [Built(1, "bakery", West, 4, 13)]);
         // the bakers work the early shift: in the afternoon they sleep
@@ -117,7 +120,7 @@ public class WorkTests
         village.Run(1000);
 
         Assert.Equal(0, village.Work.Count(West, "bread"));
-        Assert.Equal(100, village.Work.Count(West, "grain"));
+        Assert.Equal(100, village.Work.Count(West, "flour"));
         Assert.All(bakers, baker => Assert.Equal(0, baker.Money));
         Assert.Equal(cash, village.Work.Of(West).Cash);
         Assert.DoesNotContain(village.Ear.Heard, e => e is Produced);
@@ -130,8 +133,8 @@ public class WorkTests
         Assert.True(bread > 0);
         Assert.Contains(village.Ear.Heard, e => e is Produced { Material: "bread" } produced && produced.Island == West);
         Assert.Contains(bakers, baker => baker.Money > 0);
-        // a batch takes its grain when it starts and gives its bread when it is done
-        Assert.Contains(100 - village.Work.Count(West, "grain"), new[] { bread / 4 * 2, bread / 4 * 2 + 2 });
+        // a batch takes its flour when it starts and gives its bread when it is done
+        Assert.Contains(100 - village.Work.Count(West, "flour"), new[] { bread / 4 * 2, bread / 4 * 2 + 2 });
     }
 
     [Fact]
@@ -199,6 +202,44 @@ public class WorkTests
             loaded.Step();
         }
         Assert.Equal(SaveJson.ToJson(running.Save()), SaveJson.ToJson(loaded.Save()));
+    }
+
+    // Risk: the village saved on production before workers changed jobs (Work version 2) no longer loads, or loses its jobs.
+    [Fact]
+    public void A_work_save_of_version_2_loads_and_goes_on()
+    {
+        var data = Data();
+        IModule[] Modules()
+        {
+            var structures = new FakeStructures();
+            structures.Standing.AddRange(Economy());
+            return [new People(), structures, new Day(), new Work(), new Ear()];
+        }
+        var time = new SimulatedTime(June(1, 10));
+        var modules = Modules();
+        var running = new Engine(modules, data, RealMap, 7, time);
+        running.Start();
+        var village = Of(running, time, modules);
+        village.Run(1300);
+
+        // as version 2 wrote it: no day the workers moved, and no tick a job was taken
+        var saved = SaveJson.FromJson(SaveJson.ToJson(running.Save()));
+        var part = Assert.Single(saved.Modules, part => part.Name == "work");
+        var work = part.Data.AsObject();
+        work.Remove("moved");
+        foreach (var job in work["jobs"]!.AsArray()) job!.AsObject().Remove("since");
+        saved = saved with { Modules = [.. saved.Modules.Select(module => module.Name == "work" ? module with { Version = 2 } : module)] };
+
+        var loadedModules = Modules();
+        var loaded = Of(Engine.Load(SaveJson.FromJson(SaveJson.ToJson(saved)), loadedModules, data, RealMap, new SimulatedTime(saved.Calendar)), new SimulatedTime(saved.Calendar), loadedModules);
+        var jobs = village.People.All.ToDictionary(resident => resident.Id, resident => village.Work.JobOf(resident.Id)?.Role);
+        Assert.Contains(jobs.Values, role => role is not null);
+        Assert.Equal(jobs, loaded.People.All.ToDictionary(resident => resident.Id, resident => loaded.Work.JobOf(resident.Id)?.Role));
+
+        // and it goes on, and saves in the form of now
+        loaded.Run(2000);
+        Assert.Empty(loaded.Engine.Stopped);
+        Assert.Equal(3, Assert.Single(loaded.Engine.Save().Modules, module => module.Name == "work").Version);
     }
 
     [Theory]
@@ -391,6 +432,40 @@ public class WorkTests
         village.Run(2);
 
         Assert.Equal(["baker", "baker", "farmer", "farmer", "farmer"], working.Take(5).Select(resident => village.Work.JobOf(resident.Id)?.Role));
+    }
+
+    // Risk: every worker already has a job, so a new workplace stays empty for weeks and the release it came with never runs.
+    [Fact]
+    public void Once_a_day_an_empty_workplace_takes_a_worker_from_the_fullest()
+    {
+        // berry patches of three places, with food enough that they make nothing the island is short of
+        void Economy(JsonObject e, int builders)
+        {
+            e["builders"] = builders;
+            e["fits"] = new JsonObject();
+            e["start"]!["stock"]!["West"] = new JsonObject { ["berries"] = 1000, ["flour"] = 100 };
+        }
+        void ThreeSeats(JsonObject c) =>
+            c["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "berry-patch")!["jobs"]![0]!["count"] = 3;
+        var working = Start(1, June(1, 10)).People.On(West).Count(resident => resident is { Phase: LifePhase.Working, IsEddie: false });
+        Assert.True(working >= 6, $"{working} working on West");
+        // the builders take who the two patches leave
+        var data = Data(economy: e => Economy(e, working - 6), catalog: ThreeSeats);
+        var fertile = RealMap.Islands.Single(island => island.Id == West).Cells.Where(cell => RealMap.At(cell) == Ground.Fertile).ToList();
+        var village = Start(1, June(1, 10), data, [Built(1, "berry-patch", West, fertile[0].Row, fertile[0].Col), Built(2, "berry-patch", West, fertile[^1].Row, fertile[^1].Col)]);
+        int At(int building) => village.People.All.Count(resident => village.Work.JobOf(resident.Id)?.Building == building);
+        village.Run(2);
+        Assert.Equal((3, 3), (At(1), At(2)));
+        Assert.All(village.People.On(West).Where(resident => resident is { Phase: LifePhase.Working, IsEddie: false }),
+            resident => Assert.NotNull(village.Work.JobOf(resident.Id)));
+
+        // a bakery comes, and nobody is free for it
+        village.Structures.Standing.Add(Built(3, "bakery", West, 4, 13));
+        village.JumpTo(June(2, 12));
+        village.Run(2);
+
+        Assert.Equal(["baker"], village.People.All.Where(resident => village.Work.JobOf(resident.Id)?.Building == 3).Select(resident => village.Work.JobOf(resident.Id)!.Role));
+        Assert.Equal([2, 3], new[] { At(1), At(2) }.Order());
     }
 
     [Fact]

@@ -1,0 +1,21 @@
+{
+  "materials": [
+    { "id": "flour", "nl": "meel", "en": "flour" }
+  ],
+  "roles": [
+    { "id": "miller", "nl": "molenaar", "en": "miller" }
+  ],
+  "blueprints": [
+    {
+      "id": "mill", "nl": "molen", "en": "mill", "on": ["land"], "serves": "flour",
+      "jobs": [{ "role": "miller", "count": 1, "shift": "day", "outdoor": false }],
+      "recipe": { "in": { "grain": 2 }, "out": { "flour": 2 }, "ticks": 240 },
+      "phases": [
+        { "id": "foundation", "nl": "fundering", "en": "foundation", "ticks": 300, "cost": { "branches": 2 } },
+        { "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 400, "cost": { "branches": 3 } },
+        { "id": "sails", "nl": "wieken", "en": "sails", "ticks": 300, "cost": { "reed": 2 } }
+      ],
+      "look": { "form": "kit", "models": ["building_windmill"] }
+    }
+  ]
+}
