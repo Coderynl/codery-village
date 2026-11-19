@@ -20,6 +20,7 @@
   "stayQuarters": 6,
   "fetchFood": true,
   "fetchFoodFrom": "12:00",
+  "shortDays": 2,
   "nature": {
     "fertile": { "perBatch": 8, "regrowDays": 2 },
     "fishing": { "perBatch": 4, "regrowDays": 1 },
@@ -32,7 +33,7 @@
     "heat": { "perHousehold": 1 }
   },
   "prices": {
-    "berries": 200, "roots": 200, "fish": 200, "firewood": 75, "driftwood": 75,
+    "berries": 200, "roots": 200, "grapes": 200, "fish": 200, "firewood": 75, "driftwood": 75,
     "bread": 300, "wood": 100, "peat": 100
   },
   "fits": {

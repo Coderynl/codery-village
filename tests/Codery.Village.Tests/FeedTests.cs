@@ -438,7 +438,7 @@ public class FeedTests(ITestOutputHelper output)
         var folder = Path.Combine(Path.GetTempPath(), "village-export-" + Guid.NewGuid().ToString("N"));
         try
         {
-            VillageSetup.Export(folder, TimeSpan.FromMinutes(10), seed: 1, extras: []);
+            VillageSetup.Export(folder, TimeSpan.FromMinutes(10), seed: 1);
 
             var start = JsonSerializer.Deserialize<JoinMessage>(File.ReadAllText(Path.Combine(folder, "start.json")), Protocol.Json)!;
             var grown = JsonSerializer.Deserialize<JoinMessage>(File.ReadAllText(Path.Combine(folder, "grown.json")), Protocol.Json)!;
@@ -461,7 +461,7 @@ public class FeedTests(ITestOutputHelper output)
         var folder = Path.Combine(Path.GetTempPath(), "village-export-" + Guid.NewGuid().ToString("N"));
         try
         {
-            VillageSetup.Export(folder, TimeSpan.FromMinutes(10), seed: 1, extras: [], feedTicks: 40);
+            VillageSetup.Export(folder, TimeSpan.FromMinutes(10), seed: 1, feedTicks: 40);
 
             using var feed = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, "feed.json")));
             var join = feed.RootElement.GetProperty("join").Deserialize<JoinMessage>(Protocol.Json)!;

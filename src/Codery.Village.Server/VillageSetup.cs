@@ -30,8 +30,11 @@ public static class VillageSetup
     public static IReadOnlyList<IModule> Modules() =>
         [new People(), new Day(), new Work(), new Building(), new Fire(), new Community(), new Wishes(), new Happiness(), new TalkModule()];
 
-    /// <summary>The data in <see cref="Folder"/>, with the releases <paramref name="extras"/> names (such as <c>releases/cafe.json</c>).</summary>
+    /// <summary>The data in <see cref="Folder"/>, with the releases <paramref name="extras"/> names (such as <c>releases/cafe.json</c>): for the base or a part of the ladder.</summary>
     public static DataSet Data(IEnumerable<string> extras) => DataFolder.Load(Folder, extras);
+
+    /// <summary>The data the live village runs on: the base in <see cref="Folder"/> with every release in its <c>releases</c> folder.</summary>
+    public static DataSet Live() => DataFolder.LoadLive(Folder);
 
     public static IslandMap Map() => MapText.Parse(File.ReadAllText(Path.Combine(Folder, "map.txt")));
 
@@ -47,14 +50,14 @@ public static class VillageSetup
     public static readonly DateTimeOffset ExportStart = new(2026, 6, 1, 8, 0, 0, TimeSpan.FromHours(2));
 
     /// <summary>
-    /// Writes the village as it begins (<c>start.json</c>) and after <paramref name="duration"/> on the simulated
+    /// Writes the live village as it begins (<c>start.json</c>) and after <paramref name="duration"/> on the simulated
     /// clock (<c>grown.json</c>), as a page gets it when it joins: for the still village in the hero. With
     /// <paramref name="feedTicks"/> it also records what a page gets after that (<c>feed.json</c>): the join, that
     /// many ticks, and the join at the end, for the hero's tests.
     /// </summary>
-    public static void Export(string folder, TimeSpan duration, ulong seed, IEnumerable<string> extras, int feedTicks = 0)
+    public static void Export(string folder, TimeSpan duration, ulong seed, int feedTicks = 0)
     {
-        var data = Data(extras);
+        var data = Live();
         if (data.Problems() is { Count: > 0 } problems) throw new InvalidDataException(string.Join(" ", problems));
         var map = Map();
         var time = new SimulatedTime(ExportStart);

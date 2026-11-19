@@ -372,6 +372,27 @@ public class WorkTests
         Assert.Equal(working.Take(5).Select(resident => resident.Id), village.Ear.Heard.OfType<Hired>().Select(hired => hired.Resident));
     }
 
+    // Risk: an island out of food staffs its new workplaces in list order, and the bakery stays empty while its households go hungry.
+    [Fact]
+    public void While_food_is_short_the_places_that_make_food_go_first()
+    {
+        var data = Data(economy: e =>
+        {
+            e["builders"] = 0;
+            e["fits"] = new JsonObject();
+            e["start"]!["stock"]!["West"]!["berries"] = 0;
+        });
+        var village = Start(1, June(1, 10), data);
+        var working = village.People.On(West).Where(resident => resident is { Phase: LifePhase.Working, IsEddie: false }).ToList();
+        Assert.True(working.Count >= 5, $"{working.Count} working on West");
+
+        // the farm comes first in the list, but its grain feeds nobody; the bread of the bakery does
+        village.Structures.Standing.AddRange([Built(1, "farm", West, 5, 13), Built(2, "bakery", West, 4, 13)]);
+        village.Run(2);
+
+        Assert.Equal(["baker", "baker", "farmer", "farmer", "farmer"], working.Take(5).Select(resident => village.Work.JobOf(resident.Id)?.Role));
+    }
+
     [Fact]
     public void Of_equal_places_the_one_free_the_longest_goes_first()
     {

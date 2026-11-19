@@ -243,16 +243,11 @@ public class ServerTests(WebApplicationFactory<Program> factory) : IClassFixture
     }
 
     [Fact]
-    public async Task The_village_has_the_releases_its_settings_name_and_none_without()
+    public async Task The_village_has_every_release()
     {
-        static bool HasCafe(WebApplicationFactory<Program> server) =>
-            Host(server).Join().Map.Blueprints.Any(blueprint => blueprint.Id == "cafe");
+        await using var server = await Village();
 
-        await using var plain = await Village();
-        Assert.False(HasCafe(plain));
-
-        await using var released = await Village(("Village:Extras:0", "releases/cafe.json"));
-        Assert.True(HasCafe(released));
+        Assert.Contains(Host(server).Join().Map.Blueprints, blueprint => blueprint.Id == "cafe");
     }
 
     [Fact]
@@ -261,8 +256,7 @@ public class ServerTests(WebApplicationFactory<Program> factory) : IClassFixture
         // the same release twice: every id it brings is named twice
         var log = new Recorder();
         await using var server = factory.WithWebHostBuilder(builder => builder
-            .UseSetting("Village:Extras:0", "releases/cafe.json")
-            .UseSetting("Village:Extras:1", "releases/cafe.json")
+            .ConfigureTestServices(services => services.AddSingleton(VillageSetup.Data(["releases/cafe.json", "releases/cafe.json"])))
             .ConfigureLogging(logging => logging.AddProvider(log)));
 
         var refused = Assert.ThrowsAny<Exception>(() => server.Server);

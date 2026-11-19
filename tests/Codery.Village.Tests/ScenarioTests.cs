@@ -29,10 +29,11 @@ public class ScenarioTests(ITestOutputHelper output)
     private const int Seeds = 30;
     private const int Weeks = 4;
 
+    // Risk: the village as it runs live, on the whole ladder, goes broke, starves, has nothing left to want or stops building.
     [Fact]
     public void Four_weeks_of_life_stay_within_bounds()
     {
-        var sections = new Sections();
+        var sections = Sections.Of(VillageSetup.Live());
         var most = 100L * (int)sections["economy"]["startSubsidy"]!;
         var ends = new ConcurrentDictionary<ulong, string>();
 
@@ -389,8 +390,12 @@ internal sealed class Sections
 {
     private static readonly string[] Names = ["life", "people", "day", "catalog", "economy", "building", "wishes", "talk"];
 
-    public Dictionary<string, JsonObject> Json { get; } = Names.ToDictionary(name => name,
+    public Dictionary<string, JsonObject> Json { get; private init; } = Names.ToDictionary(name => name,
         name => JsonNode.Parse(File.ReadAllText(Path.Combine(Builders.Folder, name + ".json")))!.AsObject());
+
+    /// <summary>The sections as <paramref name="data"/> holds them: the catalog with the releases it was loaded with.</summary>
+    public static Sections Of(DataSet data) =>
+        new() { Json = Names.ToDictionary(name => name, name => data.Section<JsonObject>(name).DeepClone().AsObject()) };
 
     public string Map { get; set; } = File.ReadAllText(Path.Combine(Builders.Folder, "map.txt"));
 

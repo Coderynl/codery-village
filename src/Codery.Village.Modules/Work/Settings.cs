@@ -44,7 +44,10 @@ public sealed record EconomySettings(
     // whether a household fetches the food it bought at the store where it lies, for all to see; the purchase is booked either way
     bool FetchFood = false,
     // from this time of day ("HH:mm") a household sends someone who comes home for its food; never in the night of the day section
-    string FetchFoodFrom = "12:00");
+    string FetchFoodFrom = "12:00",
+    // a need is short on an island while its stock holds less than this many days of what its households buy; then the
+    // places that make it are filled first. 0: never short
+    int ShortDays = 0);
 
 /// <summary>
 /// How a tile of a ground runs out and grows back. Its yield goes from 100 (full) to 0; every batch made on it takes

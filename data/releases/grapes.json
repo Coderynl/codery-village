@@ -1,6 +1,6 @@
 {
   "materials": [
-    { "id": "grapes", "nl": "druiven", "en": "grapes" }
+    { "id": "grapes", "nl": "druiven", "en": "grapes", "satisfies": ["food"] }
   ],
   "blueprints": [
     {

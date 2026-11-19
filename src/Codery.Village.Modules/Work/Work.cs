@@ -17,7 +17,9 @@ namespace Codery.Village.Modules.Work;
 /// <summary>
 /// Work and money, in their simplest form. A building that stands offers the jobs of its blueprint and each
 /// ordinary island has places for its own builders; a working resident without a job takes the free place on
-/// his island that fits his interests best, the first places of every workplace before the second. A builder without a
+/// his island that fits his interests best, the first places of every workplace before the second; while his island is
+/// short of a need (less in stock than <c>shortDays</c> days of what its households buy), a place that makes it goes
+/// before any other. A builder without a
 /// site helps out on the land of a workplace (<see cref="Help"/>), paid but adding nothing; with nothing to help he has
 /// no job that quarter. A workplace makes its recipe while someone works there, into its own
 /// store (<see cref="Stores"/>); what goes in, one of its workers fetches first at the store nearest that has it. A
@@ -225,20 +227,23 @@ public sealed class Work : IModule, IJobs, IStock
             if (!taken.Contains(opening.Seat)) _vacant.TryAdd(opening.Seat, tick);
         if (_vacant.Count == 0) return;
 
+        Dictionary<int, HashSet<string>>? wanted = null;
         foreach (var resident in world.People.All)
         {
             if (resident is not { Phase: LifePhase.Working, IsEddie: false } || _jobs.ContainsKey(resident.Id)) continue;
-            // the best fit; of equal fits the place free the longest; of those the first in the list, so the first
-            // seats of every workplace go before the second
+            wanted ??= Wanted(world);
+            var wants = wanted.GetValueOrDefault(resident.Island);
+            // a place that makes what the island is short of; then the best fit; of equal fits the place free the
+            // longest; of those the first in the list, so the first seats of every workplace go before the second
             Opening? best = null;
-            var bestFit = -1;
+            var bestRank = (Meets: -1, Fit: -1);
             var bestFreed = long.MaxValue;
             foreach (var opening in openings)
             {
                 if (opening.Seat.Island != resident.Island || !_vacant.TryGetValue(opening.Seat, out var freed)) continue;
-                var fit = Fit(resident, opening.Role);
-                if (fit < bestFit || fit == bestFit && freed >= bestFreed) continue;
-                (best, bestFit, bestFreed) = (opening, fit, freed);
+                var rank = (Meets: wants is not null && opening.Recipe is { } recipe && recipe.Out.Keys.Any(wants.Contains) ? 1 : 0, Fit: Fit(resident, opening.Role));
+                if (rank.CompareTo(bestRank) < 0 || rank == bestRank && freed >= bestFreed) continue;
+                (best, bestRank, bestFreed) = (opening, rank, freed);
             }
             if (best is not { } chosen) continue;
             _jobs[resident.Id] = chosen.Seat;
@@ -256,16 +261,35 @@ public sealed class Work : IModule, IJobs, IStock
         {
             if (island.Eddie) continue;
             for (var index = 0; index < _settings.Builders; index++)
-                openings.Add(new Opening(new Seat(island.Id, -1, 0, index), _settings.BuilderRole));
+                openings.Add(new Opening(new Seat(island.Id, -1, 0, index), _settings.BuilderRole, null));
         }
         foreach (var structure in world.Standing)
         {
             if (!InEconomy(map, structure) || !_blueprints.TryGetValue(structure.Blueprint, out var blueprint) || blueprint.Jobs is not { } jobs) continue;
             for (var job = 0; job < jobs.Count; job++)
                 for (var index = 0; index < jobs[job].Count; index++)
-                    openings.Add(new Opening(new Seat(structure.Island, structure.Id, job, index), jobs[job].Role));
+                    openings.Add(new Opening(new Seat(structure.Island, structure.Id, job, index), jobs[job].Role, blueprint.Recipe));
         }
         return [.. openings.OrderBy(opening => opening.Seat.Index)];
+    }
+
+    // per island, the goods of every need it is short of: less in stock than shortDays days of what its households buy
+    private Dictionary<int, HashSet<string>> Wanted(World world)
+    {
+        var wanted = new Dictionary<int, HashSet<string>>();
+        if (_settings.ShortDays <= 0) return wanted;
+        foreach (var island in world.People.All.GroupBy(resident => resident.Island))
+        {
+            var households = island.Select(HouseholdOf).Distinct().Count();
+            foreach (var (_, amount, goods) in _needs)
+            {
+                var daily = amount.PerPerson * island.Count() + amount.PerHousehold * households;
+                if (goods.Sum(good => Count(island.Key, good.Material)) >= (long)_settings.ShortDays * daily) continue;
+                if (!wanted.TryGetValue(island.Key, out var goodsShort)) wanted[island.Key] = goodsShort = [];
+                goodsShort.UnionWith(goods.Select(good => good.Material));
+            }
+        }
+        return wanted;
     }
 
     private int Fit(Resident resident, string role) =>
@@ -829,7 +853,7 @@ public sealed class Work : IModule, IJobs, IStock
         var materials = catalog.Materials.Select(material => material.Id).ToHashSet();
 
         if (_settings.Builders < 0 || _settings.ForestRegrowTicks <= 0 || _settings.ForestRange < 0 || _settings.SubsidyDamping <= 0
-            || _settings.WorkRange < 0 || _settings.StayQuarters < 1
+            || _settings.WorkRange < 0 || _settings.StayQuarters < 1 || _settings.ShortDays < 0
             || _settings.SpendPercent is < 0 or > 100 || _settings.WagePerHour < 0 || _settings.SupportPerDay < 0)
             throw new InvalidDataException($"The data section '{Section}' has a number out of range.");
         foreach (var (island, stock) in _settings.Start.Stock)
@@ -946,7 +970,8 @@ public sealed class Work : IModule, IJobs, IStock
     /// <summary>A place to work: a builder's of the island (<see cref="Structure"/> −1), or one of a building's jobs.</summary>
     private readonly record struct Seat(int Island, int Structure, int Job, int Index);
 
-    private readonly record struct Opening(Seat Seat, string Role);
+    // a place to fill, with the recipe of its workplace
+    private readonly record struct Opening(Seat Seat, string Role, Recipe? Recipe);
 
     private sealed record World(
         People.People People,

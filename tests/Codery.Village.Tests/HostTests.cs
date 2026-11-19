@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Codery.Village.Core;
+using Codery.Village.Core.Data;
 using Codery.Village.Core.Save;
 using Codery.Village.Core.Time;
 using Codery.Village.Modules.Talk;
@@ -327,6 +328,43 @@ public class HostTests
         Assert.InRange(Tick(host), 0, 40);
     }
 
+    // Risk: the deploy that brings the ladder throws away the village production saved on the base, or loads it without the releases.
+    [Fact]
+    public async Task A_village_saved_on_the_base_goes_on_with_the_whole_ladder()
+    {
+        var onBase = VillageSetup.Data([]);
+        var now = Builders.June(3, 10);
+        var day = TimeSpan.FromDays(1);
+        static IReadOnlyList<(int, string)> Residents(Engine engine) =>
+            [.. engine.Running.OfType<PeopleModule>().Single().All.Select(resident => (resident.Id, resident.Name))];
+        var lived = VillageSetup.Aged(onBase, VillageSetup.Map(), 1, new SimulatedTime(now), day);
+        var saved = SaveJson.FromJson(SaveJson.ToJson(lived.Save()));
+        var store = new FakeStore();
+        var village = await store.Begin(1, saved, CancellationToken.None);
+
+        await using var server = Server(store, time: new SimulatedTime(now));
+        var host = await Started(server);
+        host.SetSpeed(0);
+
+        var (tick, residents) = host.Inspect(engine => (engine.Tick, Residents(engine)));
+        Assert.Equal(saved.Tick, tick);
+        Assert.Equal(Residents(lived), residents);
+        Assert.Equal(village, Assert.Single(store.Villages).Village);
+
+        // a day on, the village builds what only the releases bring
+        var known = onBase.Section<Catalog>("catalog").Blueprints.Select(blueprint => blueprint.Id).ToHashSet();
+        var ladder = host.Inspect(engine =>
+        {
+            for (var step = 0; step < day.TotalSeconds * Clocks.TicksPerSecond; step++)
+            {
+                engine.Step();
+                if (engine.Tick % 240 == 0) engine.Forget();
+            }
+            return engine.Running.OfType<BuildingModule>().Single().All.Select(structure => structure.Blueprint).Where(blueprint => !known.Contains(blueprint)).ToList();
+        });
+        Assert.NotEmpty(ladder);
+    }
+
     [Fact]
     public async Task Speed_hurries_the_tick_and_the_life_clock_but_not_the_calendar()
     {
@@ -620,7 +658,7 @@ public class HostDatabaseTests(PostgresFixture postgres)
         Assert.Equal(dayLater, calendar);
         Assert.Equal(saved.Calendar.Date.AddDays(1), calendar.Date);
         // it is the saved village, taken up again
-        var expected = Engine.Load(saved, VillageSetup.Modules(), VillageSetup.Data([]), VillageSetup.Map(), new SimulatedTime(dayLater));
+        var expected = Engine.Load(saved, VillageSetup.Modules(), VillageSetup.Live(), VillageSetup.Map(), new SimulatedTime(dayLater));
         Assert.Equal(SaveJson.ToJson(expected.Save()), save);
     }
 

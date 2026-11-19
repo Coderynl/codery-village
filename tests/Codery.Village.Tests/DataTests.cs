@@ -19,7 +19,19 @@ public class DataTests
     public void The_data_has_no_problems()
     {
         Assert.Empty(Base().Problems());
-        Assert.Empty(DataFolder.Load(Folder, Ladder.InOrder()).Problems());
+    }
+
+    // Risk: a release in the folder does not reach the live village, or the whole ladder together keeps the server from starting.
+    [Fact]
+    public void The_live_data_holds_every_release()
+    {
+        var live = VillageSetup.Live();
+
+        Assert.Empty(live.Problems());
+        var blueprints = CatalogOf(live).Blueprints.Select(blueprint => blueprint.Id).ToHashSet();
+        foreach (var release in Ladder.Files())
+            foreach (var blueprint in JsonDocument.Parse(Ladder.Text(release)).RootElement.GetProperty("blueprints").EnumerateArray())
+                Assert.True(blueprints.Contains(blueprint.GetProperty("id").GetString()!), $"{release}: {blueprint.GetProperty("id")} is not in the live catalog");
     }
 
     [Fact]
@@ -133,15 +145,13 @@ public class DataTests
         var labels = WishLabels();
         var files = Ladder.Files();
         Assert.NotEmpty(files);
-        // the README names each release once, in an order that loads
+        // the README names each release once
         Assert.Equal(files, Ladder.InOrder().Order(StringComparer.Ordinal));
 
         foreach (var release in files)
         {
-            var with = Ladder.With(release);
-            var order = Ladder.InOrder().ToList();
-            Assert.All(with.SkipLast(1), before => Assert.True(order.IndexOf(before) < order.IndexOf(release), $"{before} comes after {release} in the README"));
-            var data = DataFolder.Load(Folder, with);
+            // on the base and only what it needs
+            var data = DataFolder.Load(Folder, Ladder.With(release));
             Assert.True(data.Problems().Count == 0, $"{release}: {string.Join(" ", data.Problems())}");
 
             var added = JsonDocument.Parse(Ladder.Text(release)).RootElement.GetProperty("blueprints").EnumerateArray()

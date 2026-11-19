@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Http.Connections;
 
 // "export <folder> [<duration>]" writes the village as it begins (start.json) and after the duration (grown.json,
 // a week when none is given: 7d, 12h, 30m or 7.00:00:00), for the still village in the hero, and stops.
-// --Village:Seed=2 and --Village:Extras:0=releases/cafe.json (and :1, ...) work as on the server. --feed=2400 also
+// It runs on the data of the server, with every release. --Village:Seed=2 works as on the server. --feed=2400 also
 // records the join, 2400 ticks and the join after them (feed.json), for the hero's tests.
 if (args is ["export", _, ..])
 {
@@ -16,7 +16,7 @@ if (args is ["export", _, ..])
     var settings = new ConfigurationBuilder().AddCommandLine([.. args.Where(arg => arg.StartsWith("--", StringComparison.Ordinal))]).Build();
     var duration = words.Length > 1 ? VillageSetup.Duration(words[1]) : TimeSpan.FromDays(7);
     var feedTicks = settings.GetValue<int?>("feed") ?? 0;
-    VillageSetup.Export(words[0], duration, settings.GetValue<ulong?>("Village:Seed") ?? 1, settings.GetSection("Village:Extras").Get<string[]>() ?? [], feedTicks);
+    VillageSetup.Export(words[0], duration, settings.GetValue<ulong?>("Village:Seed") ?? 1, feedTicks);
     Console.WriteLine($"Wrote start.json and grown.json ({duration}){(feedTicks > 0 ? $" and feed.json ({feedTicks} ticks)" : "")} to {Path.GetFullPath(words[0])}");
     return;
 }
@@ -35,9 +35,8 @@ builder.Services.AddSignalR(options =>
     // what is not there is left out, not sent as null: a quiet tick is only its number
     .AddJsonProtocol(json => Protocol.Configure(json.PayloadSerializerOptions));
 
-// the world as data, with the releases the settings name, and the map
-builder.Services.AddSingleton(services =>
-    VillageSetup.Data(services.GetRequiredService<IConfiguration>().GetSection("Village:Extras").Get<string[]>() ?? []));
+// the world as data, with every release in the folder, and the map
+builder.Services.AddSingleton(_ => VillageSetup.Live());
 builder.Services.AddSingleton(_ => VillageSetup.Map());
 // the real time; on a developer's machine Village:ClockStart starts it at another moment, to see the village at night by day
 builder.Services.AddSingleton(services =>

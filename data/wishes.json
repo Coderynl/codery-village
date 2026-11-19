@@ -1,7 +1,7 @@
 {
   "everyTicks": 240,
   "taskThreshold": 15,
-  "points": { "fulfilled": 3, "unfulfilled": -2 },
+  "points": { "fulfilled": 1, "unfulfilled": -2 },
   "task": {
     "titleNl": "Het dorp wenst {wish}",
     "titleEn": "The village wishes for {wish}",

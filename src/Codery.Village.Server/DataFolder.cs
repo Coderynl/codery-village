@@ -16,4 +16,14 @@ public static class DataFolder
             .ToDictionary(path => Path.GetFileNameWithoutExtension(path), File.ReadAllText);
         return DataSet.FromTexts(sections, extras.Select(extra => File.ReadAllText(Path.Combine(folder, extra))));
     }
+
+    /// <summary>
+    /// The data the live village runs on: the sections in <paramref name="folder"/> and every release in its
+    /// <c>releases</c> folder, in ordinal order of the file name. A release only adds to the catalog, so the order
+    /// does not change what the village knows.
+    /// </summary>
+    public static DataSet LoadLive(string folder) =>
+        Load(folder, Directory.EnumerateFiles(Path.Combine(folder, "releases"), "*.json", SearchOption.TopDirectoryOnly)
+            .Select(path => Path.Combine("releases", Path.GetFileName(path)))
+            .Order(StringComparer.Ordinal));
 }
