@@ -32,3 +32,9 @@ The test `Every_release_serves_a_wish_and_loads` derives per release what it dep
 ## Wishes waiting for a release
 
 A wish with `after` only counts once the loaded data (the base plus the releases) knows every named id, a material or a structure. That way one release brings the next wish: with `grapes.json` the village knows grapes, and then residents wish for `wine`. No release serves wine, so that becomes a task for Eddie. An id in `after` that does not exist anywhere yet is not an error: a later release from Eddie can bring it. An empty `after` is an error.
+
+## How Eddie adds a release
+
+1. Add `data/releases/<id>.json`, with the id in lower case, digits and dashes. It only adds to the lists of the catalog and serves a wish from `wishes.json` with `serves`.
+2. Add one numbered line to the list above: the file, what it brings, the wish it serves. Change no other line.
+3. Change nothing else. CI (`dotnet run --project src/Codery.Village.Checks -- paths <base> <head> <bot>`) fails a pull request from Eddie that touches any other path. He may delete only a release his own bot added, and then removes its README line too.

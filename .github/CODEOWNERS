@@ -1,1 +1,11 @@
 * @Codery-nl
+
+# Eddie adds releases and the line about them in the README: no owner, so his pull request needs no review and merges on green.
+# The last matching line wins.
+/data/releases/*.json
+/data/releases/README.md
+
+# What guards the rule stays Michael's.
+/.github/ @Codery-nl
+/EDDIE.md @Codery-nl
+/src/Codery.Village.Checks/ @Codery-nl

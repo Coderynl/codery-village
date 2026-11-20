@@ -23,3 +23,7 @@ What every agent working in this repo must know, whatever the tool. Claude Code 
 - The tests that use a real server or the real clock are in the collection `RealTimeCollection`; the tests against the database in `PostgresCollection`. Both run only after the rest, and not side by side. A new test of that kind belongs in one of the two: next to the tests that simulate weeks of village, they miss their timeouts on CI (four cores).
 
 
+
+## What Eddie may change
+
+Eddie's pull requests may only add `data/releases/<id>.json`, change `data/releases/README.md`, and delete a release his own bot added. The check is `src/Codery.Village.Checks`: `dotnet run --project src/Codery.Village.Checks -- paths <base> <head> <bot>` reads `git diff --name-status` and `git log`, prints one line per problem and exits 1 when there are any. The rule itself is `ReleasePaths.Problems`. CI runs it as job `paths`, only for pull requests whose author is the repository variable `EDDIE_BOT`. Everything of Eddie's goes through `EDDIE.md`.
