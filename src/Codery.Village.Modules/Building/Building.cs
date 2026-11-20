@@ -25,8 +25,8 @@ namespace Codery.Village.Modules.Building;
 /// A site that stands still says why, once per reason. Each ordinary island starts with its fireplace, its start
 /// workplaces and a hut per household, Eddie with his house and workshop; all finished. Building gives the homes,
 /// as People moves households in and out of them, the places of the day, and the buildings Work staffs. It also keeps the loose things a visitor
-/// can move: a few at the start, and one by every house that is finished. A save that names a blueprint the data no
-/// longer has (its release was taken away) loads without what was built after it.
+/// can move: a few at the start, and one by every house that is finished. A save that names a blueprint or a kind of
+/// thing the data no longer has (its release was taken away) loads without what was built after it, or the things.
 /// </summary>
 public sealed class Building : IModule, IHousing, IPlaces, IStructures
 {
@@ -627,11 +627,15 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
             structure.Living.AddRange(part.Households);
             foreach (var reason in part.Told) structure.Told.Add(reason);
         }
-        _things.AddRange(saved.Things);
-        foreach (var (thing, since) in saved.InTheWay ?? new Dictionary<int, long>()) _inTheWay[thing] = since;
+        // so is a loose thing of a kind the data no longer has
+        foreach (var thing in saved.Things)
+            if (_kinds.Contains(thing.Kind)) _things.Add(thing);
+            else forgotten.Add(thing.Kind);
+        foreach (var (thing, since) in saved.InTheWay ?? new Dictionary<int, long>())
+            if (_things.Any(kept => kept.Id == thing)) _inTheWay[thing] = since;
         _nextStructure = saved.NextStructure;
         _nextThing = saved.NextThing;
-        foreach (var blueprint in forgotten) village.Log(new LogEntry(village.Clocks.Tick, Forgotten, blueprint));
+        foreach (var id in forgotten) village.Log(new LogEntry(village.Clocks.Tick, Forgotten, id));
     }
 
     private sealed record SavedBuilding(int NextStructure, int NextThing, IReadOnlyList<SavedStructure> Structures, IReadOnlyList<LooseThing> Things,

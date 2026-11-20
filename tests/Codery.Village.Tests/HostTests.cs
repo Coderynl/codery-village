@@ -401,30 +401,39 @@ public class HostTests
     [Fact]
     public void A_village_goes_on_when_a_release_is_taken_away()
     {
-        // two weeks, and then until the hunters have brought game in
+        // two weeks, and then until the hunters have game in stock and a hunter carries it, with a parasol of the café about
         var hunting = Scenario.Start(1, Sections.Of(VillageSetup.Live()));
         hunting.Days(14);
-        for (var quarter = 0; quarter < 2 * 96 && !hunting.Map.Islands.Any(island => hunting.Work.Count(island.Id, "game") > 0); quarter++) hunting.NextQuarter();
-        Assert.Contains(hunting.Map.Islands, island => hunting.Work.Count(island.Id, "game") > 0);
+        bool Carried(Scenario village) => village.People.All.Any(resident =>
+            village.Day.Of(resident.Id).Carry == "game" || village.Day.TripOf(resident.Id)?.Errand is { There: "game" } or { Back: "game" });
+        bool Ready(Scenario village) => village.Map.Islands.Any(island => village.Work.Count(island.Id, "game") > 0) && Carried(village)
+            && village.Building.Things.Any(thing => thing.Kind == "parasol");
+        for (var quarter = 0; quarter < 4 * 96 && !Ready(hunting); quarter++) hunting.NextQuarter();
+        Assert.True(Ready(hunting), "no game in stock and carried, with a parasol about, in four days after the first two weeks");
         var hunters = hunting.People.All.Where(resident => hunting.Work.JobOf(resident.Id)?.Role == "hunter").Select(resident => resident.Id).ToList();
         Assert.NotEmpty(hunters);
         var saved = SaveJson.FromJson(SaveJson.ToJson(hunting.Engine.Save()));
 
-        var withoutHunting = VillageSetup.Data(VillageSetup.Releases().Where(release => release != "hunting").Select(release => $"releases/{release}.json"));
-        var village = Scenario.Load(saved, Sections.Of(withoutHunting));
+        // the hunters' lodge and the café taken away
+        string[] gone = ["hunting", "cafe"];
+        var without = VillageSetup.Data(VillageSetup.Releases().Except(gone).Select(release => $"releases/{release}.json"));
+        var village = Scenario.Load(saved, Sections.Of(without));
 
         Assert.Empty(village.Engine.Stopped);
         Assert.DoesNotContain(village.Engine.Log, entry => entry.Kind == "module-dormant");
-        Assert.DoesNotContain(village.Building.All, structure => structure.Blueprint == "hunters-lodge");
+        Assert.DoesNotContain(village.Building.All, structure => structure.Blueprint is "hunters-lodge" or "cafe");
+        Assert.DoesNotContain(village.Building.Things, thing => thing.Kind == "parasol");
         Assert.All(village.Map.Islands, island => Assert.DoesNotContain("game", village.Work.Stock(island.Id).Keys));
-        // once per id, however many lodges and hunters there were
+        Assert.False(Carried(village));
+        // once per id in a module, however many lodges, hunters and parasols there were
         var forgotten = village.Engine.Log.Where(entry => entry.Kind == "forgotten").Select(entry => entry.Subject).ToList();
         Assert.Single(forgotten, "hunters-lodge");
         Assert.Single(forgotten, "hunter");
-        Assert.Single(forgotten, "game");
+        Assert.Single(forgotten, "parasol");
+        Assert.Contains("game", forgotten);
 
         // a day on, as the four weeks of the scenarios hold it
-        var most = 100L * (int)Sections.Of(withoutHunting)["economy"]["startSubsidy"]!;
+        var most = 100L * (int)Sections.Of(without)["economy"]["startSubsidy"]!;
         village.Days(1, each: day =>
         {
             foreach (var island in day.Ordinary)
