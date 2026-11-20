@@ -3,6 +3,7 @@ using Codery.Village.Core.Data;
 using Codery.Village.Core.Map;
 using Codery.Village.Core.Time;
 using Codery.Village.Server;
+using Codery.Village.Server.Talk;
 
 namespace Codery.Village.Tests;
 
@@ -175,6 +176,98 @@ public class DataTests
             .Select(blueprint => blueprint.Serves).OfType<string>().ToHashSet();
         foreach (var label in new[] { "tools", "planks", "fields", "bread", "stone", "bricks", "house", "jetty", "cafe", "fruit", "flour", "vegetables", "orchard", "meat" })
             Assert.Contains(label, served);
+    }
+
+    // Risk: a text Eddie (or anyone) adds to the data or a release that the talk word list forbids is shown to residents and visitors.
+    [Fact]
+    public void Every_text_in_the_live_data_passes_the_word_list()
+    {
+        Assert.Empty(WordListOffences(LiveFiles()));
+    }
+
+    // Risk: the walk misses a forbidden word in a release name, so Eddie's release passes CI with it.
+    [Theory]
+    [InlineData("bier")]
+    [InlineData("kerk")]
+    public void A_release_with_a_forbidden_word_in_its_name_is_named_in_the_failure(string word)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["releases/pub.json"] = $$"""{ "blueprints": [{ "id": "pub", "nl": "het {{word}} huis", "en": "the pub" }] }""",
+            ["talk.json"] = """{ "words": { "nl": ["bier"] }, "prompt": { "conversation": "praat niet over bier" } }""",
+        };
+
+        var offence = Assert.Single(WordListOffences(files));
+        Assert.Contains("releases/pub.json", offence);
+        Assert.Contains("$.blueprints[0].nl", offence);
+        Assert.Contains(word, offence);
+    }
+
+    // Risk: a name too long for the plaques and lists of the village breaks the layout.
+    [Fact]
+    public void Names_are_short()
+    {
+        var files = LiveFiles();
+        var tooLong = new List<string>();
+        void Measure(string file, string array, int limit)
+        {
+            foreach (var item in Parse(files, file).RootElement.GetProperty(array).EnumerateArray())
+                foreach (var language in new[] { "nl", "en" })
+                    if (item.GetProperty(language).GetString()!.Length > limit)
+                        tooLong.Add($"{file} {array} {item.GetProperty("id")} {language}: '{item.GetProperty(language)}' is over {limit}");
+        }
+        foreach (var file in files.Keys.Where(file => file == "catalog.json" || file.StartsWith("releases/")))
+        {
+            foreach (var array in new[] { "blueprints", "materials", "roles" })
+                if (Parse(files, file).RootElement.TryGetProperty(array, out _)) Measure(file, array, 40);
+        }
+        Measure("wishes.json", "wishes", 60);
+
+        Assert.Empty(tooLong);
+    }
+
+    private static IReadOnlyDictionary<string, string> LiveFiles() =>
+        Directory.EnumerateFiles(Folder, "*.json", SearchOption.AllDirectories)
+            .ToDictionary(path => Path.GetRelativePath(Folder, path).Replace(Path.DirectorySeparatorChar, '/'), File.ReadAllText);
+
+    private static JsonDocument Parse(IReadOnlyDictionary<string, string> files, string file) => JsonDocument.Parse(files[file]);
+
+    /// <summary>
+    /// Every text in the data files that has a language (a property <c>nl</c>/<c>en</c> or ending in <c>Nl</c>/<c>En</c>)
+    /// checked against the word list of that language, as "file path: 'word' in 'text'". The <c>words</c> and <c>prompt</c>
+    /// sections of <c>talk.json</c> list and describe what is forbidden; nobody sees them.
+    /// </summary>
+    private static List<string> WordListOffences(IReadOnlyDictionary<string, string> files)
+    {
+        var decency = new Decency(DataFolder.Load(Folder, []).Section<TalkServerSettings>("talk"));
+        var offences = new List<string>();
+        void Walk(string file, string path, JsonElement node, string? language)
+        {
+            switch (node.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    foreach (var property in node.EnumerateObject())
+                    {
+                        if (file == "talk.json" && path == "$" && property.Name is "words" or "prompt") continue;
+                        var own = property.Name is "nl" || property.Name.EndsWith("Nl") ? "nl"
+                            : property.Name is "en" || property.Name.EndsWith("En") ? "en" : null;
+                        Walk(file, $"{path}.{property.Name}", property.Value, own ?? language);
+                    }
+                    break;
+                case JsonValueKind.Array:
+                    var index = 0;
+                    foreach (var item in node.EnumerateArray()) Walk(file, $"{path}[{index++}]", item, language);
+                    break;
+                case JsonValueKind.String when language is not null:
+                    var text = node.GetString()!;
+                    var word = language == "nl" ? decency.Forbidden(text, "") : decency.Forbidden("", text);
+                    if (word is not null) offences.Add($"{file} {path}: the word '{word}' in '{text}'");
+                    break;
+            }
+        }
+        foreach (var (file, text) in files)
+            Walk(file, "$", JsonDocument.Parse(text).RootElement, null);
+        return offences;
     }
 
     private static HashSet<string> WishLabels() =>
