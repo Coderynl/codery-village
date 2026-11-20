@@ -216,6 +216,59 @@ public class ErrandTests
     }
 
     [Fact]
+    public void A_reject_after_live_holds_the_wish()
+    {
+        var live = Asking() with { State = ErrandState.Live };
+        List<IssueComment> comments = [Command(), Result(150, 100, "done"), ByOwner(160, "/eddie reject not like this"), Result(170, 160, "reverted")];
+
+        var held = Next(live, null, comments, Start.AddDays(1));
+
+        Assert.Equal<DeskAction>([new HoldWish("cafe"), new PostComment("Teruggedraaid."), new AddLabel("on-hold")], held.Actions);
+        Assert.Equal(ErrandState.Held, held.Errand!.State);
+    }
+
+    [Fact]
+    public void A_released_wish_is_asked_again_on_the_same_issue()
+    {
+        var history = new[] { new Failure("timeout", Issue, Start), new Failure("timeout", Issue, Start), new Failure("timeout", Issue, Start) };
+        var held = Asking(3, history) with { State = ErrandState.Held, OwnerMentioned = true };
+
+        // Michael released the wish, and the land wishes it again
+        var again = Next(held, Cafe, [Command()], Start.AddDays(5));
+
+        Assert.Equal<DeskAction>([new PostCommand(FirstCommand)], again.Actions);
+        var errand = again.Errand!;
+        Assert.Equal((7, ErrandState.Asking, 0, 0, false), (errand.Issue, errand.State, errand.Failures, errand.History.Count, errand.OwnerMentioned));
+    }
+
+    [Fact]
+    public void A_release_that_disappears_waits_for_the_reject_before_asking_again()
+    {
+        var live = Asking() with { State = ErrandState.Live };
+        List<IssueComment> comments = [Command(), Result(150, 100, "done")];
+        var gone = Start.AddDays(1);
+
+        // the task is still open for a moment after the release went live: nothing is gone
+        Assert.Equal(live, Next(live, Cafe, comments, gone, wishLive: true).Errand);
+
+        // the release went away and the task is back: first wait for Eddie's word on it
+        var waiting = Next(live, Cafe, comments, gone);
+        Assert.Empty(waiting.Actions);
+        Assert.Empty(Next(waiting.Errand, Cafe, comments, gone.AddHours(5.9)).Actions);
+
+        // Michael rejected it: Eddie's revert comes, and the wish is held
+        List<IssueComment> rejected = [.. comments, ByOwner(160, "/eddie reject"), Result(170, 160, "reverted")];
+        Assert.Equal(ErrandState.Held, Next(waiting.Errand, Cafe, rejected, gone.AddHours(1)).Errand!.State);
+
+        // no word in six hours: a new round on the same issue
+        var again = Next(waiting.Errand, Cafe, comments, gone.AddHours(6));
+        Assert.Equal<DeskAction>(
+            [new PostCommand($"/eddie build cafe-label (a café), attempt 2; before: attempt 1: release-gone {Issue}; live: harbour, bakery")],
+            again.Actions);
+        Assert.Equal((7, ErrandState.Asking), (again.Errand!.Issue, again.Errand.State));
+    }
+
+    [Fact]
     public void A_task_answered_elsewhere_ends_a_cooling_errand()
     {
         var cooling = Asking(1, [new Failure("timeout", Issue, Start)]) with { State = ErrandState.Cooling };

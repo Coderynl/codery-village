@@ -11,10 +11,11 @@ public enum ErrandState { Asking, Waiting, Budget, Delivered, Live, Cooling, Hel
 /// latest <c>/eddie</c> <paramref name="Command"/>, its <paramref name="State"/> and <paramref name="Since"/> when, the
 /// <paramref name="Failures"/> so far with their <paramref name="History"/>, and whether Michael was mentioned while
 /// Eddie waited for him. An <paramref name="Issue"/> or <paramref name="Command"/> of 0 is one the desk has yet to fill
-/// in; see <see cref="Decision"/>.
+/// in; see <see cref="Decision"/>. <paramref name="Reappeared"/> is when the task of a live wish came back because its
+/// release went away, while the errand waits for Eddie's word on that.
 /// </summary>
 public sealed record ErrandRecord(string Wish, int Issue, long Command, ErrandState State, DateTimeOffset Since,
-    int Failures, IReadOnlyList<Failure> History, bool OwnerMentioned);
+    int Failures, IReadOnlyList<Failure> History, bool OwnerMentioned, DateTimeOffset? Reappeared = null);
 
 /// <summary>A failed attempt: a fixed <paramref name="Code"/> and a link to Eddie's result or to the issue.</summary>
 public sealed record Failure(string Code, string Link, DateTimeOffset At);
@@ -25,7 +26,8 @@ public sealed record Failure(string Code, string Link, DateTimeOffset At);
 /// back into the record: the number of the issue that <see cref="OpenIssue"/> opens into <see cref="ErrandRecord.Issue"/>,
 /// the id of the comment that <see cref="PostCommand"/> posts into <see cref="ErrandRecord.Command"/>. It saves the record
 /// after each of them, and never one whose issue is still 0. A record saved with its issue but command 0 gets the
-/// command posted in the next round.
+/// command posted in the next round. <see cref="HoldWish"/> comes first in its decision; the desk saves that decision's
+/// held record only once the wish is held, or a task still open for it reads as Michael releasing it.
 /// </summary>
 public sealed record Decision(ErrandRecord? Errand, IReadOnlyList<DeskAction> Actions);
 
@@ -95,17 +97,22 @@ public static partial class Errand
     /// <paramref name="task"/> of the land, the <paramref name="comments"/> of the errand's issue (oldest first), and
     /// whether the data serves the errand's wish (<paramref name="wishLive"/>). Results count only when Eddie's login
     /// wrote them, for the desk's command or for a later <c>/eddie</c> command by the owner. An errand that waits for
-    /// Eddie does not end because the task went away: Eddie's result ends it.
+    /// Eddie does not end because the task went away: Eddie's result ends it. A live errand still follows Eddie's results
+    /// (a reject reverts and holds the wish), and asks again on the same issue when the task comes back: at once for a
+    /// held wish (only Michael releases one), after a wait for Eddie's revert for a live one.
     /// </summary>
     public static Decision Next(ErrandRecord? errand, OpenTask? task, IReadOnlyList<IssueComment> comments, bool wishLive,
         DateTimeOffset now, DeskTexts texts, ErrandFacts facts)
     {
-        if (errand is null || errand.State is ErrandState.Live or ErrandState.Held)
-            return task is not null && task.Wish != errand?.Wish ? Begin(task, now, texts, facts) : new Decision(errand, []);
+        if (errand is null) return task is null ? new Decision(null, []) : Begin(task, now, texts, facts);
+        if (errand.State is ErrandState.Live or ErrandState.Held && task is not null && task.Wish != errand.Wish)
+            return Begin(task, now, texts, facts);
 
         var round = new Round(errand, now, texts, facts);
         return errand.State switch
         {
+            ErrandState.Live => round.AfterLive(comments, back: task is not null && !wishLive),
+            ErrandState.Held when task is not null => round.Again(),
             ErrandState.Asking when errand.Command == 0 => round.Ask(),
             ErrandState.Asking or ErrandState.Waiting => round.Follow(comments),
             ErrandState.Budget => now >= NextBudget(errand.Since) ? round.Ask() : round.Stay(),
@@ -176,6 +183,19 @@ public static partial class Errand
                 ? Fail(waiting ? "waiting-too-long" : "timeout", IssueLink)
                 : Stay();
         }
+
+        /// <summary>A live wish: a revert by Eddie holds it; a task back without one asks again after <see cref="Cooling"/>.</summary>
+        public Decision AfterLive(IReadOnlyList<IssueComment> comments, bool back)
+        {
+            if (Latest(comments) is { Outcome: "reverted" }) return Hold(texts.Rejected, label: true);
+            if (!back) return errand.Reappeared is null ? Stay() : new Decision(errand with { Reappeared = null }, []);
+            if (errand.Reappeared is not { } since) return new Decision(errand with { Reappeared = now }, []);
+            return now - since >= Cooling ? Again(new Failure("release-gone", IssueLink, now)) : Stay();
+        }
+
+        /// <summary>A new round on the same issue, with <paramref name="history"/> as all that went before.</summary>
+        public Decision Again(params Failure[] history) =>
+            new Round(errand with { Failures = history.Length, History = history, OwnerMentioned = false, Reappeared = null }, now, texts, facts).Ask();
 
         public Decision Fail(string code, string link)
         {
