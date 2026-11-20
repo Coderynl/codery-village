@@ -10,13 +10,16 @@ public static partial class EddieResult
 {
     /// <returns>
     /// The id of the <c>/eddie</c> command the run answers and its outcome; null unless <paramref name="comment"/> is by
-    /// <paramref name="eddieLogin"/> (in any case) and carries a result marker with an outcome.
+    /// <paramref name="eddieLogin"/> (in any case) and its last marker is a result with an outcome.
     /// </returns>
     public static (long Command, string Outcome)? Parse(IssueComment comment, string eddieLogin)
     {
         if (eddieLogin.Length == 0 || !string.Equals(comment.Author, eddieLogin, StringComparison.OrdinalIgnoreCase)) return null;
-        var match = Marker().Match(comment.Body);
-        if (!match.Success || match.Groups["kind"].Value != "result" || !match.Groups["outcome"].Success) return null;
+        // the last marker, as Eddie reads his own: a comment may quote an older one
+        var markers = Marker().Matches(comment.Body);
+        if (markers.Count == 0) return null;
+        var match = markers[^1];
+        if (match.Groups["kind"].Value != "result" || !match.Groups["outcome"].Success) return null;
         return long.TryParse(match.Groups["cmd"].Value, out var command) ? (command, match.Groups["outcome"].Value) : null;
     }
 
