@@ -11,6 +11,8 @@ public sealed record DeskOptions
     public string AppId { get; init; } = "";
     /// <summary>The App's private key, as PEM.</summary>
     public string PrivateKey { get; init; } = "";
+    /// <summary>The App's own bot login, such as <c>codery-village[bot]</c>: its <c>/eddie</c> comments are the desk's commands.</summary>
+    public string AppLogin { get; init; } = "";
     /// <summary>Eddie's bot login.</summary>
     public string EddieLogin { get; init; } = "";
     /// <summary>Who gets mentioned.</summary>
@@ -26,7 +28,7 @@ public sealed record DeskOptions
     private bool PrintMembers(StringBuilder builder)
     {
         builder.Append(CultureInfo.InvariantCulture,
-            $"Enabled = {Enabled}, Repository = {Repository}, AppId = {AppId}, PrivateKey = {(string.IsNullOrEmpty(PrivateKey) ? "none" : "set")}, EddieLogin = {EddieLogin}, Owner = {Owner}");
+            $"Enabled = {Enabled}, Repository = {Repository}, AppId = {AppId}, PrivateKey = {(string.IsNullOrEmpty(PrivateKey) ? "none" : "set")}, AppLogin = {AppLogin}, EddieLogin = {EddieLogin}, Owner = {Owner}");
         return true;
     }
 }

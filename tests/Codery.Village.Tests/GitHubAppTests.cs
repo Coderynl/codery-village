@@ -198,6 +198,23 @@ public class GitHubAppTests
         Assert.Equal("", comments.Single().Author);
     }
 
+    // Risk: the desk cannot find the issue it opened before a restart, and opens a second one.
+    [Fact]
+    public async Task Open_issues_with_a_label_are_listed_without_pull_requests()
+    {
+        var handler = GitHub(seen => Json("""
+            [
+              {"number": 4, "title": "Het dorp wenst wijn", "user": {"login": "codery-village[bot]"}},
+              {"number": 5, "title": "Het dorp wenst wijn", "user": {"login": "eddie-codery[bot]"}, "pull_request": {"url": "x"}}
+            ]
+            """));
+
+        var issues = await App(handler).OpenIssues("wish", default);
+
+        Assert.Equal([new IssueSummary(4, "Het dorp wenst wijn", "codery-village[bot]")], issues);
+        Assert.StartsWith("/repos/Coderynl/codery-village/issues?state=open&labels=wish&per_page=100", handler.Requests.Last().Path);
+    }
+
     private static HttpResponseMessage Page(string json, string link)
     {
         var response = Json(json);

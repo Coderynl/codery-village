@@ -2,6 +2,7 @@ using Codery.Village.Core;
 using Codery.Village.Core.Modules;
 using Codery.Village.Core.Save;
 using Codery.Village.Core.Time;
+using Codery.Village.Server.Desk;
 using Codery.Village.Server.Store;
 
 namespace Codery.Village.Tests;
@@ -138,6 +139,34 @@ public class StoreTests(PostgresFixture postgres)
 
         Assert.Equal(0, await PostgresFixture.Count(database, "SELECT count(*) FROM village_log"));
         Assert.Equal(1, await PostgresFixture.Count(database, "SELECT count(*) FROM village_save"));
+    }
+
+    // Risk: after a restart the desk forgets an errand, or its history, and opens a second issue or asks a held wish again.
+    [Fact]
+    public async Task An_errand_survives_in_postgres()
+    {
+        var database = await postgres.NewDatabase();
+        await using (var village = await Store(database)) { }
+        var at = new DateTimeOffset(2026, 11, 20, 15, 0, 0, TimeSpan.Zero);
+        List<Failure> failures = [new("timeout", "https://github.com/x/y/issues/7", at), new("eddie-failed", "https://github.com/x/y/issues/7#issuecomment-9", at.AddHours(7))];
+        await using (var errands = new PostgresErrandStore(database))
+        {
+            await errands.Save(new ErrandRecord("wine", 7, 100, ErrandState.Asking, at, 0, [], false), CancellationToken.None);
+            await errands.Save(new ErrandRecord("cafe", 3, 30, ErrandState.Live, at, 0, [], true), CancellationToken.None);
+            // one row per wish: the later record of the wine replaces the first
+            await errands.Save(new ErrandRecord("wine", 7, 250, ErrandState.Cooling, at.AddHours(8), 2, failures, true, at.AddHours(9)), CancellationToken.None);
+        }
+
+        await using var again = new PostgresErrandStore(database);
+        var all = (await again.All(CancellationToken.None)).OrderBy(errand => errand.Wish, StringComparer.Ordinal).ToList();
+
+        Assert.Equal(["cafe", "wine"], all.Select(errand => errand.Wish));
+        var wine = all[1];
+        Assert.Equal(("wine", 7, 250L, ErrandState.Cooling, at.AddHours(8), 2, true, (DateTimeOffset?)at.AddHours(9)),
+            (wine.Wish, wine.Issue, wine.Command, wine.State, wine.Since, wine.Failures, wine.OwnerMentioned, wine.Reappeared));
+        Assert.Equal(failures, wine.History);
+        Assert.Null(all[0].Reappeared);
+        Assert.Empty(all[0].History);
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using System.Globalization;
 using Codery.Village.Core.Data;
 using Codery.Village.Server;
+using Codery.Village.Server.Desk;
 using Codery.Village.Server.Feed;
 using Codery.Village.Server.Store;
 using Codery.Village.Server.Talk;
@@ -68,6 +69,16 @@ builder.Services.AddSingleton(services => new InterventionLimiter(
     services.GetRequiredService<TimeProvider>()));
 builder.Services.AddHostedService(services => services.GetRequiredService<VillageHost>());
 builder.Services.AddHostedService(services => services.GetRequiredService<TalkWorker>());
+
+// the desk asks Eddie on GitHub for the village's wishes; it does nothing unless Village:Tasks:Enabled is true
+builder.Services.AddSingleton(services => DeskOptions.From(services.GetRequiredService<IConfiguration>()));
+builder.Services.AddSingleton<IVillageGitHub>(services => new GitHubApp(
+    new HttpClient { Timeout = TimeSpan.FromSeconds(30) }, services.GetRequiredService<DeskOptions>(), services.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton<IErrandStore>(_ => string.IsNullOrWhiteSpace(database) ? new MemoryErrandStore() : new PostgresErrandStore(database));
+builder.Services.AddHostedService(services => new EddieDesk(
+    services.GetRequiredService<VillageHost>(), services.GetRequiredService<IVillageGitHub>(), services.GetRequiredService<IErrandStore>(),
+    services.GetRequiredService<DeskOptions>(), services.GetRequiredService<DataSet>(), VillageSetup.Releases(),
+    services.GetRequiredService<TimeProvider>(), services.GetRequiredService<ILogger<EddieDesk>>()));
 
 var app = builder.Build();
 

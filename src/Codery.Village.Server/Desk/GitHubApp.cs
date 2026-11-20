@@ -40,28 +40,47 @@ public sealed partial class GitHubApp(HttpClient http, DeskOptions options, Time
     public async Task<IReadOnlyList<IssueComment>> Comments(int issue, CancellationToken cancellation)
     {
         var comments = new List<IssueComment>();
-        var path = $"/repos/{options.Repository}/issues/{issue}/comments?per_page=100";
-        var next = new Uri(Api + path);
-        for (var pages = 0; next is not null && pages < MaxPages; pages++)
-        {
-            using var response = await Authorized(HttpMethod.Get, next, null, cancellation);
-            using var page = await Read(response, path, cancellation);
-            foreach (var item in page.RootElement.EnumerateArray())
-                comments.Add(new IssueComment(
-                    item.GetProperty("id").GetInt64(),
-                    item.TryGetProperty("user", out var user) && user.ValueKind == JsonValueKind.Object
-                        ? user.GetProperty("login").GetString() ?? "" : "",
-                    item.GetProperty("body").GetString() ?? "",
-                    item.GetProperty("created_at").GetDateTimeOffset()));
-            next = NextPage(response, path);
-        }
+        await Pages($"/repos/{options.Repository}/issues/{issue}/comments?per_page=100", item => comments.Add(new IssueComment(
+            item.GetProperty("id").GetInt64(),
+            Login(item),
+            item.GetProperty("body").GetString() ?? "",
+            item.GetProperty("created_at").GetDateTimeOffset())), cancellation);
         return comments;
+    }
+
+    public async Task<IReadOnlyList<IssueSummary>> OpenIssues(string label, CancellationToken cancellation)
+    {
+        var issues = new List<IssueSummary>();
+        await Pages($"/repos/{options.Repository}/issues?state=open&labels={Uri.EscapeDataString(label)}&per_page=100", item =>
+        {
+            // GitHub lists pull requests as issues too
+            if (!item.TryGetProperty("pull_request", out _))
+                issues.Add(new IssueSummary(item.GetProperty("number").GetInt32(), item.GetProperty("title").GetString() ?? "", Login(item)));
+        }, cancellation);
+        return issues;
     }
 
     public async Task Label(int issue, string label, CancellationToken cancellation)
     {
         using var answer = await Post($"/repos/{options.Repository}/issues/{issue}/labels", new { labels = new[] { label } }, cancellation);
     }
+
+    /// <summary>Each item of every page of the list at <paramref name="path"/>, at most <see cref="MaxPages"/> pages.</summary>
+    private async Task Pages(string path, Action<JsonElement> read, CancellationToken cancellation)
+    {
+        var next = new Uri(Api + path);
+        for (var pages = 0; next is not null && pages < MaxPages; pages++)
+        {
+            using var response = await Authorized(HttpMethod.Get, next, null, cancellation);
+            using var page = await Read(response, path, cancellation);
+            foreach (var item in page.RootElement.EnumerateArray()) read(item);
+            next = NextPage(response, path);
+        }
+    }
+
+    // a deleted account has no user
+    private static string Login(JsonElement item) =>
+        item.TryGetProperty("user", out var user) && user.ValueKind == JsonValueKind.Object ? user.GetProperty("login").GetString() ?? "" : "";
 
     /// <summary>The <c>rel="next"</c> link of the <c>Link</c> header, or null at the last page. Only GitHub's own API is followed: the token goes along.</summary>
     private static Uri? NextPage(HttpResponseMessage response, string path)

@@ -7,6 +7,8 @@ using Codery.Village.Server.Store;
 using Codery.Village.Server.Talk;
 using Microsoft.AspNetCore.SignalR;
 using BuildingModule = Codery.Village.Modules.Building.Building;
+using OpenTask = Codery.Village.Modules.Wishes.OpenTask;
+using WishSettings = Codery.Village.Modules.Wishes.WishSettings;
 using WishesModule = Codery.Village.Modules.Wishes.Wishes;
 using TalkModule = Codery.Village.Modules.Talk.Talk;
 using WorkModule = Codery.Village.Modules.Work.Work;
@@ -189,6 +191,28 @@ public sealed class VillageHost(
     public void Release(string wish)
     {
         lock (_gate) Wishes().Release(wish);
+    }
+
+    /// <summary>The open task of the land, under the lock; null when there is none, or no village yet.</summary>
+    public OpenTask? OpenTask()
+    {
+        lock (_gate) return _engine?.Running.OfType<WishesModule>().FirstOrDefault()?.Task;
+    }
+
+    /// <summary>The wishes on hold, copied under the lock.</summary>
+    public IReadOnlySet<string> Held()
+    {
+        lock (_gate) return _engine?.Running.OfType<WishesModule>().FirstOrDefault()?.Held.ToHashSet() ?? [];
+    }
+
+    /// <summary>Whether the data this village runs on has a blueprint that serves the label of <paramref name="wish"/>.</summary>
+    public bool Live(string wish)
+    {
+        lock (_gate)
+        {
+            var label = data.Section<WishSettings>("wishes").Wishes.FirstOrDefault(known => known.Id == wish)?.Label;
+            return label is not null && data.Section<Catalog>("catalog").Blueprints.Any(blueprint => blueprint.Serves == label);
+        }
     }
 
     private WishesModule Wishes() =>
