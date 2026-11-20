@@ -1,9 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The checks CI runs on a pull request, as a console tool. It may run git; it is not Core or Modules. -->
+  <!-- The checks CI runs on a pull request, as a console tool. It may run git and read the network; it is not Core or Modules. -->
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- the village as the server sets it up, on the data folder the server copies next to it -->
+    <ProjectReference Include="..\Codery.Village.Server\Codery.Village.Server.csproj" />
+  </ItemGroup>
 
 </Project>

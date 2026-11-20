@@ -47,6 +47,20 @@ jobs:
       - name: What may Eddie change?
         run: dotnet run --project src/Codery.Village.Checks -- paths "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" "${{ vars.EDDIE_BOT }}"
 
+  # the pull request's data on the village as it stands in production: nothing may stop or sleep, ticks stay fast, and
+  # Eddie's new release answers the open wish. Production unreadable fails only Eddie's pull requests (--eddie).
+  production:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.docs != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Tried on production
+        run: dotnet run --project src/Codery.Village.Checks -c Release -- production https://village-engine.codery.nl 2400 ${{ github.event.pull_request.user.login == vars.EDDIE_BOT && '--eddie' || '' }}
+
   # the scenarios keep every core busy for minutes (30 seeds at once), so the two biggest get a machine each,
   # the other scenarios (new ones too) a third, and all other tests a fourth
   part:
@@ -103,13 +117,14 @@ jobs:
 
   # the check that main requires: green when every part is, or when only documentation changed
   test:
-    needs: [changes, part, paths]
+    needs: [changes, part, paths, production]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: |
           if [ "${{ needs.changes.result }}" != "success" ]; then exit 1; fi
           if [ "${{ needs.paths.result }}" = "failure" ] || [ "${{ needs.paths.result }}" = "cancelled" ]; then echo "Eddie's pull request changes more than a release."; exit 1; fi
+          if [ "${{ needs.production.result }}" = "failure" ] || [ "${{ needs.production.result }}" = "cancelled" ]; then echo "The pull request does not pass on the production state."; exit 1; fi
           if [ "${{ needs.changes.outputs.docs }}" = "true" ]; then echo "Only documentation changed."; exit 0; fi
           if [ "${{ needs.part.result }}" != "success" ]; then echo "A part failed: ${{ needs.part.result }}"; exit 1; fi
           echo "Every part is green."
