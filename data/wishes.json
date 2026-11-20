@@ -19,7 +19,7 @@
     "none": { "en": "none" },
     "waiting": { "nl": "@{owner} Eddie wacht op jou. Komt er binnen 3 dagen geen antwoord, dan telt deze poging als mislukt." },
     "rejected": { "nl": "De release is teruggedraaid. Het dorp vraagt voorlopig niet meer om deze wens." },
-    "notAllowed": { "nl": "@{owner} Eddie mag deze opdracht niet doen. Het dorp vraagt voorlopig niet meer om deze wens." },
+    "notAllowed": { "nl": "@{owner} Eddie mag deze opdracht niet doen. Kijk of de App van het dorp in zijn AllowedUsers staat. Na 3 dagen telt deze poging als mislukt en vraagt het dorp het opnieuw." },
     "live": { "nl": "De release draait: het dorp kent nu wat deze wens vraagt. Het issue blijft open voor je oordeel." },
     "failed": { "nl": "Poging {attempt} van 3 is niet gelukt ({code}). Over 6 uur vraagt het dorp het opnieuw." },
     "held": { "nl": "@{owner} Na 3 pogingen is deze wens nog niet gelukt. Het dorp vraagt er voorlopig niet meer om." },

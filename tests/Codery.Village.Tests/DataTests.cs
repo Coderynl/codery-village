@@ -203,6 +203,21 @@ public class DataTests
         Assert.Contains(word, offence);
     }
 
+    // Risk: a release id with a forbidden word passes CI, and the diary shows it when production forgets the release.
+    [Fact]
+    public void A_release_id_with_a_forbidden_word_is_named_in_the_failure()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["releases/pub.json"] = """{ "blueprints": [{ "id": "bier-huis", "nl": "het huis", "en": "the house" }] }""",
+            ["talk.json"] = """{ "words": { "nl": ["bier"] } }""",
+        };
+
+        var offence = Assert.Single(WordListOffences(files));
+        Assert.Contains("$.blueprints[0].id", offence);
+        Assert.Contains("bier", offence);
+    }
+
     // Risk: a name too long for the plaques and lists of the village breaks the layout.
     [Fact]
     public void Names_are_short()
@@ -234,8 +249,9 @@ public class DataTests
 
     /// <summary>
     /// Every text in the data files that has a language (a property <c>nl</c>/<c>en</c> or ending in <c>Nl</c>/<c>En</c>)
-    /// checked against the word list of that language, as "file path: 'word' in 'text'". The <c>words</c> and <c>prompt</c>
-    /// sections of <c>talk.json</c> list and describe what is forbidden; nobody sees them.
+    /// checked against the word list of that language, and every <c>id</c> in a release against both, as
+    /// "file path: 'word' in 'text'". The <c>words</c> and <c>prompt</c> sections of <c>talk.json</c> list and describe
+    /// what is forbidden; nobody sees them.
     /// </summary>
     private static List<string> WordListOffences(IReadOnlyDictionary<string, string> files)
     {
@@ -250,7 +266,9 @@ public class DataTests
                     {
                         if (file == "talk.json" && path == "$" && property.Name is "words" or "prompt") continue;
                         var own = property.Name is "nl" || property.Name.EndsWith("Nl") ? "nl"
-                            : property.Name is "en" || property.Name.EndsWith("En") ? "en" : null;
+                            : property.Name is "en" || property.Name.EndsWith("En") ? "en"
+                            // a release's ids show in the diary when production forgets them: both lists
+                            : property.Name is "id" && file.StartsWith("releases/") ? "id" : null;
                         Walk(file, $"{path}.{property.Name}", property.Value, own ?? language);
                     }
                     break;
@@ -260,7 +278,12 @@ public class DataTests
                     break;
                 case JsonValueKind.String when language is not null:
                     var text = node.GetString()!;
-                    var word = language == "nl" ? decency.Forbidden(text, "") : decency.Forbidden("", text);
+                    var word = language switch
+                    {
+                        "nl" => decency.Forbidden(text, ""),
+                        "en" => decency.Forbidden("", text),
+                        _ => decency.Forbidden(text, text),
+                    };
                     if (word is not null) offences.Add($"{file} {path}: the word '{word}' in '{text}'");
                     break;
             }

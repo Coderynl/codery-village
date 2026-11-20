@@ -23,7 +23,10 @@ namespace Codery.Village.Tests;
 /// - a live wish's errand is forgotten while the desk asks for another wish, so Michael's reject never holds it;
 /// - a refused command on an issue used again lets an old result count for the new errand;
 /// - a hold of the desk is lost when the village forgets it, or ends without Michael's release, or by anyone else's;
-/// - a refused hold comment is never posted, so Michael never hears of the hold, also when the hold closed the task.
+/// - a released wish is not asked again on its issue when its task comes back;
+/// - a refused hold comment is never posted, so Michael never hears of the hold, also when the hold closed the task;
+/// - a refused label posts the hold comment twice;
+/// - one issue GitHub refuses stops every other errand of the round.
 /// </summary>
 [Collection(RealTimeCollection.Name)]
 public class DeskTests
@@ -334,11 +337,18 @@ public class DeskTests
         Assert.Contains("wine", Held(host));
         Assert.Equal(ErrandState.Held, (await Record(_errands, "wine")).State);
 
-        // Michael's release lets the wish go and asks Eddie again on the same issue, with a new count
+        // Michael's release lets the wish go and ends the errand, without asking yet
         _github.Add(issue, "Codery-nl", "/village release");
         await desk.Round(default);
 
         Assert.DoesNotContain("wine", Held(host));
+        Assert.Equal(4, _github.Issues.Single().Comments.Count);
+        Assert.Equal(ErrandState.Closed, (await Record(_errands, "wine")).State);
+
+        // once the village asks for wine again, Eddie is asked on the same issue, with a new count
+        await HostTests.Until(() => host.OpenTask() is { Wish: "wine" }, "the task for wine again");
+        await desk.Round(default);
+
         var command = _github.Issues.Single().Comments[^1];
         Assert.StartsWith("/eddie ", command.Body);
         var errand = await Record(_errands, "wine");
@@ -401,6 +411,49 @@ public class DeskTests
         Assert.Equal(ErrandState.Held, (await Record(_errands, "cafe")).State);
     }
 
+    [Fact]
+    public async Task A_refused_label_does_not_post_the_hold_comment_twice()
+    {
+        var data = Data();
+        await using var server = Server(new FakeStore(), data);
+        var host = await Asking(server);
+        var cafe = _github.Opened("Het dorp wenst een café", App);
+        var asked = _github.Add(cafe, App, "/eddie build cafe, attempt 1");
+        await _errands.Save(new ErrandRecord("cafe", cafe, asked, ErrandState.Live, _clock.Now, 0, [], false), default);
+        _github.Add(cafe, Eddie, Result(asked, "reverted"));
+
+        // GitHub refuses the label once: the hold is decided again the next round
+        _github.Once("label", after: false, () => throw new GitHubException(502, "/repos/x/issues/1/labels"), issue: cafe);
+        await Desk(host, data).Round(default);
+        await Desk(host, data).Round(default);
+
+        var held = _github.Issues.Single(issue => issue.Number == cafe);
+        Assert.Single(held.Comments, comment => comment.Author == App && !comment.Body.StartsWith('/'));
+        Assert.Contains("on-hold", held.Labels);
+        Assert.Equal(ErrandState.Held, (await Record(_errands, "cafe")).State);
+    }
+
+    [Fact]
+    public async Task One_issue_github_refuses_does_not_stop_the_other_errands()
+    {
+        var data = Data();
+        await using var server = Server(new FakeStore(), data);
+        var host = await Asking(server);
+        // wine, the open task, has an issue GitHub no longer finds; the café, rejected, waits behind it in the round
+        var wine = _github.Opened(host.OpenTask()!.TitleNl, App);
+        await _errands.Save(new ErrandRecord("wine", wine, _github.Add(wine, App, "/eddie build wine, attempt 1"), ErrandState.Asking, _clock.Now, 0, [], false), default);
+        var cafe = _github.Opened("Het dorp wenst een café", App);
+        var asked = _github.Add(cafe, App, "/eddie build cafe, attempt 1");
+        await _errands.Save(new ErrandRecord("cafe", cafe, asked, ErrandState.Live, _clock.Now, 0, [], false), default);
+        _github.Add(cafe, Eddie, Result(asked, "reverted"));
+
+        _github.Once("comments", after: false, () => throw new GitHubException(404, "/repos/x/issues/1/comments"), issue: wine);
+        await Desk(host, data).Round(default);
+
+        Assert.Contains("cafe", Held(host));
+        Assert.Equal(ErrandState.Held, (await Record(_errands, "cafe")).State);
+    }
+
     private static (int Issue, long Command, ErrandState State) Of(ErrandRecord errand) => (errand.Issue, errand.Command, errand.State);
 
     private sealed class Clock(DateTimeOffset now) : TimeProvider
@@ -423,7 +476,7 @@ public class DeskTests
         private (string Call, bool After, Action Act, int? Issue)? _once;
 
         /// <summary>
-        /// Runs <paramref name="act"/> once, at the next <paramref name="call"/> (<c>issue</c>, <c>comment</c> or <c>label</c>),
+        /// Runs <paramref name="act"/> once, at the next <paramref name="call"/> (<c>issue</c>, <c>comment</c>, <c>comments</c> or <c>label</c>),
         /// on <paramref name="issue"/> when given, before the change or after it: to refuse it, lose its answer or stop the server.
         /// </summary>
         public void Once(string call, bool after, Action act, int? issue = null) => _once = (call, after, act, issue);
@@ -462,6 +515,7 @@ public class DeskTests
         public Task<IReadOnlyList<IssueComment>> Comments(int issue, CancellationToken cancellation)
         {
             Calls++;
+            At("comments", after: false, issue);
             return Task.FromResult<IReadOnlyList<IssueComment>>([.. Issues.Single(item => item.Number == issue).Comments]);
         }
 

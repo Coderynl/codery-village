@@ -13,12 +13,15 @@ namespace Codery.Village.Tests;
 /// - a wish that fails three times keeps being asked for, unnoticed by Michael;
 /// - Michael is mentioned on every round while Eddie waits for him, or a later answer of his is not followed;
 /// - a budget stop asks Eddie again before his budget is back;
-/// - a rejected or forbidden wish is asked for again;
+/// - a rejected wish is asked for again, or a wrong list of who may use Eddie holds every wish or is never told;
 /// - silence or a release that never shows keeps the errand waiting for ever;
 /// - anyone who types the marker moves the errand;
 /// - a wish another release answered is asked for again;
+/// - a cooling errand whose wish is not asked now is closed as answered, and never asked again;
 /// - a reject after delivery, or after live, is lost while another wish is asked, or an approved errand is followed for ever;
-/// - a released wish stays stuck, a held one is asked again, or a release that went away is asked again before Eddie's revert;
+/// - a reject typed the way Eddie also takes it (<c>/ed reject</c>), or followed by a question, is missed;
+/// - a released wish stays stuck, is asked while another wish is the task, a held one is asked again, or a release that
+///   went away is asked again before Eddie's revert;
 /// - a lost answer from GitHub makes the desk post a command twice;
 /// - a quoted marker, a stranger's command or a release id carries text into the errand;
 /// - the data lacks a sentence the desk needs.
@@ -143,7 +146,7 @@ public class ErrandTests
         var history = new[] { new Failure("timeout", Issue, Start.AddDays(-2)), new Failure("eddie-failed", $"{Issue}#issuecomment-90", Start.AddDays(-1)) };
         var held = Next(Asking(2, history), Cafe, [Command(), Result(201, 100, "failed")], Start.AddHours(1));
 
-        Assert.Equal<DeskAction>([new HoldWish("cafe"), Holding("@Codery-nl Drie keer niet gelukt."), new AddLabel("on-hold")], held.Actions);
+        Assert.Equal<DeskAction>([new HoldWish("cafe"), new AddLabel("on-hold"), Holding("@Codery-nl Drie keer niet gelukt.")], held.Actions);
         Assert.Equal((ErrandState.Held, 3, 3), (held.Errand!.State, held.Errand.Failures, held.Errand.History.Count));
 
         // held: the errand asks nothing more, also when the land wishes something else
@@ -198,13 +201,24 @@ public class ErrandTests
 
         var held = Next(waitingForReject, Cafe, comments, Start.AddHours(2));
 
-        Assert.Equal<DeskAction>([new HoldWish("cafe"), Holding("Teruggedraaid."), new AddLabel("on-hold")], held.Actions);
+        Assert.Equal<DeskAction>([new HoldWish("cafe"), new AddLabel("on-hold"), Holding("Teruggedraaid.")], held.Actions);
         Assert.Equal(ErrandState.Held, held.Errand!.State);
+    }
 
-        // Eddie may not do it at all: held too, and Michael is told
-        var notAllowed = Next(Asking(), Cafe, [Command(), Result(150, 100, "not_allowed")], Start.AddHours(1));
-        Assert.Equal<DeskAction>([new HoldWish("cafe"), Holding("@Codery-nl Dit mag Eddie niet.")], notAllowed.Actions);
-        Assert.Equal(ErrandState.Held, notAllowed.Errand!.State);
+    [Fact]
+    public void Not_allowed_waits_and_tells_the_owner_once()
+    {
+        List<IssueComment> comments = [Command(), Result(150, 100, "not_allowed")];
+
+        // Eddie may not do it: most likely his list of who may use him lacks the App, so the wish is not held, Michael is told
+        var waiting = Next(Asking() with { OwnerMentioned = true }, Cafe, comments, Start.AddHours(1));
+
+        Assert.Equal<DeskAction>([new PostComment("@Codery-nl Dit mag Eddie niet.")], waiting.Actions);
+        Assert.Equal((ErrandState.Waiting, true), (waiting.Errand!.State, waiting.Errand.OwnerMentioned));
+        // the next round tells nothing again, and the wait keeps its start
+        var next = Next(waiting.Errand, Cafe, comments, Start.AddHours(2));
+        Assert.Empty(next.Actions);
+        Assert.Equal(waiting.Errand, next.Errand);
     }
 
     [Fact]
@@ -231,12 +245,12 @@ public class ErrandTests
 
         var held = Next(live, null, comments, Start.AddDays(1));
 
-        Assert.Equal<DeskAction>([new HoldWish("cafe"), Holding("Teruggedraaid."), new AddLabel("on-hold")], held.Actions);
+        Assert.Equal<DeskAction>([new HoldWish("cafe"), new AddLabel("on-hold"), Holding("Teruggedraaid.")], held.Actions);
         Assert.Equal(ErrandState.Held, held.Errand!.State);
     }
 
     [Fact]
-    public void A_held_wish_is_asked_again_on_the_same_issue_once_the_owner_releases_it()
+    public void A_released_wish_is_let_go_without_asking()
     {
         var history = new[] { new Failure("timeout", Issue, Start), new Failure("timeout", Issue, Start) };
         List<IssueComment> comments = [Command(), ByOwner(150, "/village release"), Result(160, 100, "failed")];
@@ -245,14 +259,14 @@ public class ErrandTests
 
         // a release from before the hold, or by anyone else, does nothing
         List<IssueComment> stranger = [.. comments, ByOwner(170, "/village release", owner: "someone-else")];
-        Assert.Empty(Next(held, Cafe, stranger, Start.AddDays(1)).Actions);
+        Assert.Empty(Next(held, Park, stranger, Start.AddDays(1)).Actions);
 
-        // Michael's release lets the wish go and starts a new count on the same issue; an old result never counts again
-        var again = Next(held, null, [.. stranger, ByOwner(180, "/village release")], Start.AddDays(2));
+        // Michael's release lets the wish go and ends the errand, without asking while another wish is the task: the next
+        // task for it begins a new errand, counting from 1
+        var released = Next(held, Park, [.. stranger, ByOwner(180, "/village release")], Start.AddDays(2));
 
-        Assert.Equal<DeskAction>([new ReleaseWish("cafe"), new PostCommand(FirstCommand)], again.Actions);
-        var errand = again.Errand!;
-        Assert.Equal((7, 0L, ErrandState.Asking, 0, 0, false), (errand.Issue, errand.Command, errand.State, errand.Failures, errand.History.Count, errand.OwnerMentioned));
+        Assert.Equal<DeskAction>([new ReleaseWish("cafe")], released.Actions);
+        Assert.Equal(ErrandState.Closed, released.Errand!.State);
 
         // released while another release serves the wish: it is answered, not asked
         var answered = Next(held, null, [.. comments, ByOwner(180, "/village release")], Start.AddDays(2), wishLive: true);
@@ -295,7 +309,7 @@ public class ErrandTests
 
         var held = Next(live, Cafe, [Command(), Result(150, 100, "done")], Start.AddDays(1).AddHours(6));
 
-        Assert.Equal<DeskAction>([new HoldWish("cafe"), Holding("@Codery-nl Drie keer niet gelukt."), new AddLabel("on-hold")], held.Actions);
+        Assert.Equal<DeskAction>([new HoldWish("cafe"), new AddLabel("on-hold"), Holding("@Codery-nl Drie keer niet gelukt.")], held.Actions);
         Assert.Equal((ErrandState.Held, 3, "release-gone"), (held.Errand!.State, held.Errand.Failures, held.Errand.History[^1].Code));
     }
 
@@ -314,6 +328,33 @@ public class ErrandTests
     }
 
     [Fact]
+    public void A_reject_in_eddies_short_form_holds_the_wish()
+    {
+        var live = Asking() with { State = ErrandState.Live };
+        // Eddie takes /ed, /eddy and /eddie in any case; his signed result naming the comment shows he took it as a command
+        List<IssueComment> comments = [Command(), Result(150, 100, "done"), ByOwner(160, "  /Ed: reject"), Result(170, 160, "reverted")];
+
+        var held = Next(live, null, comments, Start.AddDays(1));
+
+        Assert.Equal(ErrandState.Held, held.Errand!.State);
+    }
+
+    [Fact]
+    public void A_question_after_a_reject_does_not_hide_it()
+    {
+        var live = Asking() with { State = ErrandState.Live };
+        List<IssueComment> comments =
+        [
+            Command(), Result(150, 100, "done"), ByOwner(160, "/eddie reject"), Result(170, 160, "reverted"),
+            ByOwner(180, "/eddie why was that?"), Result(190, 180, "answered"),
+        ];
+
+        var held = Next(live, null, comments, Start.AddDays(1), wishLive: true);
+
+        Assert.Equal(ErrandState.Held, held.Errand!.State);
+    }
+
+    [Fact]
     public void A_reject_before_live_holds_the_wish()
     {
         var delivered = Asking() with { State = ErrandState.Delivered };
@@ -321,7 +362,7 @@ public class ErrandTests
 
         var held = Next(delivered, null, comments, Start.AddHours(1));
 
-        Assert.Equal<DeskAction>([new HoldWish("cafe"), Holding("Teruggedraaid."), new AddLabel("on-hold")], held.Actions);
+        Assert.Equal<DeskAction>([new HoldWish("cafe"), new AddLabel("on-hold"), Holding("Teruggedraaid.")], held.Actions);
         Assert.Equal(ErrandState.Held, held.Errand!.State);
     }
 
@@ -360,7 +401,7 @@ public class ErrandTests
 
         var held = Next(live, Park, comments, Start.AddDays(1));
 
-        Assert.Equal<DeskAction>([new HoldWish("cafe"), Holding("Teruggedraaid."), new AddLabel("on-hold")], held.Actions);
+        Assert.Equal<DeskAction>([new HoldWish("cafe"), new AddLabel("on-hold"), Holding("Teruggedraaid.")], held.Actions);
         Assert.Equal(("cafe", ErrandState.Held), (held.Errand!.Wish, held.Errand.State));
     }
 
@@ -431,14 +472,23 @@ public class ErrandTests
     }
 
     [Fact]
-    public void A_task_answered_elsewhere_ends_a_cooling_errand()
+    public void A_cooling_errand_whose_wish_is_not_asked_keeps_its_count_and_asks_later()
     {
         var cooling = Asking(1, [new Failure("timeout", Issue, Start)]) with { State = ErrandState.Cooling };
 
-        var answered = Next(cooling, null, [Command()], Start.AddHours(1));
+        // another wish is the task, or none, and no release serves this one: nothing answered it, so it waits
+        foreach (var other in new[] { Park, null })
+        {
+            var waiting = Next(cooling, other, [Command()], Start.AddHours(7));
+            Assert.Empty(waiting.Actions);
+            Assert.Equal(cooling, waiting.Errand);
+        }
 
-        Assert.Equal<DeskAction>([new PostComment("Al beantwoord.")], answered.Actions);
-        Assert.Equal(ErrandState.Closed, answered.Errand!.State);
+        // its wish is the task again: it asks, with its count
+        var again = Next(cooling, Cafe, [Command()], Start.AddHours(8));
+        Assert.Equal<DeskAction>(
+            [new PostCommand($"/eddie build cafe-label (a café), attempt 2; before: attempt 1: timeout {Issue}; live: harbour, bakery")],
+            again.Actions);
         // while Eddie works on it, a closed task changes nothing: his result ends the errand
         Assert.Equal(Asking(), Next(Asking(), null, [Command()], Start.AddHours(1)).Errand);
     }

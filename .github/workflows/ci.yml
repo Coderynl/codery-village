@@ -12,7 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # a pull request that only changes documentation needs no build
+  # a pull request that only changes documentation needs no build; a file under data/ is never documentation (the
+  # releases' README is read by the tests)
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -26,7 +27,10 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "docs=false" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" | grep -qvE '\.md$'; then
+            exit 0
+          fi
+          changed=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}")
+          if echo "$changed" | grep -qvE '\.md$' || echo "$changed" | grep -q '^data/'; then
             echo "docs=false" >> "$GITHUB_OUTPUT"
           else
             echo "docs=true" >> "$GITHUB_OUTPUT"
@@ -48,8 +52,9 @@ jobs:
         run: dotnet run --project src/Codery.Village.Checks -- paths "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" "${{ vars.EDDIE_BOT }}"
 
   # the pull request's data on the village as it stands in production, for one village day (86,400 s at 4 ticks):
-  # nothing may stop or sleep, ticks stay fast, and Eddie's new release answers the open wish. Production unreadable
-  # fails only Eddie's pull requests (--eddie).
+  # nothing may stop or sleep, ticks stay fast, production keeps every release it runs and forgets nothing (except by
+  # Eddie's revert), and Eddie's new release answers the open wish. Production unreadable fails only Eddie's pull
+  # requests (--eddie).
   production:
     needs: changes
     if: github.event_name == 'pull_request' && needs.changes.outputs.docs != 'true'

@@ -124,6 +124,59 @@ public class ProductionTrialTests
         Assert.Contains(productionRunsEveryRelease ? "passes on the production state" : "does not answer the open wish: wine", output.ToString());
     }
 
+    // Risk: a pull request that takes away what production built on merges, and production forgets it after the deploy.
+    [Fact]
+    public async Task A_building_whose_blueprint_the_data_lacks_fails_a_pull_request()
+    {
+        var output = new StringWriter();
+        using var http = new HttpClient(Serving(WithWinery(AskingForWine.Value), VillageSetup.Releases()));
+
+        var code = await ProductionTrial.Check(http, "https://village.test", 240, eddie: false, output);
+
+        Assert.True(code == 1, output.ToString());
+        Assert.Contains("forgotten: winery", output.ToString());
+    }
+
+    // Risk: a pull request that drops a release production runs merges, or Eddie's revert of his own release cannot.
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 0)]
+    public async Task A_release_production_runs_that_the_data_lacks_passes_only_as_eddies_revert(bool eddie, int exit)
+    {
+        var output = new StringWriter();
+        using var http = new HttpClient(Serving(WithWinery(AskingForWine.Value), [.. VillageSetup.Releases(), "winery"]));
+
+        var code = await ProductionTrial.Check(http, "https://village.test", 240, eddie, output);
+
+        Assert.True(code == exit, output.ToString());
+        Assert.Contains("winery", output.ToString());
+    }
+
+    /// <summary>Production with a winery built: a structure of a blueprint no release in data/releases has.</summary>
+    private static SavedVillage WithWinery(SavedVillage save) => save with
+    {
+        Modules = [.. save.Modules.Select(module => module.Name != "building" ? module : module with { Data = WineryBuilt(module.Data) })],
+    };
+
+    private static JsonNode WineryBuilt(JsonNode building)
+    {
+        var copy = building.DeepClone();
+        var structures = copy["structures"]!.AsArray();
+        var winery = structures[0]!.DeepClone();
+        winery["id"] = 9999;
+        winery["blueprint"] = "winery";
+        winery["households"] = new JsonArray();
+        structures.Add(winery);
+        return copy;
+    }
+
+    private static Production Serving(SavedVillage save, IReadOnlyList<string> releases) => new(request => request.RequestUri!.AbsolutePath switch
+    {
+        "/save" => Json(save),
+        "/version" => Json(new { commit = "abc", releases }),
+        _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+    });
+
     private static HttpResponseMessage Json(object value) =>
         new(HttpStatusCode.OK) { Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(value, Protocol.Json)) };
 

@@ -15,9 +15,11 @@ namespace Codery.Village.Checks;
 
 /// <summary>
 /// What a trial found: <paramref name="Problems"/> (one line each), the wish of the task that was open in the save, whether
-/// the trial's data answered it (the village closed the task), and the mean time per tick on this machine.
+/// the trial's data answered it (the village closed the task), the mean time per tick on this machine, and the ids the
+/// village <paramref name="Forgotten"/> because the data no longer has them (its <c>forgotten</c> lines).
 /// </summary>
-public sealed record TrialResult(IReadOnlyList<string> Problems, string? OpenWish, bool OpenWishAnswered, double MeanTickMs);
+public sealed record TrialResult(IReadOnlyList<string> Problems, string? OpenWish, bool OpenWishAnswered, double MeanTickMs,
+    IReadOnlyList<string> Forgotten);
 
 /// <summary>
 /// Tries data on the village as it stands in production: takes up its save with every module of the village, steps it,
@@ -41,7 +43,8 @@ public static class ProductionTrial
     /// Takes up <paramref name="save"/> on <paramref name="data"/> and <paramref name="map"/>, runs <paramref name="ticks"/>
     /// ticks, forgetting old log lines as the server does, and saves. A problem is a problem in the data (the server
     /// does not start on it), an exception, a module that stopped, a module that went to sleep (a <c>module-dormant</c>
-    /// line), or a mean tick time above <see cref="TickLimitMs"/>.
+    /// line), or a mean tick time above <see cref="TickLimitMs"/>. What the village forgot is no problem here: whether it
+    /// may is up to <see cref="Check"/>.
     /// </summary>
     public static TrialResult Run(SavedVillage save, DataSet data, IslandMap map, int ticks)
     {
@@ -50,6 +53,7 @@ public static class ProductionTrial
         string? openWish = null;
         var answered = false;
         var mean = 0.0;
+        var forgotten = new List<string>();
         try
         {
             var modules = VillageSetup.Modules();
@@ -67,6 +71,9 @@ public static class ProductionTrial
                     // the line the village writes when it publishes TaskClosed because the data now fulfils the wish
                     if (line.Kind == "task-closed" && line.Subject == openWish)
                         answered = true;
+                    // what the save names that the data no longer has: production would lose it after the deploy
+                    if (line.Kind == "forgotten" && !forgotten.Contains(line.Subject))
+                        forgotten.Add(line.Subject);
                     read = sequence + 1;
                 }
             }
@@ -93,28 +100,28 @@ public static class ProductionTrial
         {
             problems.Add($"exception: {e.GetType().Name}: {e.Message}");
         }
-        return new TrialResult(problems, openWish, answered, mean);
+        return new TrialResult(problems, openWish, answered, mean, forgotten);
     }
 
     /// <summary>
-    /// The command <c>production</c>: fetches <c>&lt;url&gt;/save</c>, tries the checked-out data on it and writes the
-    /// result. Exits 1 when the trial has problems, or for Eddie's pull request (<paramref name="eddie"/>) when it adds a
-    /// release production does not run (by <c>/version</c>) and does not answer the open wish; his revert adds none.
-    /// When production cannot be read, Eddie's pull request fails; another one passes with a warning.
+    /// The command <c>production</c>: fetches <c>&lt;url&gt;/save</c> and <c>&lt;url&gt;/version</c>, tries the
+    /// checked-out data on the save and writes the result. Exits 1 when the trial has problems; when production runs a
+    /// release the checked-out data lacks, or the village forgot anything of the save; or for Eddie's pull request
+    /// (<paramref name="eddie"/>) when it adds a release production does not run and does not answer the open wish.
+    /// Eddie's revert adds no release and takes away his own (the job <c>paths</c> holds him to that): what production
+    /// loses with it is written, and does not fail it. When production cannot be read, Eddie's pull request fails;
+    /// another one passes with a warning.
     /// </summary>
     public static async Task<int> Check(HttpClient http, string url, int ticks, bool eddie, TextWriter output)
     {
         var reading = $"{url.TrimEnd('/')}/save";
         SavedVillage save;
-        IReadOnlyList<string>? running = null;
+        IReadOnlyList<string> running;
         try
         {
             save = await Read<SavedVillage>(http, reading);
-            if (eddie)
-            {
-                reading = $"{url.TrimEnd('/')}/version";
-                running = (await Read<ProductionVersion>(http, reading)).Releases;
-            }
+            reading = $"{url.TrimEnd('/')}/version";
+            running = (await Read<ProductionVersion>(http, reading)).Releases;
         }
         // IOException: the connection broke while the body was read
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or IOException or JsonException or NotSupportedException)
@@ -135,12 +142,21 @@ public static class ProductionTrial
         foreach (var problem in result.Problems) output.WriteLine(problem);
 
         // a release in the checked-out data that production does not run: Eddie's new one
-        var added = running is null ? [] : VillageSetup.Releases().Except(running, StringComparer.Ordinal).ToList();
+        var checkedOut = VillageSetup.Releases();
+        var added = eddie ? checkedOut.Except(running, StringComparer.Ordinal).ToList() : [];
         var unanswered = added.Count > 0 && !result.OpenWishAnswered;
         if (added.Count > 0)
             output.WriteLine($"The new release ({string.Join(", ", added)}) {(unanswered ? "does not answer" : "answers")} the open wish: {result.OpenWish ?? "none"}.");
 
-        var failed = result.Problems.Count > 0 || unanswered;
+        // what production would lose with this data: a release it runs, and what the village forgot of the save
+        var dropped = running.Except(checkedOut, StringComparer.Ordinal).ToList();
+        var lost = result.Forgotten.Select(id => $"forgotten: {id}").ToList();
+        if (dropped.Count > 0) lost.Insert(0, $"dropped: production runs {string.Join(", ", dropped)}, which the checked-out data lacks.");
+        foreach (var line in lost) output.WriteLine(line);
+        var revert = eddie && added.Count == 0 && dropped.Count > 0;
+        if (revert && lost.Count > 0) output.WriteLine("Eddie's revert takes this away from production; that does not fail it.");
+
+        var failed = result.Problems.Count > 0 || unanswered || (!revert && lost.Count > 0);
         output.WriteLine(failed ? "The checked-out data does not pass on the production state." : "The checked-out data passes on the production state.");
         return failed ? 1 : 0;
     }

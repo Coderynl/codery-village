@@ -10,8 +10,9 @@ namespace Codery.Village.Server.Desk;
 /// is not closed, and carries out each decision as <see cref="Decision"/> says.
 /// <para>
 /// Off unless <c>Village:Tasks:Enabled</c>: then it touches nothing, not even GitHub. Switched on without the App's
-/// settings it names the missing ones once, never their values, and stays idle. A round that fails is logged and tried
-/// again a minute later from what the store holds; the server never stops for it. A round runs only under the store's
+/// settings it names the missing ones once, never their values, and stays idle. An errand that fails is logged and the
+/// round goes on with the next; a round that fails is logged. Either is tried again a minute later from what the store
+/// holds; the server never stops for it. A round runs only under the store's
 /// round lock, so of two servers side by side (during a deploy) only one acts.
 /// </para>
 /// </summary>
@@ -91,10 +92,26 @@ public sealed class EddieDesk(VillageHost village, IVillageGitHub github, IErran
             .Select(errand => (errand.Wish, (ErrandRecord?)errand)));
         var live = round.ToDictionary(item => item.Wish, item => village.Live(item.Wish));
 
+        // one errand that fails stops no other: the next round decides it again from what the store holds
         foreach (var (wish, errand) in round)
         {
             if (stoppingToken.IsCancellationRequested) return;
-            await Carry(errand, task, live[wish], texts, facts, stoppingToken);
+            try
+            {
+                await Carry(errand, task, live[wish], texts, facts, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (GitHubException exception)
+            {
+                logger.LogWarning("GitHub answered {Status} on {Path} for the errand of {Wish}; the desk goes on with the next.", exception.Status, exception.Path, wish);
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning("The errand of {Wish} failed ({Kind}); the desk goes on with the next.", wish, exception.GetType().Name);
+            }
         }
     }
 

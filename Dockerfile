@@ -1,8 +1,6 @@
 # The server of the village, as Coolify builds and runs it. Only the server and what it needs: no tests.
 FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
 WORKDIR /source
-# Coolify passes the commit when "Include Source Commit in Build" is on
-ARG SOURCE_COMMIT=dev
 COPY Directory.Build.props ./
 COPY src/ src/
 COPY data/ data/
@@ -13,6 +11,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine
 RUN apk add --no-cache tzdata
 WORKDIR /app
 COPY --from=build /app ./
+# Coolify passes the commit when "Include Source Commit in Build" is on
 ARG SOURCE_COMMIT=dev
 ENV VILLAGE_COMMIT=$SOURCE_COMMIT
 ENV ASPNETCORE_URLS=http://+:8080

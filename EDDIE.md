@@ -30,7 +30,7 @@ Only these paths. CI (job `paths`) fails your pull request on anything else:
 
 - add `data/releases/<id>.json`;
 - change `data/releases/README.md`: one new numbered line for your release, nothing else;
-- delete a release that your own bot added (see Revert).
+- delete a release that is wholly your bot's: every commit on the base that touched the file is your bot's (see Revert). A release Michael ever edited stays his.
 
 Never change `.github/`, `src/`, `tests/`, `EDDIE.md`, `data/wishes.json` or any other data file, and no existing release.
 
@@ -48,13 +48,14 @@ Not applicable. The village runs on its own server; there is no test account.
 
 - Default branch `main`: pull request required, squash merge, auto-merge allowed, no required approval (mode `merge-on-green`). Your pull request touches only release paths, which have no code owner.
 - Gate: this rule holds only because the ruleset requires code-owner review for everything outside the release paths (`CODEOWNERS`). CI runs from the merge commit of the pull request itself, so a pull request that edits `ci.yml` or the check tool would otherwise check itself and pass. Never touch those; Michael is the gate.
-- CI on pull requests: GitHub Actions workflow `ci.yml` (jobs `paths`, `part`, required check `test`).
+- CI on pull requests: GitHub Actions workflow `ci.yml` (jobs `paths`, `production`, `part`, required check `test`).
+- Job `production` (about 5 minutes): tries the data of your pull request on the village as production runs it now, for one village day. It fails when a module stops or sleeps, when ticks are too slow, when production would lose a release it runs or anything it built on one, and when your new release does not answer the open wish: the wish the village asks for at that moment. Your revert adds no release, so that rule does not apply to it, and what production loses with it is printed, not failed.
 - Deployment: Coolify deploys `main` by itself after a merge, usually within a few minutes.
 - Integration URL: https://village-engine.codery.nl
 
 ## Verification after the deploy (T5 to T8)
 
-- T5: `GET https://village-engine.codery.nl/version` returns `{ "commit": "<sha>", "releases": ["<id>", ...] }`. `commit` is the merge commit and the id of your new release is in `releases`.
+- T5: `GET https://village-engine.codery.nl/version` returns `{ "commit": "<sha>", "releases": ["<id>", ...] }`. The criterion: the id of your new release is in `releases`. `commit` may be a later merge than yours.
 - T6: the wish of the issue is now answered: the same `/version` lists your release.
 - Health: `GET https://village-engine.codery.nl/health` returns `ok`.
 - No login, no test account: not applicable.

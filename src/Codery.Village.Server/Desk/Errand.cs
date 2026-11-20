@@ -109,7 +109,9 @@ public static partial class Errand
     private static readonly TimeSpan BudgetBack = new(0, 10, 0);
 
     private static readonly HashSet<string> Questions = ["needs_input", "answered", "spec_ready", "plan_ready"];
-    private static readonly HashSet<string> Outcomes = ["done", "failed", "reverted", "budget_reached", "not_allowed", .. Questions];
+    // what an errand that waits for the owner hears no more of: it told him already
+    private static readonly HashSet<string> ForTheOwner = ["not_allowed", .. Questions];
+    private static readonly HashSet<string> Outcomes = ["done", "failed", "reverted", "budget_reached", .. ForTheOwner];
     // a live errand also hears Michael's final approve
     private static readonly HashSet<string> LiveOutcomes = [.. Outcomes, "approved"];
 
@@ -120,11 +122,13 @@ public static partial class Errand
     /// of the land, which may be for another wish; <paramref name="comments"/> are those of the record's issue (oldest
     /// first, none without an issue), and <paramref name="wishLive"/> says whether the data serves the record's wish.
     /// <para>
-    /// Results count only when Eddie's login wrote them, for the desk's command or for a later <c>/eddie</c> command by
-    /// the owner. An errand that waits for Eddie does not end because the task went away: Eddie's result ends it. A live
-    /// errand follows Eddie's results until Michael's approve closes it (a reject holds the wish), and asks again on the
-    /// same issue when its task comes back without the wish being live. A held wish is asked again on its issue once the
-    /// owner released it there with <c>/village release</c>; a released wish that is live by then is answered. A record
+    /// Results count only when Eddie's login wrote them, for the desk's command or for a later comment by the owner:
+    /// Eddie takes more forms of his command than <c>/eddie </c>, and his signed result naming the comment proves he
+    /// took it as one. A reject (Eddie's <c>reverted</c>) holds the wish, whatever result came after it. An errand that
+    /// waits for Eddie does not end because the task went away: Eddie's result ends it. A live errand follows Eddie's
+    /// results until Michael's approve closes it, and asks again on the same issue when its task comes back without the
+    /// wish being live. A held wish is let go once the owner released it on its issue with <c>/village release</c>, and
+    /// its errand closes without asking: the next task for the wish begins a new errand, on the same issue. A record
     /// is never replaced by one for another wish.
     /// </para>
     /// </summary>
@@ -205,16 +209,18 @@ public static partial class Errand
         /// <summary>Asking or waiting: Eddie's latest result that counts, or the time it takes.</summary>
         public Decision Follow()
         {
+            if (WasRejected()) return Rejected();
             var waiting = errand.State == ErrandState.Waiting;
-            if (Latest(Outcomes) is { } result && !(waiting && Questions.Contains(result.Outcome)))
+            if (Latest(Outcomes) is { } result && !(waiting && ForTheOwner.Contains(result.Outcome)))
             {
                 return result.Outcome switch
                 {
                     "done" => Move(ErrandState.Delivered),
                     "failed" => Fail("eddie-failed", $"{IssueLink}#issuecomment-{result.Id}"),
-                    "reverted" => Rejected(),
                     "budget_reached" => Move(ErrandState.Budget),
-                    "not_allowed" => Hold(texts.NotAllowed, label: false),
+                    // most likely Eddie's list of who may use him lacks the App: that holds no wish, the owner is told
+                    "not_allowed" => new Decision(errand with { State = ErrandState.Waiting, Since = now, OwnerMentioned = true },
+                        [new PostComment(Line(texts.NotAllowed))]),
                     _ when errand.OwnerMentioned => new Decision(errand with { State = ErrandState.Waiting, Since = now }, []),
                     _ => new Decision(errand with { State = ErrandState.Waiting, Since = now, OwnerMentioned = true },
                         [new PostComment(Line(texts.Waiting))]),
@@ -228,25 +234,24 @@ public static partial class Errand
         /// <summary>Eddie called it done: a reject holds the wish, the data serving it makes it live, else it is not live in time.</summary>
         public Decision Deliver(bool wishLive)
         {
-            if (Latest(Outcomes) is { Outcome: "reverted" }) return Rejected();
+            if (WasRejected()) return Rejected();
             if (wishLive) return Move(ErrandState.Live, new PostComment(Line(texts.Live)));
             return now - errand.Since >= LiveLimit ? Fail("not-live", IssueLink) : Stay();
         }
 
         /// <summary>
         /// After a failure: a late result of Eddie's still counts. A task gone with the wish live means a release serves it,
-        /// most likely Eddie's late one, so the errand goes live and is watched; gone without it, the errand closes as
-        /// answered. Otherwise the village asks again after <see cref="Cooling"/>.
+        /// most likely Eddie's late one, so the errand goes live and is watched. A task gone without it answers nothing:
+        /// the errand keeps its count and waits until its wish is the task again. Then the village asks again once
+        /// <see cref="Cooling"/> has passed.
         /// </summary>
         public Decision Cool(bool wished, bool wishLive)
         {
-            var latest = Latest(Outcomes);
-            if (latest is { Outcome: "reverted" }) return Rejected();
+            if (WasRejected()) return Rejected();
             // a done that already ran out of time to go live is not delivered again
-            if (latest is { Outcome: "done" } && errand.History is not [.., { Code: "not-live" }]) return Move(ErrandState.Delivered);
+            if (Latest(Outcomes) is { Outcome: "done" } && errand.History is not [.., { Code: "not-live" }]) return Move(ErrandState.Delivered);
             if (!wished && wishLive) return Move(ErrandState.Live, new PostComment(Line(texts.Live)));
-            if (!wished) return Move(ErrandState.Closed, new PostComment(Line(texts.Answered)));
-            return now - errand.Since >= Cooling ? Ask() : Stay();
+            return wished && now - errand.Since >= Cooling ? Ask() : Stay();
         }
 
         /// <summary>
@@ -256,9 +261,8 @@ public static partial class Errand
         /// </summary>
         public Decision AfterLive(bool wished, bool wishLive)
         {
-            var latest = Latest(LiveOutcomes);
-            if (latest is { Outcome: "reverted" }) return Rejected();
-            if (latest is { Outcome: "approved" }) return Move(ErrandState.Closed);
+            if (WasRejected()) return Rejected();
+            if (Latest(LiveOutcomes) is { Outcome: "approved" }) return Move(ErrandState.Closed);
             if (wishLive) return errand.Reappeared is null ? Stay() : new Decision(errand with { Reappeared = null }, []);
             // once the task came back, its going away again does not stop the count: a hold of this errand closes it too
             if (errand.Reappeared is not { } since) return wished ? new Decision(errand with { Reappeared = now }, []) : Stay();
@@ -266,8 +270,10 @@ public static partial class Errand
         }
 
         /// <summary>
-        /// Held: the owner's <c>/village release</c> after the hold lets the wish go, and starts a new round on the same
-        /// issue with a new count; when another release serves the wish by then, it is answered instead.
+        /// Held: the owner's <c>/village release</c> after the hold lets the wish go and closes the errand, without asking:
+        /// another wish may be the task now, and a release for this one would not answer it. The next task for the wish
+        /// begins a new errand with a new count, on the same issue (the desk finds it by its title). When another release
+        /// serves the wish by then, the issue says it is answered.
         /// </summary>
         public Decision Released(bool wishLive)
         {
@@ -275,53 +281,65 @@ public static partial class Errand
                 && comment.Body.StartsWith("/village release", StringComparison.Ordinal));
             if (!released) return Stay();
             DeskAction release = new ReleaseWish(errand.Wish);
-            if (wishLive) return Move(ErrandState.Closed, release, new PostComment(Line(texts.Answered)));
-            // nothing of the earlier rounds counts: the desk's next command is a new one
-            var again = With(errand with { Command = 0, Baseline = Floor, Failures = 0, History = [], OwnerMentioned = false, Reappeared = null }).Ask();
-            return again with { Actions = [release, .. again.Actions] };
+            return wishLive ? Move(ErrandState.Closed, release, new PostComment(Line(texts.Answered))) : Move(ErrandState.Closed, release);
         }
 
         private Decision Fail(string code, string link, bool askAtOnce = false)
         {
             var failures = errand.Failures + 1;
             var failed = With(errand with { Failures = failures, History = [.. errand.History, new Failure(code, link, now)], Reappeared = null });
-            if (failures >= MaxFailures) return failed.Hold(texts.Held, label: true);
+            if (failures >= MaxFailures) return failed.Hold(texts.Held);
             if (askAtOnce) return failed.Ask();
             return failed.Move(ErrandState.Cooling, new PostComment(Line(texts.Failed, ("attempt", $"{failures}"), ("code", code))));
         }
 
-        private Decision Rejected() => Hold(texts.Rejected, label: true);
+        private Decision Rejected() => Hold(texts.Rejected);
 
-        /// <summary>Holds the wish and tells why, and how to release it; a release counts only after what the errand saw now.</summary>
-        private Decision Hold(DeskLine line, bool label)
+        /// <summary>
+        /// Holds the wish, labels the issue, and tells why and how to release it, the comment last: a hold decided again
+        /// after a refusal labels again, which changes nothing, but never says it twice. A release counts only after what
+        /// the errand saw now.
+        /// </summary>
+        private Decision Hold(DeskLine line)
         {
-            List<DeskAction> actions = [new HoldWish(errand.Wish), new PostComment($"{Line(line)}\n\n{Line(texts.Release)}")];
-            if (label) actions.Add(new AddLabel("on-hold"));
             var seen = comments.Select(comment => comment.Id).DefaultIfEmpty(0).Max();
-            return new Decision(errand with { State = ErrandState.Held, Since = now, Baseline = Math.Max(Floor, seen) }, [.. actions]);
+            return new Decision(errand with { State = ErrandState.Held, Since = now, Baseline = Math.Max(Floor, seen) },
+                [new HoldWish(errand.Wish), new AddLabel("on-hold"), new PostComment($"{Line(line)}\n\n{Line(texts.Release)}")]);
         }
 
         private string Line(DeskLine line, params (string Name, string Value)[] values) => Fill(line.Nl, [("owner", facts.Owner), .. values]);
 
-        // the latest result by Eddie's login with one of these outcomes, for the desk's command or a later one by the owner;
-        // never for a command up to the baseline
+        // the latest result that counts with one of these outcomes
         private (long Id, string Outcome)? Latest(IReadOnlySet<string> outcomes)
         {
+            (long Id, string Outcome)? latest = null;
+            foreach (var result in Results())
+                if (outcomes.Contains(result.Outcome) && result.Id > (latest?.Id ?? long.MinValue)) latest = result;
+            return latest;
+        }
+
+        // a reject is never hidden by a result that came after it
+        private bool WasRejected() => Results().Any(result => result.Outcome == "reverted");
+
+        // the results by Eddie's login for the desk's command or for a later comment by the owner, which Eddie may have
+        // taken as a command in any of his forms; never for a command up to the baseline
+        private IEnumerable<(long Id, string Outcome)> Results()
+        {
             var owners = comments
-                .Where(comment => comment.Id > Floor && Is(comment.Author, facts.Owner) && IsCommand(comment))
+                .Where(comment => comment.Id > Floor && Is(comment.Author, facts.Owner))
                 .Select(comment => comment.Id)
                 .ToHashSet();
-            foreach (var comment in comments.OrderByDescending(comment => comment.Id))
+            foreach (var comment in comments)
             {
                 if (EddieResult.Parse(comment, facts.EddieLogin) is { } result && result.Command > errand.Baseline
-                    && (result.Command == errand.Command || owners.Contains(result.Command)) && outcomes.Contains(result.Outcome))
-                    return (comment.Id, result.Outcome);
+                    && (result.Command == errand.Command || owners.Contains(result.Command)))
+                    yield return (comment.Id, result.Outcome);
             }
-            return null;
         }
 
         private static bool Is(string author, string login) => login.Length > 0 && string.Equals(author, login, StringComparison.OrdinalIgnoreCase);
 
+        // the App's own text: the desk writes its commands as /eddie followed by a space
         private static bool IsCommand(IssueComment comment) => comment.Body.StartsWith("/eddie ", StringComparison.Ordinal);
     }
 
