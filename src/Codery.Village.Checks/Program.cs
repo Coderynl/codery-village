@@ -32,7 +32,7 @@ internal static class Program
 
     private static async Task<int> Production(string url, int ticks, bool eddie)
     {
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60), MaxResponseContentBufferSize = ProductionTrial.MaxAnswerBytes };
         return await ProductionTrial.Check(http, url, ticks, eddie, Console.Out);
     }
 }

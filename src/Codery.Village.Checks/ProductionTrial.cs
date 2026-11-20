@@ -26,19 +26,27 @@ public sealed record TrialResult(IReadOnlyList<string> Problems, string? OpenWis
 public static class ProductionTrial
 {
     /// <summary>
-    /// Above this mean time per tick a trial is a problem: three times the mean on the live data and a production-like
-    /// save (a village of 14 days), rounded up.
+    /// Above this mean time per tick a trial is a problem: three times the mean over a village day on the live data and a
+    /// production-like save (a village of 14 days), 0.05 ms in Release, rounded up to a whole ms.
     /// </summary>
-    public const double TickLimitMs = 2;
+    public const double TickLimitMs = 1;
+
+    /// <summary>The largest answer of production read, in bytes: a save is far smaller.</summary>
+    public const long MaxAnswerBytes = 64L * 1024 * 1024;
+
+    // how often the trial forgets old log lines: as the server does, once a minute
+    private const int ForgetEvery = 60 * Clocks.TicksPerSecond;
 
     /// <summary>
     /// Takes up <paramref name="save"/> on <paramref name="data"/> and <paramref name="map"/>, runs <paramref name="ticks"/>
-    /// ticks and saves. A problem is an exception, a module that stopped, a module that went to sleep (a
-    /// <c>module-dormant</c> line), or a mean tick time above <see cref="TickLimitMs"/>.
+    /// ticks, forgetting old log lines as the server does, and saves. A problem is a problem in the data (the server
+    /// does not start on it), an exception, a module that stopped, a module that went to sleep (a <c>module-dormant</c>
+    /// line), or a mean tick time above <see cref="TickLimitMs"/>.
     /// </summary>
     public static TrialResult Run(SavedVillage save, DataSet data, IslandMap map, int ticks)
     {
-        var problems = new List<string>();
+        // the server does not start on data with a problem
+        var problems = data.Problems().Select(problem => $"data: {problem}").ToList();
         string? openWish = null;
         var answered = false;
         var mean = 0.0;
@@ -48,23 +56,36 @@ public static class ProductionTrial
             var engine = Engine.Load(save, modules, data, map, new SimulatedTime(save.Calendar));
             openWish = modules.OfType<Wishes>().Single().Task?.Wish;
 
+            // the lines since the save, the load's own among them, read as they come: the trial forgets old lines as the server does
+            var read = save.LogStart + save.Log.Count;
+            void ReadLog()
+            {
+                foreach (var (sequence, line) in engine.LogFrom(read))
+                {
+                    if (line.Kind == "module-dormant")
+                        problems.Add($"module-dormant: {line.Subject}{(line.Detail is { } detail ? $": {detail}" : "")}");
+                    // the line the village writes when it publishes TaskClosed because the data now fulfils the wish
+                    if (line.Kind == "task-closed" && line.Subject == openWish)
+                        answered = true;
+                    read = sequence + 1;
+                }
+            }
+
             // the first tick is not timed: it pays for compiling the code once, which production paid long ago
             if (ticks > 0) engine.Step();
             var watch = Stopwatch.StartNew();
-            for (var tick = 1; tick < ticks; tick++) engine.Step();
+            for (var tick = 1; tick < ticks; tick++)
+            {
+                engine.Step();
+                if (engine.Tick % ForgetEvery != 0) continue;
+                ReadLog();
+                engine.Forget();
+            }
             mean = ticks > 1 ? watch.Elapsed.TotalMilliseconds / (ticks - 1) : 0;
             engine.Save();
+            ReadLog();
 
             problems.AddRange(engine.Stopped.Select(stopped => $"module-stopped: {stopped.Module}: {stopped.Error}"));
-            // the lines since the save, the load's own among them; the trial never forgets lines
-            foreach (var (_, line) in engine.LogFrom(save.LogStart + save.Log.Count))
-            {
-                if (line.Kind == "module-dormant")
-                    problems.Add($"module-dormant: {line.Subject}{(line.Detail is { } detail ? $": {detail}" : "")}");
-                // the line the village writes when it publishes TaskClosed because the data now fulfils the wish
-                if (line.Kind == "task-closed" && line.Subject == openWish)
-                    answered = true;
-            }
             if (mean > TickLimitMs)
                 problems.Add($"tick time: a mean of {Ms(mean)} ms per tick is above the limit of {Ms(TickLimitMs)} ms.");
         }
@@ -88,15 +109,15 @@ public static class ProductionTrial
         IReadOnlyList<string>? running = null;
         try
         {
-            save = await http.GetFromJsonAsync<SavedVillage>(reading, Protocol.Json) ?? throw new JsonException("The answer is empty.");
+            save = await Read<SavedVillage>(http, reading);
             if (eddie)
             {
                 reading = $"{url.TrimEnd('/')}/version";
-                running = (await http.GetFromJsonAsync<ProductionVersion>(reading, Protocol.Json))?.Releases
-                    ?? throw new JsonException("The answer is empty.");
+                running = (await Read<ProductionVersion>(http, reading)).Releases;
             }
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException)
+        // IOException: the connection broke while the body was read
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or IOException or JsonException or NotSupportedException)
         {
             var line = $"Production cannot be read at {reading}: {e.Message}";
             if (eddie)
@@ -122,6 +143,14 @@ public static class ProductionTrial
         var failed = result.Problems.Count > 0 || unanswered;
         output.WriteLine(failed ? "The checked-out data does not pass on the production state." : "The checked-out data passes on the production state.");
         return failed ? 1 : 0;
+    }
+
+    // read whole before it is parsed, so the client's MaxResponseContentBufferSize caps it
+    private static async Task<T> Read<T>(HttpClient http, string url)
+    {
+        using var answer = await http.GetAsync(url);
+        answer.EnsureSuccessStatusCode();
+        return await answer.Content.ReadFromJsonAsync<T>(Protocol.Json) ?? throw new JsonException("The answer is empty.");
     }
 
     private static string Ms(double value) => value.ToString("0.00", CultureInfo.InvariantCulture);

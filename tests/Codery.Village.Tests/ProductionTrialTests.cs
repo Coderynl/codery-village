@@ -32,15 +32,14 @@ public class ProductionTrialTests
 
     private static readonly string Grapes = File.ReadAllText(Path.Combine(VillageSetup.Folder, "releases", "grapes.json"));
 
-    /// <summary>The base data with grapes and only the wine wish, for everyone and over a low threshold, so the village asks for wine soon.</summary>
+    /// <summary>The base data with grapes, where everyone wishes for wine, heavily and over a low threshold, so the village asks for wine soon.</summary>
     private static DataSet Data(Action<JsonObject>? wishes = null, params string[] extras)
     {
         var sections = Directory.EnumerateFiles(VillageSetup.Folder, "*.json").ToDictionary(path => Path.GetFileNameWithoutExtension(path), File.ReadAllText);
         var section = JsonNode.Parse(sections["wishes"])!.AsObject();
-        var wine = section["wishes"]!.AsArray().Single(wish => (string)wish!["id"]! == "wine")!.DeepClone().AsObject();
+        var wine = section["wishes"]!.AsArray().Single(wish => (string)wish!["id"]! == "wine")!.AsObject();
         wine["who"] = new JsonObject();
-        wine["weight"] = 2;
-        section["wishes"] = new JsonArray(wine);
+        wine["weight"] = 10;
         section["taskThreshold"] = 1;
         wishes?.Invoke(section);
         sections["wishes"] = section.ToJsonString();
@@ -75,6 +74,17 @@ public class ProductionTrialTests
         var result = ProductionTrial.Run(AskingForWine.Value, Data(wishes => wishes["everyTicks"] = 0, Winery), VillageSetup.Map(), 240);
 
         Assert.Contains(result.Problems, problem => problem.Contains("module-dormant") && problem.Contains("wishes"));
+    }
+
+    // Risk: a release the server refuses to start on merges, and production stays down after the deploy.
+    [Fact]
+    public void A_release_the_server_would_not_start_on_is_a_problem()
+    {
+        // a wish with an empty after: every module takes it, the server's check of the data does not
+        var result = ProductionTrial.Run(AskingForWine.Value, Data(wishes => wishes["wishes"]!.AsArray().First(wish => (string)wish!["id"]! == "wine")!["after"] = new JsonArray(), Winery), VillageSetup.Map(), 240);
+
+        Assert.Contains(result.Problems, problem => problem.Contains("empty 'after'"));
+        Assert.DoesNotContain(result.Problems, problem => problem.StartsWith("module-"));
     }
 
     // Risk: Eddie's release merges untried while production cannot be read, or every other pull request fails until /save is deployed.

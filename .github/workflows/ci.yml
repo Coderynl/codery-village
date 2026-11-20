@@ -47,19 +47,21 @@ jobs:
       - name: What may Eddie change?
         run: dotnet run --project src/Codery.Village.Checks -- paths "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" "${{ vars.EDDIE_BOT }}"
 
-  # the pull request's data on the village as it stands in production: nothing may stop or sleep, ticks stay fast, and
-  # Eddie's new release answers the open wish. Production unreadable fails only Eddie's pull requests (--eddie).
+  # the pull request's data on the village as it stands in production, for one village day (86,400 s at 4 ticks):
+  # nothing may stop or sleep, ticks stay fast, and Eddie's new release answers the open wish. Production unreadable
+  # fails only Eddie's pull requests (--eddie).
   production:
     needs: changes
     if: github.event_name == 'pull_request' && needs.changes.outputs.docs != 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
       - name: Tried on production
-        run: dotnet run --project src/Codery.Village.Checks -c Release -- production https://village-engine.codery.nl 2400 ${{ github.event.pull_request.user.login == vars.EDDIE_BOT && '--eddie' || '' }}
+        run: dotnet run --project src/Codery.Village.Checks -c Release -- production https://village-engine.codery.nl 345600 ${{ github.event.pull_request.user.login == vars.EDDIE_BOT && '--eddie' || '' }}
 
   # the scenarios keep every core busy for minutes (30 seeds at once), so the two biggest get a machine each,
   # the other scenarios (new ones too) a third, and all other tests a fourth
