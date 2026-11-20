@@ -23,7 +23,7 @@ namespace Codery.Village.Tests;
 /// - a live wish's errand is forgotten while the desk asks for another wish, so Michael's reject never holds it;
 /// - a refused command on an issue used again lets an old result count for the new errand;
 /// - a hold of the desk is lost when the village forgets it, or ends without Michael's release, or by anyone else's;
-/// - a refused hold comment is never posted, so Michael never hears of the hold.
+/// - a refused hold comment is never posted, so Michael never hears of the hold, also when the hold closed the task.
 /// </summary>
 [Collection(RealTimeCollection.Name)]
 public class DeskTests
@@ -343,6 +343,36 @@ public class DeskTests
         Assert.StartsWith("/eddie ", command.Body);
         var errand = await Record(_errands, "wine");
         Assert.Equal((issue, command.Id, ErrandState.Asking, 0), (errand.Issue, errand.Command, errand.State, errand.Failures));
+    }
+
+    [Fact]
+    public async Task A_refused_hold_comment_after_a_third_release_gone_is_posted_the_next_round()
+    {
+        var data = Data();
+        await using var server = Server(new FakeStore(), data);
+        var host = await Asking(server);
+        // wine was live, twice failed before; its release went away more than six hours ago and the village asks for it again
+        var issue = _github.Opened(host.OpenTask()!.TitleNl, App);
+        var asked = _github.Add(issue, App, "/eddie build wine, attempt 3");
+        List<Failure> history = [new("timeout", "https://github.com/x/y/issues/1", _clock.Now), new("not-live", "https://github.com/x/y/issues/1", _clock.Now)];
+        await _errands.Save(new ErrandRecord("wine", issue, asked, ErrandState.Live, _clock.Now, 2, history, false, Reappeared: _clock.Now), default);
+        _clock.Now += TimeSpan.FromHours(7);
+
+        // GitHub refuses the hold comment; the hold has closed the task already
+        _github.Once("comment", after: false, () => throw new GitHubException(502, "/repos/x/issues/1/comments"));
+        await Desk(host, data).Round(default);
+        Assert.Contains("wine", Held(host));
+        Assert.Null(host.OpenTask());
+        Assert.Equal(ErrandState.Live, (await Record(_errands, "wine")).State);
+
+        await Desk(host, data).Round(default);
+
+        var texts = DeskTexts.From(data);
+        var held = _github.Issues.Single();
+        Assert.Equal(Holding(texts, texts.Held).Replace("{owner}", "Codery-nl"), held.Comments[^1].Body);
+        Assert.Contains("on-hold", held.Labels);
+        var errand = await Record(_errands, "wine");
+        Assert.Equal((ErrandState.Held, 3), (errand.State, errand.Failures));
     }
 
     [Fact]

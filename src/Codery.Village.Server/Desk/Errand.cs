@@ -251,7 +251,8 @@ public static partial class Errand
 
         /// <summary>
         /// A live wish: Michael's approve closes the errand, a reject holds the wish. When the wish is no longer live and
-        /// its task is back, the errand waits <see cref="Cooling"/> for the revert, then counts a failure and asks again.
+        /// its task is back, the errand waits <see cref="Cooling"/> for the revert, then counts a failure and asks again,
+        /// also when the task went away since: a third failure that holds the wish closes it before it is told.
         /// </summary>
         public Decision AfterLive(bool wished, bool wishLive)
         {
@@ -259,8 +260,8 @@ public static partial class Errand
             if (latest is { Outcome: "reverted" }) return Rejected();
             if (latest is { Outcome: "approved" }) return Move(ErrandState.Closed);
             if (wishLive) return errand.Reappeared is null ? Stay() : new Decision(errand with { Reappeared = null }, []);
-            if (!wished) return Stay();
-            if (errand.Reappeared is not { } since) return new Decision(errand with { Reappeared = now }, []);
+            // once the task came back, its going away again does not stop the count: a hold of this errand closes it too
+            if (errand.Reappeared is not { } since) return wished ? new Decision(errand with { Reappeared = now }, []) : Stay();
             return now - since >= Cooling ? Fail("release-gone", IssueLink, askAtOnce: true) : Stay();
         }
 
