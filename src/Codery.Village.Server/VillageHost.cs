@@ -307,6 +307,29 @@ public sealed class VillageHost(
         }
     }
 
+    // the save the public gets: a copy taken at most once a minute
+    private SavedVillage? _public;
+    private DateTimeOffset _publicAt;
+
+    /// <summary>
+    /// The village as saved for the public <c>/save</c>: a copy, taken under the lock and then kept for a minute, so
+    /// requests never make the village work. Null while the village is loading.
+    /// </summary>
+    public SavedVillage? LastSave()
+    {
+        lock (_gate)
+        {
+            if (_engine is null) return null;
+            var now = time.GetUtcNow();
+            if (_public is null || now - _publicAt >= TimeSpan.FromMinutes(1) || now < _publicAt)
+            {
+                _public = _engine.Save();
+                _publicAt = now;
+            }
+            return _public;
+        }
+    }
+
     /// <summary>For the tests: a look at the village, under the lock.</summary>
     internal T Inspect<T>(Func<Engine, T> look)
     {

@@ -22,6 +22,8 @@ using PeopleModule = Codery.Village.Modules.People.People;
 
 namespace Codery.Village.Tests;
 
+internal sealed record VersionAnswer(string Commit, string[] Releases);
+
 /// <summary>A store in memory that can be told to be away, to fail, to take its time, or to hold a save it cannot read.</summary>
 internal sealed class FakeStore : IVillageStore
 {
@@ -195,6 +197,26 @@ public class HostTests
         _ = server.Server;
         Assert.Null(server.Services.GetService<IVillageStore>());
         Assert.True(server.Services.GetRequiredService<VillageHost>().Ready.IsCompleted);
+    }
+
+    [Fact]
+    public async Task The_version_names_the_commit_and_every_release()
+    {
+        await using var server = Server(settings: ("VILLAGE_COMMIT", "abc123"));
+        await Started(server);
+        var version = await server.CreateClient().GetFromJsonAsync<VersionAnswer>("/version", Protocol.Json);
+        Assert.Equal("abc123", version!.Commit);
+        Assert.Equal(Ladder.Files().Select(file => Path.GetFileNameWithoutExtension(file)), version.Releases);
+    }
+
+    [Fact]
+    public async Task The_public_save_loads_as_a_village()
+    {
+        await using var server = Server();
+        await Started(server);
+        var saved = await server.CreateClient().GetFromJsonAsync<SavedVillage>("/save", Protocol.Json);
+        var engine = Engine.Load(saved!, VillageSetup.Modules(), VillageSetup.Live(), VillageSetup.Map(), TimeProvider.System);
+        Assert.Empty(engine.Stopped);
     }
 
     [Fact]

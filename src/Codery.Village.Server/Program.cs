@@ -89,6 +89,12 @@ app.Use(async (context, next) =>
 app.UseWebSockets();
 
 app.MapGet("/health", () => Results.Text("ok"));
+// what runs here, and the village as it stands, for the tools that work on the village; no visitors in it
+var commit = app.Configuration["VILLAGE_COMMIT"] is { Length: > 0 } built ? built : "dev";
+var releases = VillageSetup.Releases();
+app.MapGet("/version", () => Results.Json(new { commit, releases }, Protocol.Json));
+app.MapGet("/save", (VillageHost host) =>
+    host.LastSave() is { } save ? Results.Json(save, Protocol.Json) : Results.StatusCode(StatusCodes.Status503ServiceUnavailable));
 app.MapHub<VillageHub>("/hub", options => options.Transports = HttpTransportType.WebSockets);
 
 // the flat map, to watch along: on a developer's machine only
