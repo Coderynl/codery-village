@@ -134,7 +134,7 @@ public static partial class Errand
             ErrandState.Asking or ErrandState.Waiting => round.Follow(),
             ErrandState.Budget => now >= NextBudget(errand.Since) ? round.Ask() : round.Stay(),
             ErrandState.Delivered => round.Deliver(wishLive),
-            ErrandState.Cooling => round.Cool(wished),
+            ErrandState.Cooling => round.Cool(wished, wishLive),
             _ => round.Stay(),
         };
     }
@@ -220,15 +220,17 @@ public static partial class Errand
         }
 
         /// <summary>
-        /// After a failure: a late result of Eddie's still counts, a task gone means another release answered the wish,
-        /// and after <see cref="Cooling"/> the village asks again.
+        /// After a failure: a late result of Eddie's still counts. A task gone with the wish live means a release serves it,
+        /// most likely Eddie's late one, so the errand goes live and is watched; gone without it, the errand closes as
+        /// answered. Otherwise the village asks again after <see cref="Cooling"/>.
         /// </summary>
-        public Decision Cool(bool wished)
+        public Decision Cool(bool wished, bool wishLive)
         {
             var latest = Latest(Outcomes);
             if (latest is { Outcome: "reverted" }) return Rejected();
             // a done that already ran out of time to go live is not delivered again
             if (latest is { Outcome: "done" } && errand.History is not [.., { Code: "not-live" }]) return Move(ErrandState.Delivered);
+            if (!wished && wishLive) return Move(ErrandState.Live, new PostComment(Line(texts.Live)));
             if (!wished) return Move(ErrandState.Closed, new PostComment(Line(texts.Answered)));
             return now - errand.Since >= Cooling ? Ask() : Stay();
         }

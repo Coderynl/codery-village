@@ -412,6 +412,20 @@ public class ErrandTests
     }
 
     [Fact]
+    public void A_cooling_errand_whose_wish_went_live_is_watched()
+    {
+        var cooling = Asking(1, [new Failure("timeout", Issue, Start.AddHours(12))]) with { State = ErrandState.Cooling, Since = Start.AddHours(12) };
+
+        // Eddie's late release closed the task before his result came
+        var live = Next(cooling, null, [Command()], Start.AddHours(13), wishLive: true);
+
+        Assert.Equal<DeskAction>([new PostComment("Het draait.")], live.Actions);
+        Assert.Equal(ErrandState.Live, live.Errand!.State);
+        List<IssueComment> rejected = [Command(), Result(150, 100, "done"), ByOwner(160, "/eddie reject"), Result(170, 160, "reverted")];
+        Assert.Equal(ErrandState.Held, Next(live.Errand, null, rejected, Start.AddHours(14)).Errand!.State);
+    }
+
+    [Fact]
     public void A_task_answered_elsewhere_ends_a_cooling_errand()
     {
         var cooling = Asking(1, [new Failure("timeout", Issue, Start)]) with { State = ErrandState.Cooling };
