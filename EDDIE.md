@@ -37,7 +37,7 @@ Never change `.github/`, `src/`, `tests/`, `EDDIE.md`, `data/wishes.json` or any
 ## Build & test
 
 - Quick (T1, T2): `dotnet test --filter Category!=Scenario`
-- Full (T3): `dotnet test` (needs Docker running; about 12 minutes; the scenarios are in it)
+- Full (T3): `dotnet test` (needs Docker running; locally five to six minutes, CI about ten; the scenarios are in it)
 - The test `Every_release_serves_a_wish_and_loads` loads your release and checks that it serves a wish and that the README names it once.
 
 ## Run locally (T4)
@@ -47,6 +47,7 @@ Not applicable. The village runs on its own server; there is no test account.
 ## Delivery
 
 - Default branch `main`: pull request required, squash merge, auto-merge allowed, no required approval (mode `merge-on-green`). Your pull request touches only release paths, which have no code owner.
+- Gate: this rule holds only because the ruleset requires code-owner review for everything outside the release paths (`CODEOWNERS`). CI runs from the merge commit of the pull request itself, so a pull request that edits `ci.yml` or the check tool would otherwise check itself and pass. Never touch those; Michael is the gate.
 - CI on pull requests: GitHub Actions workflow `ci.yml` (jobs `paths`, `part`, required check `test`).
 - Deployment: Coolify deploys `main` by itself after a merge, usually within a few minutes.
 - Integration URL: https://village-engine.codery.nl
