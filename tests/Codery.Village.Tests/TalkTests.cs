@@ -318,10 +318,18 @@ public class TalkTests
         Assert.Null(Decent.Forbidden(new TalkLines(["Els: Sinds opa dood is, is het stil in huis."], ["Els: Since grandpa died the house is quiet."], FromTemplate: false)));
     }
 
+    // risk: wine from their own grapes is what the village wishes for; a list that still refuses it blocks that wish
+    [Fact]
+    public void A_glass_of_wine_passes_the_word_list()
+    {
+        Assert.Null(Decent.Forbidden(new TalkLines(["Piet: Vanavond drinken we wijn van onze eigen druiven."], ["Piet: Tonight we drink wine from our own grapes."], FromTemplate: false)));
+    }
+
     [Theory]
     [InlineData("Jan: Seks is niet voor hier.", "Jan: Sex is not for here.")]
     [InlineData("Jan: We gaan naar de kerk.", "Jan: We go to church.")]
     [InlineData("Jan: Ik haat die lelijke buurman.", "Jan: I hate that ugly neighbour.")]
+    [InlineData("Jan: Piet is weer dronken.", "Jan: Piet is drunk again.")]
     public void A_line_with_sexual_content_religion_or_discrimination_is_still_refused(string nl, string en)
     {
         Assert.NotNull(Decent.Forbidden(new TalkLines([nl], [en], FromTemplate: false)));
