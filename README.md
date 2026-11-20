@@ -20,7 +20,7 @@ When the residents wish for something the data cannot give them, the village wri
 - opens an issue with the label `wish` for the task and posts Eddie's `/eddie` command under it; an open issue the App opened already for the same wish is used again;
 - reads Eddie's results under the issue (only those of his login count): after `done` it waits until the server runs on data that serves the wish and says so on the issue, then follows the issue until Michael approves or rejects the release;
 - asks again 6 hours after a failure, up to 3 attempts; after the third, after a reject, or when Eddie may not do it, the village puts the wish on hold and stops asking for it;
-- keeps one errand per wish (the table `errands` in the database, or in memory without one) and saves after every step on GitHub, so a restart never opens a second issue or posts a command twice.
+- keeps one errand per wish (the table `errands` in the database, or in memory without one) and saves after every step on GitHub, so a restart never opens a second issue or posts a command twice. During a deploy the old and the new server run side by side; a round takes a Postgres advisory lock first, so only one of them acts.
 
 A wish on hold is asked again, on its issue, once Michael released it with `Village__Tasks__Release__0=<wish>` and the village wishes it again.
 

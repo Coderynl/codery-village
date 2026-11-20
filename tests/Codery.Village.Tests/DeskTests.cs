@@ -16,6 +16,7 @@ namespace Codery.Village.Tests;
 /// The desk on a running village, with GitHub in memory. Test plan, one risk per test:
 /// - the village's task never reaches Eddie, or a live release is not told on its issue;
 /// - with the switch off, or switched on without the App's settings, the desk still speaks to GitHub or crashes;
+/// - while another server (the old one, during a deploy) has the round, this one acts too and posts twice;
 /// - a stop, a refusal or a lost answer between opening and commanding opens a second issue or posts the command twice;
 /// - an issue the App opened already is opened again, or an old command or result on it is taken for the new one;
 /// - a live wish's errand is forgotten while the desk asks for another wish, so Michael's reject never holds it.
@@ -88,8 +89,8 @@ public class DeskTests
         return host;
     }
 
-    private EddieDesk Desk(VillageHost host, DataSet data, DeskOptions? options = null) =>
-        new(host, _github, _errands, options ?? On, data, ["grapes"], _clock, NullLogger<EddieDesk>.Instance);
+    private EddieDesk Desk(VillageHost host, DataSet data, DeskOptions? options = null, IErrandStore? store = null) =>
+        new(host, _github, store ?? _errands, options ?? On, data, ["grapes"], _clock, NullLogger<EddieDesk>.Instance);
 
     private static string Result(long command, string outcome) =>
         $"Klaar.\n\n<!-- eddie:result cmd={command} run=run-1 outcome={outcome} sig=0123456789abcdef -->";
@@ -160,6 +161,29 @@ public class DeskTests
         Assert.Equal(0, _github.Calls);
         Assert.Empty(await _errands.All(default));
         Assert.Empty(host.Held());
+    }
+
+    [Fact]
+    public async Task A_round_another_server_holds_does_nothing()
+    {
+        var data = Data();
+        await using var server = Server(new FakeStore(), data);
+        var host = await Asking(server);
+
+        await Desk(host, data, store: new Taken(_errands)).Round(default);
+
+        Assert.Equal(0, _github.Calls);
+        Assert.Empty(await _errands.All(default));
+    }
+
+    /// <summary>The errands, while another server has the round.</summary>
+    private sealed class Taken(IErrandStore errands) : IErrandStore
+    {
+        public Task<IReadOnlyList<ErrandRecord>> All(CancellationToken cancellation) => errands.All(cancellation);
+
+        public Task Save(ErrandRecord errand, CancellationToken cancellation) => errands.Save(errand, cancellation);
+
+        public Task<IAsyncDisposable?> TryLockRound(CancellationToken cancellation) => Task.FromResult<IAsyncDisposable?>(null);
     }
 
     [Fact]

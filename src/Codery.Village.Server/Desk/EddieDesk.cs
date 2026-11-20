@@ -10,7 +10,8 @@ namespace Codery.Village.Server.Desk;
 /// <para>
 /// Off unless <c>Village:Tasks:Enabled</c>: then it touches nothing, not even GitHub. Switched on without the App's
 /// settings it names the missing ones once, never their values, and stays idle. A round that fails is logged and tried
-/// again a minute later from what the store holds; the server never stops for it.
+/// again a minute later from what the store holds; the server never stops for it. A round runs only under the store's
+/// round lock, so of two servers side by side (during a deploy) only one acts.
 /// </para>
 /// </summary>
 public sealed class EddieDesk(VillageHost village, IVillageGitHub github, IErrandStore store, DeskOptions options, DataSet data,
@@ -46,6 +47,13 @@ public sealed class EddieDesk(VillageHost village, IVillageGitHub github, IErran
         if (!options.Enabled || _missing.Count > 0 || !village.Ready.IsCompleted) return;
         try
         {
+            // during a deploy the old and the new server run side by side: one of them has the round
+            await using var round = await store.TryLockRound(stoppingToken);
+            if (round is null)
+            {
+                logger.LogDebug("Another server has the desk's round.");
+                return;
+            }
             await Work(stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

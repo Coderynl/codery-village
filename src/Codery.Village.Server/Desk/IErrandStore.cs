@@ -12,6 +12,12 @@ public interface IErrandStore
 
     /// <summary>Keeps <paramref name="errand"/> as the errand of its wish, in place of the one there was.</summary>
     Task Save(ErrandRecord errand, CancellationToken cancellation);
+
+    /// <summary>
+    /// The desk's round, for one server at a time: during a deploy the old and the new server run side by side. Null
+    /// while another holds it; disposing the lock lets go of it.
+    /// </summary>
+    Task<IAsyncDisposable?> TryLockRound(CancellationToken cancellation);
 }
 
 /// <summary>The errands in memory: for a village without a database, and for the tests.</summary>
@@ -30,6 +36,14 @@ public sealed class MemoryErrandStore : IErrandStore
         lock (_gate) _errands[errand.Wish] = errand;
         return Task.CompletedTask;
     }
+
+    /// <summary>Always granted: without a database there is no other server that shares the errands.</summary>
+    public Task<IAsyncDisposable?> TryLockRound(CancellationToken cancellation) => Task.FromResult<IAsyncDisposable?>(new Granted());
+
+    private sealed class Granted : IAsyncDisposable
+    {
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
 }
 
 /// <summary>
@@ -39,6 +53,9 @@ public sealed class MemoryErrandStore : IErrandStore
 public sealed class PostgresErrandStore(string connectionString) : IErrandStore, IAsyncDisposable, IDisposable
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    // the advisory lock of the desk's round: one fixed number for the whole database ("errand" in ASCII)
+    private const long RoundLock = 0x65_72_72_61_6E_64;
 
     private readonly NpgsqlDataSource _source = NpgsqlDataSource.Create(connectionString);
 
@@ -86,6 +103,44 @@ public sealed class PostgresErrandStore(string connectionString) : IErrandStore,
             NpgsqlDbType = NpgsqlDbType.TimestampTz,
         });
         await command.ExecuteNonQueryAsync(cancellation);
+    }
+
+    /// <summary>
+    /// A session advisory lock on a connection of its own, held until disposed. When the server dies, Postgres closes the
+    /// connection and the lock goes with it.
+    /// </summary>
+    public async Task<IAsyncDisposable?> TryLockRound(CancellationToken cancellation)
+    {
+        var connection = await _source.OpenConnectionAsync(cancellation);
+        try
+        {
+            await using var command = new NpgsqlCommand("SELECT pg_try_advisory_lock($1)", connection) { Parameters = { new() { Value = RoundLock } } };
+            if (await command.ExecuteScalarAsync(cancellation) is true) return new HeldRound(connection);
+        }
+        catch
+        {
+            await connection.DisposeAsync();
+            throw;
+        }
+        await connection.DisposeAsync();
+        return null;
+    }
+
+    private sealed class HeldRound(NpgsqlConnection connection) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync()
+        {
+            try
+            {
+                await using var command = new NpgsqlCommand("SELECT pg_advisory_unlock($1)", connection) { Parameters = { new() { Value = RoundLock } } };
+                await command.ExecuteScalarAsync(CancellationToken.None);
+            }
+            finally
+            {
+                // closing the session lets go of the lock as well, should the unlock fail
+                await connection.DisposeAsync();
+            }
+        }
     }
 
     public ValueTask DisposeAsync() => _source.DisposeAsync();

@@ -169,6 +169,25 @@ public class StoreTests(PostgresFixture postgres)
         Assert.Empty(all[0].History);
     }
 
+    // Risk: during a deploy the old and the new server both run a desk round, and post a command or comment twice.
+    [Fact]
+    public async Task One_server_at_a_time_has_the_desk_round()
+    {
+        var database = await postgres.NewDatabase();
+        await using (var village = await Store(database)) { }
+        await using var old = new PostgresErrandStore(database);
+        await using var fresh = new PostgresErrandStore(database);
+
+        await using (var round = await old.TryLockRound(CancellationToken.None))
+        {
+            Assert.NotNull(round);
+            Assert.Null(await fresh.TryLockRound(CancellationToken.None));
+        }
+
+        await using var next = await fresh.TryLockRound(CancellationToken.None);
+        Assert.NotNull(next);
+    }
+
     [Fact]
     public async Task What_the_conversations_cost_is_kept_per_day_and_never_goes_down()
     {
