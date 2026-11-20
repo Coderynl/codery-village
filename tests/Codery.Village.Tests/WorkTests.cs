@@ -249,9 +249,9 @@ public class WorkTests
         Assert.Equal(4, Assert.Single(loaded.Engine.Save().Modules, module => module.Name == "work").Version);
     }
 
-    // Risk: the village saved on production before game had a layer of its own (Work version 3) loses what its land has left.
+    // Risk: a nature tile saved without a layer loses what its land has left instead of loading into the ground's own layer.
     [Fact]
-    public void A_work_save_of_version_3_keeps_what_its_land_has_left()
+    public void A_nature_tile_saved_without_a_layer_loads_into_the_grounds_own_layer()
     {
         var data = Data();
         IModule[] Modules()
@@ -266,7 +266,7 @@ public class WorkTests
         running.Start();
         running.Step();
 
-        // as version 3 wrote it: a fertile tile of West worked down to 10, without a layer
+        // a tile as an older save wrote it: a fertile tile of West worked down to 10, without a layer
         var cell = new Cell(9, 6);
         Assert.Equal(Ground.Fertile, RealMap.At(cell));
         var saved = SaveJson.FromJson(SaveJson.ToJson(running.Save()));

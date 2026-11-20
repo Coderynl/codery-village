@@ -329,6 +329,7 @@ public class HostTests
     }
 
     // Risk: the deploy that brings the ladder throws away the village production saved on the base, or loads it without the releases.
+    // Risk: a live village whose saved Work cannot be read runs on without an economy instead of failing a test.
     [Fact]
     public async Task A_village_saved_on_the_base_goes_on_with_the_whole_ladder()
     {
@@ -360,6 +361,8 @@ public class HostTests
                 engine.Step();
                 if (engine.Tick % 240 == 0) engine.Forget();
             }
+            Assert.Empty(engine.Stopped);
+            Assert.DoesNotContain(engine.Log, entry => entry.Kind == "module-dormant");
             return engine.Running.OfType<BuildingModule>().Single().All.Select(structure => structure.Blueprint).Where(blueprint => !known.Contains(blueprint)).ToList();
         });
         Assert.NotEmpty(ladder);

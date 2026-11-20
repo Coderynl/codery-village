@@ -316,7 +316,7 @@ public sealed class Work : IModule, IJobs, IStock
         wants is not null && recipe is not null && recipe.Out.Keys.Any(wants.Contains);
 
     /// <summary>
-    /// Once a day, at the start of the day shift: every workplace without a worker, in the order they stand, takes one
+    /// Once a day, at the first step after the move time (weekends included): every workplace without a worker, in the order they stand, takes one
     /// from the workplace of its island with the most (of equals the first), when that one has two or more and makes
     /// nothing the island is short of; when none can, from the builders of the island while it keeps one. Who fits least
     /// there goes, of equals the newest in the job; he takes the first place of the workplace as a new hire, and his old

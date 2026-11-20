@@ -173,7 +173,7 @@ public class DataTests
         // the wishes for progress are each served by a release
         var served = Ladder.Files().SelectMany(release => CatalogOf(DataFolder.Load(Folder, Ladder.With(release))).Blueprints)
             .Select(blueprint => blueprint.Serves).OfType<string>().ToHashSet();
-        foreach (var label in new[] { "tools", "planks", "fields", "bread", "stone", "bricks", "house", "jetty", "cafe", "fruit" })
+        foreach (var label in new[] { "tools", "planks", "fields", "bread", "stone", "bricks", "house", "jetty", "cafe", "fruit", "flour", "vegetables", "orchard", "meat" })
             Assert.Contains(label, served);
     }
 
