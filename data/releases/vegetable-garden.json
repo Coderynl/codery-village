@@ -1,0 +1,20 @@
+{
+  "materials": [
+    { "id": "vegetables", "nl": "groente", "en": "vegetables", "satisfies": ["food"] }
+  ],
+  "roles": [
+    { "id": "gardener", "nl": "tuinder", "en": "gardener" }
+  ],
+  "blueprints": [
+    {
+      "id": "vegetable-garden", "nl": "moestuin", "en": "vegetable garden", "on": ["fertile"], "serves": "vegetables",
+      "jobs": [{ "role": "gardener", "count": 2, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "vegetables": 2 }, "ticks": 360 },
+      "phases": [
+        { "id": "clearing", "nl": "open plek", "en": "clearing", "ticks": 200, "cost": {} },
+        { "id": "beds", "nl": "bedden", "en": "beds", "ticks": 300, "cost": { "branches": 2 } }
+      ],
+      "look": { "form": "kit", "models": ["vegetable_beds"] }
+    }
+  ]
+}

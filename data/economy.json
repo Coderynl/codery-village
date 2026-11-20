@@ -20,20 +20,22 @@
   "stayQuarters": 6,
   "fetchFood": true,
   "fetchFoodFrom": "12:00",
+  "shortDays": 2,
   "nature": {
     "fertile": { "perBatch": 8, "regrowDays": 2 },
     "fishing": { "perBatch": 4, "regrowDays": 1 },
     "forest": { "perBatch": 15, "regrowDays": 3 },
     "rock": { "perBatch": 10, "regrowDays": 14 },
-    "clay": { "perBatch": 10, "regrowDays": 21 }
+    "clay": { "perBatch": 10, "regrowDays": 21 },
+    "game": { "perBatch": 25, "regrowDays": 5 }
   },
   "needs": {
     "food": { "perPerson": 1 },
     "heat": { "perHousehold": 1 }
   },
   "prices": {
-    "berries": 200, "roots": 200, "fish": 200, "firewood": 75, "driftwood": 75,
-    "bread": 300, "wood": 100, "peat": 100
+    "berries": 200, "roots": 200, "grapes": 200, "fish": 200, "firewood": 75, "driftwood": 75,
+    "bread": 300, "wood": 100, "peat": 100, "flour": 150, "vegetables": 200, "apples": 200, "game": 200
   },
   "fits": {
     "builder": ["crafts", "technology", "numbers"],
@@ -51,7 +53,10 @@
     "digger": ["gardening", "history"],
     "peat-cutter": ["nature", "history"],
     "brickmaker": ["crafts", "art"],
-    "stoker": ["stars", "reading"]
+    "stoker": ["stars", "reading"],
+    "miller": ["technology", "numbers"],
+    "gardener": ["gardening", "nature", "cooking"],
+    "hunter": ["nature", "walking", "animals"]
   },
   "start": {
     "cash": 100000,

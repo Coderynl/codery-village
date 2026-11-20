@@ -71,9 +71,9 @@ public sealed class VillageHost(
         if (problems.Count > 0)
         {
             foreach (var problem in problems)
-                logger.LogCritical("The data with the releases of Village:Extras has a problem: {Problem}", problem);
+                logger.LogCritical("The data with its releases has a problem: {Problem}", problem);
             throw new InvalidOperationException(
-                $"The village does not start: the data with the releases of Village:Extras has {problems.Count} problem(s). {string.Join(" ", problems)}");
+                $"The village does not start: the data with its releases has {problems.Count} problem(s). {string.Join(" ", problems)}");
         }
         _advance = Advance();
         _hand = new Hand(data);

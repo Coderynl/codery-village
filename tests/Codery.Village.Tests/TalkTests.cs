@@ -6,6 +6,7 @@ using Codery.Village.Modules.Day;
 using Codery.Village.Modules.Talk;
 using Codery.Village.Modules.Wishes;
 using Codery.Village.Server;
+using Codery.Village.Server.Talk;
 using TalkModule = Codery.Village.Modules.Talk.Talk;
 using WishesModule = Codery.Village.Modules.Wishes.Wishes;
 
@@ -304,6 +305,26 @@ public class TalkTests
         Assert.Equal(
             a.Modules.Where(part => part.Name != "talk").Select(part => JsonSerializer.Serialize(part, SaveJson.Options)),
             b.Modules.Where(part => part.Name != "talk").Select(part => JsonSerializer.Serialize(part, SaveJson.Options)));
+    }
+
+    // risk: a word list that refuses plain talk of hunting or a death makes the village mute about life, or a list
+    // that lets sexual content, religion or discrimination through breaks what Michael forbids
+    private static readonly Decency Decent = new(Data.Section<TalkServerSettings>("talk"));
+
+    [Fact]
+    public void A_line_about_hunting_or_death_passes_the_word_list()
+    {
+        Assert.Null(Decent.Forbidden(new TalkLines(["Jan: Morgen ga ik jagen, het wild is dun gezaaid."], ["Jan: Tomorrow I go hunting, game is scarce."], FromTemplate: false)));
+        Assert.Null(Decent.Forbidden(new TalkLines(["Els: Sinds opa dood is, is het stil in huis."], ["Els: Since grandpa died the house is quiet."], FromTemplate: false)));
+    }
+
+    [Theory]
+    [InlineData("Jan: Seks is niet voor hier.", "Jan: Sex is not for here.")]
+    [InlineData("Jan: We gaan naar de kerk.", "Jan: We go to church.")]
+    [InlineData("Jan: Ik haat die lelijke buurman.", "Jan: I hate that ugly neighbour.")]
+    public void A_line_with_sexual_content_religion_or_discrimination_is_still_refused(string nl, string en)
+    {
+        Assert.NotNull(Decent.Forbidden(new TalkLines([nl], [en], FromTemplate: false)));
     }
 
     private static string Json<T>(T value) => JsonSerializer.Serialize(value, SaveJson.Options);

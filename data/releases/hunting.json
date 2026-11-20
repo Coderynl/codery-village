@@ -1,0 +1,21 @@
+{
+  "materials": [
+    { "id": "game", "nl": "wild", "en": "game", "satisfies": ["food"] }
+  ],
+  "roles": [
+    { "id": "hunter", "nl": "jager", "en": "hunter" }
+  ],
+  "blueprints": [
+    {
+      "id": "hunters-lodge", "nl": "jachthut", "en": "hunters' lodge", "on": ["land"], "near": "forest", "serves": "meat",
+      "jobs": [{ "role": "hunter", "count": 2, "shift": "day", "outdoor": true }],
+      "recipe": { "in": {}, "out": { "game": 2 }, "ticks": 3600, "takes": "game" },
+      "phases": [
+        { "id": "foundation", "nl": "fundering", "en": "foundation", "ticks": 200, "cost": { "branches": 2 } },
+        { "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 300, "cost": { "branches": 3 } },
+        { "id": "roof", "nl": "dak", "en": "roof", "ticks": 200, "cost": { "reed": 2 } }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "wood", "roof": "thatch", "extras": ["door", "crates"] }
+    }
+  ]
+}

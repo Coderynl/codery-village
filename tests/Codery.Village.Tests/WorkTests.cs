@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Codery.Village.Core;
 using Codery.Village.Core.Data;
@@ -24,13 +25,16 @@ public class WorkTests
     private static DateTimeOffset June(int day, int hour, int minute = 0) => new(2026, 6, day, hour, minute, 0, TimeSpan.FromHours(2));
 
     /// <summary>The real data with the whole ladder of releases, changed as the test needs.</summary>
-    private static DataSet Data(Action<JsonObject>? economy = null, Action<JsonObject>? people = null, Action<JsonObject>? life = null)
+    private static DataSet Data(Action<JsonObject>? economy = null, Action<JsonObject>? people = null, Action<JsonObject>? life = null,
+        Action<JsonObject>? catalog = null, Action<JsonObject>? releases = null)
     {
         JsonObject Read(string name) => JsonNode.Parse(File.ReadAllText(Path.Combine(Folder, name + ".json")))!.AsObject();
         var economyJson = Read("economy");
         var peopleJson = Read("people");
         var lifeJson = Read("life");
+        var catalogJson = Read("catalog");
         life?.Invoke(lifeJson);
+        catalog?.Invoke(catalogJson);
         economy?.Invoke(economyJson);
         people?.Invoke(peopleJson);
         return DataSet.FromTexts(new Dictionary<string, string>
@@ -38,9 +42,15 @@ public class WorkTests
             ["life"] = lifeJson.ToJsonString(),
             ["people"] = peopleJson.ToJsonString(),
             ["day"] = Read("day").ToJsonString(),
-            ["catalog"] = Read("catalog").ToJsonString(),
+            ["catalog"] = catalogJson.ToJsonString(),
             ["economy"] = economyJson.ToJsonString(),
-        }, Ladder.All());
+        }, [.. Ladder.All().Select(text =>
+        {
+            if (releases is null) return text;
+            var release = JsonNode.Parse(text)!.AsObject();
+            releases(release);
+            return release.ToJsonString();
+        })]);
     }
 
     private static StructureView Built(int id, string blueprint, int island, int row, int col)
@@ -105,7 +115,7 @@ public class WorkTests
         var data = Data(economy: e =>
         {
             e["builders"] = 0;
-            e["start"]!["stock"]!["West"] = new JsonObject { ["grain"] = 100 };
+            e["start"]!["stock"]!["West"] = new JsonObject { ["flour"] = 100 };
         });
         var village = Start(1, June(1, 14), data, [Built(1, "bakery", West, 4, 13)]);
         // the bakers work the early shift: in the afternoon they sleep
@@ -117,7 +127,7 @@ public class WorkTests
         village.Run(1000);
 
         Assert.Equal(0, village.Work.Count(West, "bread"));
-        Assert.Equal(100, village.Work.Count(West, "grain"));
+        Assert.Equal(100, village.Work.Count(West, "flour"));
         Assert.All(bakers, baker => Assert.Equal(0, baker.Money));
         Assert.Equal(cash, village.Work.Of(West).Cash);
         Assert.DoesNotContain(village.Ear.Heard, e => e is Produced);
@@ -130,8 +140,8 @@ public class WorkTests
         Assert.True(bread > 0);
         Assert.Contains(village.Ear.Heard, e => e is Produced { Material: "bread" } produced && produced.Island == West);
         Assert.Contains(bakers, baker => baker.Money > 0);
-        // a batch takes its grain when it starts and gives its bread when it is done
-        Assert.Contains(100 - village.Work.Count(West, "grain"), new[] { bread / 4 * 2, bread / 4 * 2 + 2 });
+        // a batch takes its flour when it starts and gives its bread when it is done
+        Assert.Contains(100 - village.Work.Count(West, "flour"), new[] { bread / 4 * 2, bread / 4 * 2 + 2 });
     }
 
     [Fact]
@@ -199,6 +209,146 @@ public class WorkTests
             loaded.Step();
         }
         Assert.Equal(SaveJson.ToJson(running.Save()), SaveJson.ToJson(loaded.Save()));
+    }
+
+    // Risk: the village saved on production before workers changed jobs (Work version 2) no longer loads, or loses its jobs.
+    [Fact]
+    public void A_work_save_of_version_2_loads_and_goes_on()
+    {
+        var data = Data();
+        IModule[] Modules()
+        {
+            var structures = new FakeStructures();
+            structures.Standing.AddRange(Economy());
+            return [new People(), structures, new Day(), new Work(), new Ear()];
+        }
+        var time = new SimulatedTime(June(1, 10));
+        var modules = Modules();
+        var running = new Engine(modules, data, RealMap, 7, time);
+        running.Start();
+        var village = Of(running, time, modules);
+        village.Run(1300);
+
+        // as version 2 wrote it: no day the workers moved, and no tick a job was taken
+        var saved = SaveJson.FromJson(SaveJson.ToJson(running.Save()));
+        var part = Assert.Single(saved.Modules, part => part.Name == "work");
+        var work = part.Data.AsObject();
+        work.Remove("moved");
+        foreach (var job in work["jobs"]!.AsArray()) job!.AsObject().Remove("since");
+        saved = saved with { Modules = [.. saved.Modules.Select(module => module.Name == "work" ? module with { Version = 2 } : module)] };
+
+        var loadedModules = Modules();
+        var loaded = Of(Engine.Load(SaveJson.FromJson(SaveJson.ToJson(saved)), loadedModules, data, RealMap, new SimulatedTime(saved.Calendar)), new SimulatedTime(saved.Calendar), loadedModules);
+        var jobs = village.People.All.ToDictionary(resident => resident.Id, resident => village.Work.JobOf(resident.Id)?.Role);
+        Assert.Contains(jobs.Values, role => role is not null);
+        Assert.Equal(jobs, loaded.People.All.ToDictionary(resident => resident.Id, resident => loaded.Work.JobOf(resident.Id)?.Role));
+
+        // and it goes on, and saves in the form of now
+        loaded.Run(2000);
+        Assert.Empty(loaded.Engine.Stopped);
+        Assert.Equal(4, Assert.Single(loaded.Engine.Save().Modules, module => module.Name == "work").Version);
+    }
+
+    // Risk: a nature tile saved without a layer loses what its land has left instead of loading into the ground's own layer.
+    [Fact]
+    public void A_nature_tile_saved_without_a_layer_loads_into_the_grounds_own_layer()
+    {
+        var data = Data();
+        IModule[] Modules()
+        {
+            var structures = new FakeStructures();
+            structures.Standing.AddRange(Economy());
+            return [new People(), structures, new Day(), new Work(), new Ear()];
+        }
+        var time = new SimulatedTime(June(1, 10));
+        var modules = Modules();
+        var running = new Engine(modules, data, RealMap, 7, time);
+        running.Start();
+        running.Step();
+
+        // a tile as an older save wrote it: a fertile tile of West worked down to 10, without a layer
+        var cell = new Cell(9, 6);
+        Assert.Equal(Ground.Fertile, RealMap.At(cell));
+        var saved = SaveJson.FromJson(SaveJson.ToJson(running.Save()));
+        var tile = JsonSerializer.SerializeToNode(new NatureTile(cell, 10, Ground.Fertile, 0), SaveJson.Options)!.AsObject();
+        tile.Remove("layer");
+        Assert.Single(saved.Modules, part => part.Name == "work").Data["nature"]!["tiles"]!.AsArray().Add(tile);
+        saved = saved with { Modules = [.. saved.Modules.Select(module => module.Name == "work" ? module with { Version = 3 } : module)] };
+
+        var loadedModules = Modules();
+        var loaded = Of(Engine.Load(SaveJson.FromJson(SaveJson.ToJson(saved)), loadedModules, data, RealMap, new SimulatedTime(saved.Calendar)), new SimulatedTime(saved.Calendar), loadedModules);
+
+        // the tile keeps its yield as what the ground itself has left, and has all its game
+        Assert.Equal(10, loaded.Work.YieldOf(cell));
+        Assert.Contains(cell, loaded.Work.Bare);
+        Assert.Equal(Nature.Full, loaded.Work.YieldOf(cell, "game"));
+        loaded.Run(1);
+        Assert.Empty(loaded.Engine.Stopped);
+        Assert.Equal(4, Assert.Single(loaded.Engine.Save().Modules, module => module.Name == "work").Version);
+    }
+
+    /// <summary>The real data with a hunters' lodge that makes a batch in 30 ticks, and no builders.</summary>
+    private static DataSet QuickHunting() => Data(
+        economy: e => e["builders"] = 0,
+        releases: release =>
+        {
+            foreach (var blueprint in release["blueprints"]?.AsArray() ?? [])
+                if ((string)blueprint!["id"]! == "hunters-lodge") blueprint["recipe"]!["ticks"] = 30;
+        });
+
+    // a lodge on the land of West, next to its forest
+    private static StructureView[] Lodge() => [Built(1, "hunters-lodge", West, 4, 5)];
+
+    // a while in every quarter of the day shift, from 10:15 until five; stops early when done says so
+    private static void HuntADay(Village village, Func<bool>? done = null)
+    {
+        for (var quarter = June(1, 10, 15); quarter < June(1, 17); quarter += TimeSpan.FromMinutes(15))
+        {
+            village.JumpTo(quarter);
+            for (var tick = 0; tick < 300; tick++)
+            {
+                if (done?.Invoke() == true) return;
+                village.Engine.Step();
+            }
+        }
+    }
+
+    // Risk: hunters strip the forest of what the gatherers and woodcutters live on, or hunt on without the game running out.
+    [Fact]
+    public void Hunting_takes_game_not_the_forest()
+    {
+        var village = Start(1, June(1, 10), QuickHunting(), Lodge());
+        var area = village.Work.WorkAreaOf(1);
+        Assert.NotEmpty(area);
+        Assert.All(area, cell => Assert.Equal(Ground.Forest, RealMap.At(cell)));
+
+        HuntADay(village);
+
+        Assert.NotEmpty(village.InRole("hunter"));
+        Assert.Contains(village.Ear.Heard, e => e is Produced { Material: "game" });
+        Assert.Contains(area, cell => village.Work.YieldOf(cell, "game") < Nature.Full);
+        Assert.All(area, cell => Assert.Equal(Nature.Full, village.Work.YieldOf(cell)));
+        Assert.DoesNotContain(area, village.Work.Bare.Contains);
+    }
+
+    // Risk: game hunted out never comes back, and the lodge stands idle for good.
+    [Fact]
+    public void Game_grows_back()
+    {
+        var village = Start(1, June(1, 10), QuickHunting(), Lodge());
+        var area = village.Work.WorkAreaOf(1);
+        Cell? Bare() => area.Where(cell => village.Work.YieldOf(cell, "game") < Nature.Low).Select(cell => (Cell?)cell).FirstOrDefault();
+        HuntADay(village, () => Bare() is not null);
+        var bare = Bare() ?? throw new Xunit.Sdk.XunitException("no tile was hunted bare");
+
+        var regrow = (int)JsonNode.Parse(File.ReadAllText(Path.Combine(Folder, "economy.json")))!["nature"]!["game"]!["regrowDays"]!;
+        Assert.True(regrow >= 2, $"game grows back in {regrow} days");
+        // a night later it is growing, after regrowDays it is full
+        var left = village.Work.YieldOf(bare, "game");
+        village.JumpTo(June(2, 1));
+        Assert.InRange(village.Work.YieldOf(bare, "game"), left + 1, Nature.Full - 1);
+        village.JumpTo(June(1 + regrow, 1));
+        Assert.Equal(Nature.Full, village.Work.YieldOf(bare, "game"));
     }
 
     [Theory]
@@ -370,6 +520,93 @@ public class WorkTests
         Assert.Equal(["baker", "baker", "farmer", "farmer", "farmer"], working.Take(5).Select(resident => village.Work.JobOf(resident.Id)?.Role));
         Assert.All(working.Skip(5), resident => Assert.Null(village.Work.JobOf(resident.Id)));
         Assert.Equal(working.Take(5).Select(resident => resident.Id), village.Ear.Heard.OfType<Hired>().Select(hired => hired.Resident));
+    }
+
+    // Risk: an island out of food staffs its new workplaces in list order, and the bakery stays empty while its households go hungry.
+    [Fact]
+    public void While_food_is_short_the_places_that_make_food_go_first()
+    {
+        var data = Data(economy: e =>
+        {
+            e["builders"] = 0;
+            e["fits"] = new JsonObject();
+            e["start"]!["stock"]!["West"]!["berries"] = 0;
+        });
+        var village = Start(1, June(1, 10), data);
+        var working = village.People.On(West).Where(resident => resident is { Phase: LifePhase.Working, IsEddie: false }).ToList();
+        Assert.True(working.Count >= 5, $"{working.Count} working on West");
+
+        // the farm comes first in the list, but its grain feeds nobody; the bread of the bakery does
+        village.Structures.Standing.AddRange([Built(1, "farm", West, 5, 13), Built(2, "bakery", West, 4, 13)]);
+        village.Run(2);
+
+        Assert.Equal(["baker", "baker", "farmer", "farmer", "farmer"], working.Take(5).Select(resident => village.Work.JobOf(resident.Id)?.Role));
+    }
+
+    // Risk: every worker already has a job, so a new workplace stays empty for weeks and the release it came with never runs.
+    [Fact]
+    public void Once_a_day_an_empty_workplace_takes_a_worker_from_the_fullest()
+    {
+        // berry patches of three places, with food enough that they make nothing the island is short of
+        void Economy(JsonObject e, int builders)
+        {
+            e["builders"] = builders;
+            e["fits"] = new JsonObject();
+            e["start"]!["stock"]!["West"] = new JsonObject { ["berries"] = 1000, ["flour"] = 100 };
+        }
+        void ThreeSeats(JsonObject c) =>
+            c["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "berry-patch")!["jobs"]![0]!["count"] = 3;
+        var working = Start(1, June(1, 10)).People.On(West).Count(resident => resident is { Phase: LifePhase.Working, IsEddie: false });
+        Assert.True(working >= 6, $"{working} working on West");
+        // the builders take who the two patches leave
+        var data = Data(economy: e => Economy(e, working - 6), catalog: ThreeSeats);
+        var fertile = RealMap.Islands.Single(island => island.Id == West).Cells.Where(cell => RealMap.At(cell) == Ground.Fertile).ToList();
+        var village = Start(1, June(1, 10), data, [Built(1, "berry-patch", West, fertile[0].Row, fertile[0].Col), Built(2, "berry-patch", West, fertile[^1].Row, fertile[^1].Col)]);
+        int At(int building) => village.People.All.Count(resident => village.Work.JobOf(resident.Id)?.Building == building);
+        village.Run(2);
+        Assert.Equal((3, 3), (At(1), At(2)));
+        Assert.All(village.People.On(West).Where(resident => resident is { Phase: LifePhase.Working, IsEddie: false }),
+            resident => Assert.NotNull(village.Work.JobOf(resident.Id)));
+
+        // a bakery comes, and nobody is free for it
+        village.Structures.Standing.Add(Built(3, "bakery", West, 4, 13));
+        village.JumpTo(June(2, 12));
+        village.Run(2);
+
+        Assert.Equal(["baker"], village.People.All.Where(resident => village.Work.JobOf(resident.Id)?.Building == 3).Select(resident => village.Work.JobOf(resident.Id)!.Role));
+        Assert.Equal([2, 3], new[] { At(1), At(2) }.Order());
+    }
+
+    // Risk: with no workplace to give, the move takes the island's last builder, and nothing gets built any more.
+    [Fact]
+    public void Builders_give_a_worker_only_while_one_stays()
+    {
+        // berry patches of one place each, as many as West has workers besides its two builders: none can give
+        void OneSeat(JsonObject c) =>
+            c["blueprints"]!.AsArray().Single(blueprint => (string)blueprint!["id"]! == "berry-patch")!["jobs"]![0]!["count"] = 1;
+        var working = Start(1, June(1, 10)).People.On(West).Count(resident => resident is { Phase: LifePhase.Working, IsEddie: false });
+        Assert.True(working >= 3, $"{working} working on West");
+        var data = Data(economy: e =>
+        {
+            e["builders"] = 2;
+            e["fits"] = new JsonObject();
+            e["start"]!["stock"]!["West"] = new JsonObject { ["berries"] = 1000 };
+        }, catalog: OneSeat);
+        var fertile = RealMap.Islands.Single(island => island.Id == West).Cells.Where(cell => RealMap.At(cell) == Ground.Fertile).ToList();
+        var patches = Enumerable.Range(0, working - 2).Select(i => Built(1 + i, "berry-patch", West, fertile[i % fertile.Count].Row, fertile[i % fertile.Count].Col)).ToArray();
+        var village = Start(1, June(1, 10), data, patches);
+        village.Run(2);
+        Assert.Equal(2, village.InRole("builder").Count(resident => resident.Island == West));
+        Assert.All(village.People.On(West).Where(resident => resident is { Phase: LifePhase.Working, IsEddie: false }),
+            resident => Assert.NotNull(village.Work.JobOf(resident.Id)));
+
+        // two empty workplaces come; the next day one of them gets a builder, and the island keeps the other
+        village.Structures.Standing.AddRange([Built(100, "bakery", West, 4, 13), Built(101, "mill", West, 4, 12)]);
+        village.JumpTo(June(2, 12));
+        village.Run(2);
+
+        Assert.Single(village.InRole("builder"), resident => resident.Island == West);
+        Assert.Equal(1, village.People.All.Count(resident => village.Work.JobOf(resident.Id)?.Building is 100 or 101));
     }
 
     [Fact]

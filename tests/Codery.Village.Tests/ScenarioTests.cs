@@ -29,10 +29,11 @@ public class ScenarioTests(ITestOutputHelper output)
     private const int Seeds = 30;
     private const int Weeks = 4;
 
+    // Risk: the village as it runs live, on the whole ladder, goes broke, starves, has nothing left to want or stops building.
     [Fact]
     public void Four_weeks_of_life_stay_within_bounds()
     {
-        var sections = new Sections();
+        var sections = Sections.Of(VillageSetup.Live());
         var most = 100L * (int)sections["economy"]["startSubsidy"]!;
         var ends = new ConcurrentDictionary<ulong, string>();
 
@@ -62,6 +63,149 @@ public class ScenarioTests(ITestOutputHelper output)
         });
 
         foreach (var seed in ends.Keys.Order().Take(3)) output.WriteLine($"seed {seed} after {Weeks} weeks:{Environment.NewLine}{ends[seed]}");
+    }
+
+    // Risk: on the live ladder the bread chain breaks: West, with its fertile soil, does not get from grain to flour to
+    // bread in its first two weeks, or Oost, without fertile soil, puts up a part of the chain it can never feed. A West
+    // of seven or eight workers cannot staff every workplace, so a few seeds may go without.
+    [Fact]
+    public void West_bakes_bread_from_its_own_grain()
+    {
+        const int Days = 14;
+        const int Baking = 27;
+        string[] chain = ["farm", "mill", "bakery"];
+        var sections = Sections.Of(VillageSetup.Live());
+        var baked = new ConcurrentDictionary<ulong, int>();
+
+        try
+        {
+            EverySeed(seed =>
+            {
+                var scenario = Scenario.Start(seed, sections);
+                var west = scenario.Ordinary.Single(island => island.Name == "West").Id;
+                var oost = scenario.Ordinary.Single(island => island.Name == "Oost").Id;
+                var quarter = 0;
+                scenario.Days(Days, each: village =>
+                {
+                    quarter++;
+                    if (village.Work.Count(west, "bread") > 0) baked.TryAdd(seed, (quarter + 95) / 96);
+                });
+
+                var standing = scenario.Building.All.Where(structure => structure.Island == west && structure.Done).Select(structure => structure.Blueprint).ToHashSet();
+                Assert.True(chain.All(standing.Contains), $"West after {Days} days has standing: {string.Join(", ", standing.Order())}");
+                Assert.DoesNotContain(scenario.Building.All, structure => structure.Island == oost && chain.Contains(structure.Blueprint));
+                Assert.Empty(scenario.Engine.Stopped);
+            });
+        }
+        finally
+        {
+            output.WriteLine($"bread on West by day 7 in {baked.Values.Count(day => day <= 7)} of {Seeds} seeds, by day {Days} in {baked.Count}");
+        }
+        var without = Enumerable.Range(1, Seeds).Select(seed => (ulong)seed).Where(seed => !baked.ContainsKey(seed)).ToList();
+        Assert.True(baked.Count >= Baking,
+            $"West had bread within {Days} days in {baked.Count} of {Seeds} seeds, fewer than {Baking}; none in seeds {string.Join(", ", without)}");
+    }
+
+    // Risk: on the live ladder West does not get a vegetable garden and an orchard that bear in its first two weeks, or
+    // they wear its fertile land bare, so that the farm on the same soil no longer harvests. A West of fewer than twenty
+    // residents has no worker left to give them within two weeks, and day 13 and 14 are a weekend, so many seeds go without.
+    [Fact]
+    public void West_grows_vegetables_and_apples()
+    {
+        const int Days = 14;
+        const int Growing = 16;
+        string[] places = ["vegetable-garden", "orchard"];
+        string[] crops = ["vegetables", "apples"];
+        var sections = Sections.Of(VillageSetup.Live());
+        // per seed, the first day each place stood and each crop was in West's stock, and whether the farm harvested after both
+        var stood = new ConcurrentDictionary<(ulong Seed, string Place), int>();
+        var bore = new ConcurrentDictionary<(ulong Seed, string Crop), int>();
+        var harvested = new ConcurrentDictionary<ulong, int>();
+
+        try
+        {
+            EverySeed(seed =>
+            {
+                var scenario = Scenario.Start(seed, sections);
+                var west = scenario.Ordinary.Single(island => island.Name == "West").Id;
+                var (quarter, grain) = (0, 0);
+                scenario.Days(Days, each: village =>
+                {
+                    var day = (++quarter + 95) / 96;
+                    foreach (var place in places)
+                        if (village.Building.All.Any(structure => structure.Island == west && structure.Done && structure.Blueprint == place))
+                            stood.TryAdd((seed, place), day);
+                    foreach (var crop in crops)
+                        if (village.Work.Count(west, crop) > 0) bore.TryAdd((seed, crop), day);
+                    // the farm harvests: West's grain grows, after the garden and the orchard have both borne
+                    var now = village.Work.Count(west, "grain");
+                    if (now > grain && crops.All(crop => bore.ContainsKey((seed, crop)))) harvested.TryAdd(seed, day);
+                    grain = now;
+                });
+                Assert.Empty(scenario.Engine.Stopped);
+            });
+        }
+        finally
+        {
+            foreach (var place in places)
+                output.WriteLine($"{place} standing on West by day 7 in {stood.Count(item => item.Key.Place == place && item.Value <= 7)} of {Seeds} seeds, by day {Days} in {stood.Count(item => item.Key.Place == place)}");
+            foreach (var crop in crops)
+                output.WriteLine($"{crop} in West's stock by day 7 in {bore.Count(item => item.Key.Crop == crop && item.Value <= 7)} of {Seeds} seeds, by day {Days} in {bore.Count(item => item.Key.Crop == crop)}");
+            output.WriteLine($"the farm harvested after both bore in {harvested.Count} of {Seeds} seeds");
+        }
+        var grew = Enumerable.Range(1, Seeds).Select(seed => (ulong)seed)
+            .Where(seed => places.All(place => stood.ContainsKey((seed, place))) && harvested.ContainsKey(seed)).ToList();
+        var without = Enumerable.Range(1, Seeds).Select(seed => (ulong)seed).Except(grew);
+        Assert.True(grew.Count >= Growing,
+            $"West had a garden and an orchard that bore, and a farm that still harvested, within {Days} days in {grew.Count} of {Seeds} seeds, " +
+            $"fewer than {Growing}; not in seeds {string.Join(", ", without)}");
+    }
+
+    // Risk: on the live ladder West never hunts (nobody wishes for meat, the lodge stands out of reach of the forest, or
+    // nobody works it), or its hunters take the hands that gather firewood, so that West goes a whole day without heat.
+    // A West of fewer than twenty residents often has no worker left to give the lodge within two weeks, so many seeds
+    // go without a hunt; none goes without firewood.
+    [Fact]
+    public void West_hunts_and_still_has_firewood()
+    {
+        const int Days = 14;
+        const int Hunting = 12;
+        var sections = Sections.Of(VillageSetup.Live());
+        // per seed, the first day the lodge stood on West and West had game in stock, and the longest it went without firewood, in quarters
+        var stood = new ConcurrentDictionary<ulong, int>();
+        var hunted = new ConcurrentDictionary<ulong, int>();
+        var cold = new ConcurrentDictionary<ulong, int>();
+
+        try
+        {
+            EverySeed(seed =>
+            {
+                var scenario = Scenario.Start(seed, sections);
+                var west = scenario.Ordinary.Single(island => island.Name == "West").Id;
+                var (quarter, without, longest) = (0, 0, 0);
+                scenario.Days(Days, each: village =>
+                {
+                    var day = (++quarter + 95) / 96;
+                    if (village.Building.All.Any(structure => structure.Island == west && structure.Done && structure.Blueprint == "hunters-lodge"))
+                        stood.TryAdd(seed, day);
+                    if (village.Work.Count(west, "game") > 0) hunted.TryAdd(seed, day);
+                    without = village.Work.Count(west, "firewood") > 0 ? 0 : without + 1;
+                    longest = Math.Max(longest, without);
+                });
+                cold[seed] = longest;
+                Assert.True(longest < 96, $"West went {longest} quarters without firewood");
+                Assert.Empty(scenario.Engine.Stopped);
+            });
+        }
+        finally
+        {
+            output.WriteLine($"a lodge standing on West by day 7 in {stood.Values.Count(day => day <= 7)} of {Seeds} seeds, by day {Days} in {stood.Count}");
+            output.WriteLine($"game on West by day 7 in {hunted.Values.Count(day => day <= 7)} of {Seeds} seeds, by day {Days} in {hunted.Count}");
+            output.WriteLine($"the longest West went without firewood: {(cold.IsEmpty ? 0 : cold.Values.Max())} quarters");
+        }
+        var without = Enumerable.Range(1, Seeds).Select(seed => (ulong)seed).Where(seed => !hunted.ContainsKey(seed)).ToList();
+        Assert.True(hunted.Count >= Hunting,
+            $"West hunted within {Days} days in {hunted.Count} of {Seeds} seeds, fewer than {Hunting}; not in seeds {string.Join(", ", without)}");
     }
 
     [Fact]
@@ -389,8 +533,12 @@ internal sealed class Sections
 {
     private static readonly string[] Names = ["life", "people", "day", "catalog", "economy", "building", "wishes", "talk"];
 
-    public Dictionary<string, JsonObject> Json { get; } = Names.ToDictionary(name => name,
+    public Dictionary<string, JsonObject> Json { get; private init; } = Names.ToDictionary(name => name,
         name => JsonNode.Parse(File.ReadAllText(Path.Combine(Builders.Folder, name + ".json")))!.AsObject());
+
+    /// <summary>The sections as <paramref name="data"/> holds them: the catalog with the releases it was loaded with.</summary>
+    public static Sections Of(DataSet data) =>
+        new() { Json = Names.ToDictionary(name => name, name => data.Section<JsonObject>(name).DeepClone().AsObject()) };
 
     public string Map { get; set; } = File.ReadAllText(Path.Combine(Builders.Folder, "map.txt"));
 

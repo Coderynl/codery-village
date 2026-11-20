@@ -19,7 +19,31 @@ public class DataTests
     public void The_data_has_no_problems()
     {
         Assert.Empty(Base().Problems());
-        Assert.Empty(DataFolder.Load(Folder, Ladder.InOrder()).Problems());
+    }
+
+    // Risk: a release in the folder does not reach the live village, or the whole ladder together keeps the server from starting.
+    [Fact]
+    public void The_live_data_holds_every_release()
+    {
+        var live = VillageSetup.Live();
+
+        Assert.Empty(live.Problems());
+        var blueprints = CatalogOf(live).Blueprints.Select(blueprint => blueprint.Id).ToHashSet();
+        foreach (var release in Ladder.Files())
+            foreach (var blueprint in JsonDocument.Parse(Ladder.Text(release)).RootElement.GetProperty("blueprints").EnumerateArray())
+                Assert.True(blueprints.Contains(blueprint.GetProperty("id").GetString()!), $"{release}: {blueprint.GetProperty("id")} is not in the live catalog");
+    }
+
+    // Risk: a typo under economy.nature (such as "forrest") is read as a yield of its own, and that ground never runs out.
+    [Fact]
+    public void Every_yield_under_nature_is_a_ground_or_taken_by_a_recipe()
+    {
+        var live = VillageSetup.Live();
+        var taken = CatalogOf(live).Blueprints.Select(blueprint => blueprint.Recipe?.Takes).OfType<string>().ToHashSet();
+        var names = live.Section<JsonElement>("economy").GetProperty("nature").EnumerateObject().Select(yield => yield.Name);
+
+        Assert.All(names, name => Assert.True(Enum.GetNames<Ground>().Contains(name, StringComparer.OrdinalIgnoreCase) || taken.Contains(name),
+            $"economy.nature has '{name}', which is no ground and no recipe in the live data takes from"));
     }
 
     [Fact]
@@ -133,15 +157,13 @@ public class DataTests
         var labels = WishLabels();
         var files = Ladder.Files();
         Assert.NotEmpty(files);
-        // the README names each release once, in an order that loads
+        // the README names each release once
         Assert.Equal(files, Ladder.InOrder().Order(StringComparer.Ordinal));
 
         foreach (var release in files)
         {
-            var with = Ladder.With(release);
-            var order = Ladder.InOrder().ToList();
-            Assert.All(with.SkipLast(1), before => Assert.True(order.IndexOf(before) < order.IndexOf(release), $"{before} comes after {release} in the README"));
-            var data = DataFolder.Load(Folder, with);
+            // on the base and only what it needs
+            var data = DataFolder.Load(Folder, Ladder.With(release));
             Assert.True(data.Problems().Count == 0, $"{release}: {string.Join(" ", data.Problems())}");
 
             var added = JsonDocument.Parse(Ladder.Text(release)).RootElement.GetProperty("blueprints").EnumerateArray()
@@ -151,7 +173,7 @@ public class DataTests
         // the wishes for progress are each served by a release
         var served = Ladder.Files().SelectMany(release => CatalogOf(DataFolder.Load(Folder, Ladder.With(release))).Blueprints)
             .Select(blueprint => blueprint.Serves).OfType<string>().ToHashSet();
-        foreach (var label in new[] { "tools", "planks", "fields", "bread", "stone", "bricks", "house", "jetty", "cafe", "fruit" })
+        foreach (var label in new[] { "tools", "planks", "fields", "bread", "stone", "bricks", "house", "jetty", "cafe", "fruit", "flour", "vegetables", "orchard", "meat" })
             Assert.Contains(label, served);
     }
 
@@ -216,6 +238,7 @@ public class DataTests
         { Catalog($"[{Hut("""[{ "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 10, "cost": { "wood": -2 } }]""")}]"), Wishes, "-2 wood" },
         { Catalog($"[{Hut(more: """, "recipe": { "in": {}, "out": { "wood": 1 }, "ticks": 0 }""")}]"), Wishes, "0 ticks" },
         { Catalog($"[{Hut(more: """, "recipe": { "in": {}, "out": { "wood": 0 }, "ticks": 5 }""")}]"), Wishes, "0 wood" },
+        { Catalog($"[{Hut(more: """, "recipe": { "in": {}, "out": { "wood": 1 }, "ticks": 5, "takes": "game" }""")}]"), Wishes, "'game'" },
         { Catalog($"[{Hut(more: """, "jobs": [{ "role": "carpenter", "count": 0, "shift": "day", "outdoor": false }]""")}]"), Wishes, "0 carpenter" },
         { Catalog($"[{Hut(more: """, "homes": 0""")}]"), Wishes, "0 homes" },
         { Catalog($"[{Hut(more: """, "serves": "cafe", "range": 0""")}]"), Wishes, "range 0" },
@@ -239,6 +262,38 @@ public class DataTests
     public void Problems_are_found(string catalog, string wishes, string expected)
     {
         var problem = Assert.Single(Small(catalog, wishes).Problems());
+
+        Assert.Contains(expected, problem);
+    }
+
+    // a hut whose recipe takes from the yield named, and an economy with the nature named
+    private static string Taking(string yield) => Catalog($$"""[{{Hut(more: $$""", "recipe": { "in": {}, "out": { "wood": 1 }, "ticks": 5, "takes": "{{yield}}" }""")}}]""");
+
+    private static string Nature(params string[] names) =>
+        $$"""{ "nature": { {{string.Join(", ", names.Select(name => $$"""
+"{{name}}": { "perBatch": 10, "regrowDays": 2 }
+"""))}} } }""";
+
+    private static DataSet WithEconomy(string catalog, string economy) =>
+        DataSet.FromTexts(new Dictionary<string, string> { ["catalog"] = catalog, ["wishes"] = Wishes, ["economy"] = economy }, []);
+
+    [Fact]
+    public void A_recipe_may_take_from_a_yield_of_its_own()
+    {
+        Assert.Empty(WithEconomy(Taking("game"), Nature("forest", "game")).Problems());
+    }
+
+    public static TheoryData<string, string, string> BrokenNature => new()
+    {
+        // a yield of its own needs a name of its own
+        { Taking("forest"), Nature("forest"), "'forest'" },
+    };
+
+    [Theory]
+    [MemberData(nameof(BrokenNature))]
+    public void Nature_problems_are_found(string catalog, string economy, string expected)
+    {
+        var problem = Assert.Single(WithEconomy(catalog, economy).Problems());
 
         Assert.Contains(expected, problem);
     }

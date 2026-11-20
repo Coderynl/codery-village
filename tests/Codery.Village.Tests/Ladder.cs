@@ -4,14 +4,15 @@ using System.Text.RegularExpressions;
 namespace Codery.Village.Tests;
 
 /// <summary>
-/// The releases in <c>data/releases</c>: the steps from the prehistoric base to the future. A release may use what
-/// an earlier one adds, so it loads on top of the base and the releases it depends on. The README gives the order.
+/// The releases in <c>data/releases</c>: the steps from the prehistoric base to the future. The live village loads
+/// them all; a release may use what another adds, so on its own it loads on top of the base and the releases it
+/// depends on. The README lists them.
 /// </summary>
 public static partial class Ladder
 {
     public static readonly string Folder = Path.Combine(AppContext.BaseDirectory, "data", "releases");
 
-    /// <summary>The release files, as paths relative to the data folder (<c>releases/cafe.json</c>), in the order of the numbered list in the README.</summary>
+    /// <summary>The release files the numbered list in the README names, as paths relative to the data folder (<c>releases/cafe.json</c>).</summary>
     public static IReadOnlyList<string> InOrder() =>
         [.. FileName().Matches(File.ReadAllText(Path.Combine(Folder, "README.md"))).Select(match => "releases/" + match.Groups[1].Value)];
 
@@ -19,8 +20,8 @@ public static partial class Ladder
     public static IReadOnlyList<string> Files() =>
         [.. Directory.EnumerateFiles(Folder, "*.json").Select(path => "releases/" + Path.GetFileName(path)).Order(StringComparer.Ordinal)];
 
-    /// <summary>The texts of the whole ladder, in the order of the README.</summary>
-    public static IReadOnlyList<string> All() => [.. InOrder().Select(Text)];
+    /// <summary>The texts of the whole ladder.</summary>
+    public static IReadOnlyList<string> All() => [.. Files().Select(Text)];
 
     public static string Text(string release) => File.ReadAllText(Path.Combine(Folder, "..", release));
 

@@ -9,7 +9,7 @@
     {
       "id": "bakery", "nl": "bakkerij", "en": "bakery", "on": ["land"], "serves": "bread",
       "jobs": [{ "role": "baker", "count": 2, "shift": "early", "outdoor": false }],
-      "recipe": { "in": { "grain": 2 }, "out": { "bread": 4 }, "ticks": 240 },
+      "recipe": { "in": { "flour": 2 }, "out": { "bread": 4 }, "ticks": 240 },
       "phases": [
         { "id": "foundation", "nl": "fundering", "en": "foundation", "ticks": 300, "cost": { "branches": 2 } },
         { "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 400, "cost": { "branches": 3 } },

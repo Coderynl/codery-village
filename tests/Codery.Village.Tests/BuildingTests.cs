@@ -251,6 +251,20 @@ public class BuildingTests
         Assert.DoesNotContain(village.Heard<Reached>(), e => e.Errand == Activity.Fetch);
     }
 
+    // Risk: the hunters' lodge goes up by the homes, out of reach of the forest, and its hunters have nothing to hunt.
+    [Fact]
+    public void A_lodge_stands_on_land_next_to_the_forest()
+    {
+        var village = Builders.Start(1, Builders.June(1, 9), Builders.Data(extras: Ladder.All()));
+        village.Run(1);
+
+        var (anchor, _) = village.Building.FindPlace("hunters-lodge", West) ?? throw new Xunit.Sdk.XunitException("no room for a lodge on West");
+        Assert.Equal(Ground.Land, Builders.RealMap.At(anchor));
+        Assert.Contains(anchor.Neighbours(), next => Builders.RealMap.At(next) == Ground.Forest);
+        // Oost has no forest
+        Assert.Null(village.Building.FindPlace("hunters-lodge", Oost));
+    }
+
     [Fact]
     public void A_two_tile_shape_needs_two_free_tiles()
     {
