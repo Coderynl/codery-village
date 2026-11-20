@@ -25,6 +25,7 @@ public sealed class Wishes : IModule, IWishSource
 {
     private const string Opened = "task-opened";
     private const string Closed = "task-closed";
+    private const string HeldKind = "task-held";
 
     private WishSettings _settings = null!;
     private IReadOnlyList<Wish> _wishes = [];
@@ -37,10 +38,28 @@ public sealed class Wishes : IModule, IWishSource
     // the calendar moment the village began; a wish with afterDays waits from here
     private DateTimeOffset _began;
     private OpenTask? _task;
+    // the wishes the village does not ask a task for, for now
+    private readonly HashSet<string> _held = [];
 
     public string Name => "wishes";
 
-    public int Version => 1;
+    public int Version => 2;
+
+    /// <summary>The wishes on hold: they are tallied and fulfilled as ever, but no task is written for them.</summary>
+    public IReadOnlySet<string> Held => _held;
+
+    /// <summary>Puts a wish on hold. The open task for it is dropped, as <see cref="TaskClosed"/> with a <c>task-held</c> line.</summary>
+    public void Hold(string wish)
+    {
+        _held.Add(wish);
+        if (_task is not { } task || task.Wish != wish) return;
+        _task = null;
+        _village.Publish(new TaskClosed(_village.Clocks.Tick, wish));
+        _village.Log(new LogEntry(_village.Clocks.Tick, HeldKind, wish));
+    }
+
+    /// <summary>Takes a wish off hold: the next time the village writes a task, it counts again.</summary>
+    public void Release(string wish) => _held.Remove(wish);
 
     /// <summary>The task for Eddie, or null when there is none open.</summary>
     public OpenTask? Task => _task;
@@ -96,7 +115,7 @@ public sealed class Wishes : IModule, IWishSource
         var heaviest = 0.0;
         for (var index = 0; index < _wishes.Count; index++)
         {
-            if (_served.Contains(_wishes[index].Label) || !tallies.Any(tally => tally[index].Weight > _settings.TaskThreshold)) continue;
+            if (_served.Contains(_wishes[index].Label) || _held.Contains(_wishes[index].Id) || !tallies.Any(tally => tally[index].Weight > _settings.TaskThreshold)) continue;
             var total = tallies.Sum(tally => tally[index].Weight);
             if (chosen is not null && total <= heaviest) continue;
             chosen = index;
@@ -213,7 +232,7 @@ public sealed class Wishes : IModule, IWishSource
         var interests = village.Data.Section<PeopleSettings>("people").Interests.Select(interest => interest.Id).ToHashSet();
         if (_settings.EveryTicks <= 0 || _settings.TaskThreshold < 0)
             throw new InvalidDataException("The data section 'wishes' needs everyTicks above 0 and a taskThreshold of at least 0.");
-        foreach (var kind in new[] { Opened, Closed })
+        foreach (var kind in new[] { Opened, Closed, HeldKind })
             if (!_settings.Log.ContainsKey(kind)) throw new InvalidDataException($"The data section 'wishes' has no log sentence for {kind}.");
         foreach (var wish in _wishes)
         {
@@ -228,7 +247,7 @@ public sealed class Wishes : IModule, IWishSource
 
     // ── saving ──
 
-    public JsonNode Save() => JsonSerializer.SerializeToNode(new SavedWishes(_began, _task), SaveJson.Options)!;
+    public JsonNode Save() => JsonSerializer.SerializeToNode(new SavedWishes(_began, _task, [.. _held.Order(StringComparer.Ordinal)]), SaveJson.Options)!;
 
     public void Load(ModuleContext village, JsonNode data, int version)
     {
@@ -236,7 +255,9 @@ public sealed class Wishes : IModule, IWishSource
         var saved = data.Deserialize<SavedWishes>(SaveJson.Options) ?? throw new InvalidDataException("The wishes part of the save is empty.");
         _began = saved.Began;
         _task = saved.Task;
+        _held.Clear();
+        _held.UnionWith(saved.Held ?? []);
     }
 
-    private sealed record SavedWishes(DateTimeOffset Began, OpenTask? Task = null);
+    private sealed record SavedWishes(DateTimeOffset Began, OpenTask? Task = null, IReadOnlyList<string>? Held = null);
 }

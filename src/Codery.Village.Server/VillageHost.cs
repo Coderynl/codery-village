@@ -7,6 +7,7 @@ using Codery.Village.Server.Store;
 using Codery.Village.Server.Talk;
 using Microsoft.AspNetCore.SignalR;
 using BuildingModule = Codery.Village.Modules.Building.Building;
+using WishesModule = Codery.Village.Modules.Wishes.Wishes;
 using TalkModule = Codery.Village.Modules.Talk.Talk;
 using WorkModule = Codery.Village.Modules.Work.Work;
 
@@ -178,12 +179,32 @@ public sealed class VillageHost(
         return engine;
     }
 
+    /// <summary>Puts a wish on hold, under the lock: the village writes no task for it until it is released.</summary>
+    public void Hold(string wish)
+    {
+        lock (_gate) Wishes().Hold(wish);
+    }
+
+    /// <summary>Takes a wish off hold, under the lock.</summary>
+    public void Release(string wish)
+    {
+        lock (_gate) Wishes().Release(wish);
+    }
+
+    private WishesModule Wishes() =>
+        (_engine ?? throw new InvalidOperationException("The village is not there yet.")).Running.OfType<WishesModule>().FirstOrDefault()
+            ?? throw new InvalidOperationException("The village has no wishes.");
+
     /// <summary>Makes a village the one that runs.</summary>
     private void Use(Engine engine, long? village)
     {
         lock (_gate)
         {
             _engine = engine;
+            // Michael's switch: the wishes in Village:Tasks:Release are let go of at start
+            if (engine.Running.OfType<WishesModule>().FirstOrDefault() is { } wishes)
+                foreach (var wish in configuration.GetSection("Village:Tasks:Release").Get<string[]>() ?? [])
+                    wishes.Release(wish);
             _feed = new VillageFeed(data, map, time);
             _hand!.Clear();
             _said.Clear();

@@ -9,7 +9,8 @@
   },
   "log": {
     "task-opened": { "nl": "Het dorp schrijft een taak uit voor Eddie: {subject}.", "en": "The village writes a task for Eddie: {subject}." },
-    "task-closed": { "nl": "De taak is klaar: {subject} kan er nu komen.", "en": "The task is done: {subject} can come now." }
+    "task-closed": { "nl": "De taak is klaar: {subject} kan er nu komen.", "en": "The task is done: {subject} can come now." },
+    "task-held": { "nl": "Het dorp vraagt voorlopig niet meer om {subject}.", "en": "The village stops asking for {subject} for now." }
   },
   "wishes": [
     { "id": "cafe", "nl": "een café", "en": "a café", "label": "cafe", "weight": 1,

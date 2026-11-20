@@ -211,6 +211,82 @@ public class WishesTests
         Assert.Empty(village.Engine.Stopped);
     }
 
+    /// <summary>The real wishes.json with the café and the playground left, both for everyone, the café the heavier.</summary>
+    private static Action<JsonObject> CafeAndPlayground => wishes =>
+    {
+        JsonObject Everyone(string id, double weight)
+        {
+            var wish = wishes["wishes"]!.AsArray().Single(w => (string)w!["id"]! == id)!.DeepClone().AsObject();
+            wish["who"] = new JsonObject();
+            wish["weight"] = weight;
+            wish.Remove("afterDays");
+            return wish;
+        }
+        wishes["wishes"] = new JsonArray(Everyone("cafe", 10), Everyone("playground", 5));
+        wishes["taskThreshold"] = 1;
+    };
+
+    // Risk: a wish Michael or Eddie put on hold keeps getting tasks, so the village asks again for what is not wanted now.
+    [Fact]
+    public void A_held_wish_gets_no_task_and_the_next_one_does()
+    {
+        var village = Builders.Start(1, June(1, 9), Builders.Data(wishes: CafeAndPlayground), more: [new WishesModule()]);
+        Wishes(village).Hold("cafe");
+        village.Run(2 * Every);
+        Assert.Equal("playground", Wishes(village).Task?.Wish);
+
+        // released, the heaviest wish is the next task again; the open task is not replaced in the meantime
+        Wishes(village).Release("cafe");
+        Assert.Empty(Wishes(village).Held);
+        var fresh = Builders.Start(1, June(1, 9), Builders.Data(wishes: CafeAndPlayground), more: [new WishesModule()]);
+        fresh.Run(2 * Every);
+        Assert.Equal("cafe", Wishes(fresh).Task?.Wish);
+    }
+
+    // Risk: holding the wish of the open task leaves it open, and Eddie works on what the village no longer asks for.
+    [Fact]
+    public void Holding_the_wish_of_the_open_task_drops_it()
+    {
+        var village = Builders.Start(1, June(1, 9), Builders.Data(wishes: CafeAndPlayground), more: [new WishesModule()]);
+        village.Run(2 * Every);
+        Assert.Equal("cafe", Wishes(village).Task?.Wish);
+
+        Wishes(village).Hold("cafe");
+        Assert.Null(Wishes(village).Task);
+        village.Run(1);
+        Assert.Single(village.Heard<TaskClosed>(), e => e.Wish == "cafe");
+        Assert.Single(village.Engine.Log, line => line.Kind == "task-held" && line.Subject == "cafe");
+    }
+
+    // Risk: a restart forgets what is on hold (the village asks again), or production's version 1 save no longer loads.
+    [Fact]
+    public void Holds_survive_a_save_and_a_version_1_save_has_none()
+    {
+        var village = Builders.Start(1, June(1, 9), Builders.Data(wishes: CafeAndPlayground), more: [new WishesModule()]);
+        Wishes(village).Hold("playground");
+        Wishes(village).Hold("cafe");
+        var saved = village.Engine.Save();
+        Assert.Equal(2, saved.Modules.Single(part => part.Name == "wishes").Version);
+        Assert.Equal(["cafe", "playground"], saved.Modules.Single(part => part.Name == "wishes").Data["held"]!.AsArray().Select(id => (string)id!));
+
+        var loaded = Builders.Load(saved, Builders.Data(wishes: CafeAndPlayground), more: [new WishesModule()]);
+        Assert.Equal(["cafe", "playground"], Wishes(loaded).Held.Order());
+        loaded.Run(2 * Every);
+        Assert.Null(Wishes(loaded).Task);
+
+        // the save of production: version 1, without the field
+        var old = saved with
+        {
+            Modules = [.. saved.Modules.Select(part => part.Name != "wishes" ? part
+                : part with { Version = 1, Data = new JsonObject { ["began"] = part.Data["began"]!.DeepClone() } })],
+        };
+        var upgraded = Builders.Load(old, Builders.Data(wishes: CafeAndPlayground), more: [new WishesModule()]);
+        Assert.Empty(Wishes(upgraded).Held);
+        upgraded.Run(2 * Every);
+        Assert.Equal("cafe", Wishes(upgraded).Task?.Wish);
+        Assert.Empty(upgraded.Engine.Stopped);
+    }
+
     private static bool Cafe(Builders.Village village, int island) =>
         village.Building.All.Any(structure => structure.Island == island && structure.Blueprint == "cafe" && structure.Done);
 }

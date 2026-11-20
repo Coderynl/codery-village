@@ -19,6 +19,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using BuildingModule = Codery.Village.Modules.Building.Building;
 using PeopleModule = Codery.Village.Modules.People.People;
+using WishesModule = Codery.Village.Modules.Wishes.Wishes;
 
 namespace Codery.Village.Tests;
 
@@ -203,6 +204,31 @@ public class HostTests
         var version = await server.CreateClient().GetFromJsonAsync<VersionAnswer>("/version", Protocol.Json);
         Assert.Equal("abc123", version!.Commit);
         Assert.Equal(Ladder.Files().Select(file => Path.GetFileNameWithoutExtension(file)), version.Releases);
+    }
+
+    // Risk: Michael's switch Village:Tasks:Release does nothing, so a wish stays on hold after he released it.
+    [Fact]
+    public async Task Released_wishes_in_the_configuration_are_released_at_start()
+    {
+        var store = new FakeStore();
+        await using (var first = Server(store))
+        {
+            var host = await Started(first);
+            host.Hold("cafe");
+            host.Hold("library");
+            host.Release("library");
+            Assert.Equal(["cafe"], host.Inspect(engine => engine.Running.OfType<WishesModule>().Single().Held.ToList()));
+            // the village moves on, so that it is saved once more when the server stops
+            var at = Tick(host);
+            await Until(() => Tick(host) > at, "a tick after the hold");
+        }
+        var held = store.Villages.Single().Saves[^1].Modules.Single(part => part.Name == "wishes").Data["held"]!.AsArray();
+        Assert.Equal(["cafe"], held.Select(id => (string)id!));
+
+        // saved on stopping with the café on hold, and the configuration lets it go
+        await using var second = Server(store, settings: ("Village:Tasks:Release:0", "cafe"));
+        var again = await Started(second);
+        Assert.Empty(again.Inspect(engine => engine.Running.OfType<WishesModule>().Single().Held.ToList()));
     }
 
     [Fact]
