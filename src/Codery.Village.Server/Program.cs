@@ -88,7 +88,10 @@ app.Use(async (context, next) =>
 });
 app.UseWebSockets();
 
-app.MapGet("/health", () => Results.Text("ok"));
+// unhealthy while the saved village cannot be loaded: it waits for a fix, and is never replaced by a new one
+app.MapGet("/health", (VillageHost host) => host.Unloadable
+    ? Results.Text("cannot load the saved village", statusCode: StatusCodes.Status503ServiceUnavailable)
+    : Results.Text("ok"));
 // what runs here, and the village as it stands, for the tools that work on the village; no visitors in it
 var commit = app.Configuration["VILLAGE_COMMIT"] is { Length: > 0 } built ? built : "dev";
 var releases = VillageSetup.Releases();

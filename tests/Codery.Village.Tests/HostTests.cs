@@ -24,7 +24,7 @@ namespace Codery.Village.Tests;
 
 internal sealed record VersionAnswer(string Commit, string[] Releases);
 
-/// <summary>A store in memory that can be told to be away, to fail, to take its time, or to hold a save it cannot read.</summary>
+/// <summary>A store in memory that can be told to be away, to fail or to take its time.</summary>
 internal sealed class FakeStore : IVillageStore
 {
     private readonly Lock _gate = new();
@@ -36,8 +36,6 @@ internal sealed class FakeStore : IVillageStore
     public volatile bool Away;
     /// <summary>Save fails.</summary>
     public volatile bool Failing;
-    /// <summary>The latest save of the village begun last cannot be read.</summary>
-    public volatile bool Unreadable;
     /// <summary>When set, a save waits until it is done.</summary>
     public volatile TaskCompletionSource? Hold;
     public int Attempts;
@@ -54,7 +52,6 @@ internal sealed class FakeStore : IVillageStore
         lock (_gate)
         {
             if (_villages.Count == 0) return Task.FromResult<StoredVillage?>(null);
-            if (Unreadable) throw new SaveException("The save cannot be read: it is not JSON.");
             var (village, seed, saves) = _villages[^1];
             return Task.FromResult<StoredVillage?>(new StoredVillage(village, seed, saves[^1]));
         }
@@ -65,7 +62,6 @@ internal sealed class FakeStore : IVillageStore
         lock (_gate)
         {
             _villages.Add((_villages.Count + 1, seed, [first]));
-            Unreadable = false;
             return Task.FromResult((long)_villages.Count);
         }
     }
@@ -334,20 +330,30 @@ public class HostTests
         Assert.Equal(HttpStatusCode.OK, (await http.GetAsync("/state")).StatusCode);
     }
 
+    // Risk: production cannot read its own save after a deploy and begins a new village in its place: the village is lost.
     [Fact]
-    public async Task A_save_that_cannot_be_read_begins_a_new_village_next_to_it()
+    public async Task A_saved_village_that_cannot_be_read_is_never_replaced()
     {
         var store = new FakeStore();
-        await using (var first = Server(store)) await Started(first);
-        store.Unreadable = true;
+        var lived = VillageSetup.Begin(VillageSetup.Data([]), VillageSetup.Map(), 1, new SimulatedTime(Builders.June(2, 10)));
+        await store.Begin(1, lived.Save() with { Format = SavedVillage.CurrentFormat + 1 }, CancellationToken.None);
+        var log = new ServerTests.Recorder();
 
-        await using var server = Server(store);
-        var host = await Started(server);
+        await using (var server = Server(store, log: log))
+        {
+            var http = server.CreateClient();
+            await Until(() => log.Lines.Any(line => line.Level == LogLevel.Error), "the host to give up on the save");
 
-        Assert.Equal(2, store.Villages.Count);
-        Assert.Single(store.Villages[0].Saves, save => save.Tick == 0);
-        Assert.Equal(0, store.Villages[1].Saves[0].Tick);
-        Assert.InRange(Tick(host), 0, 40);
+            var health = await http.GetAsync("/health");
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, health.StatusCode);
+            Assert.Equal("cannot load the saved village", await health.Content.ReadAsStringAsync());
+            Assert.False(server.Services.GetRequiredService<VillageHost>().Ready.IsCompleted);
+            Assert.Contains(log.Lines, line => line.Level == LogLevel.Error && line.Text.Contains($"format {SavedVillage.CurrentFormat + 1}"));
+        }
+
+        // stopped, it did not save over it either
+        var village = Assert.Single(store.Villages);
+        Assert.Single(village.Saves);
     }
 
     // Risk: the deploy that brings the ladder throws away the village production saved on the base, or loads it without the releases.
@@ -388,6 +394,50 @@ public class HostTests
             return engine.Running.OfType<BuildingModule>().Single().All.Select(structure => structure.Blueprint).Where(blueprint => !known.Contains(blueprint)).ToList();
         });
         Assert.NotEmpty(ladder);
+    }
+
+    // Risk: Eddie takes a release away, and the save production loads names what the data no longer knows: the
+    // buildings sleep for good, or the hunters stand at a lodge that is not there.
+    [Fact]
+    public void A_village_goes_on_when_a_release_is_taken_away()
+    {
+        // two weeks, and then until the hunters have brought game in
+        var hunting = Scenario.Start(1, Sections.Of(VillageSetup.Live()));
+        hunting.Days(14);
+        for (var quarter = 0; quarter < 2 * 96 && !hunting.Map.Islands.Any(island => hunting.Work.Count(island.Id, "game") > 0); quarter++) hunting.NextQuarter();
+        Assert.Contains(hunting.Map.Islands, island => hunting.Work.Count(island.Id, "game") > 0);
+        var hunters = hunting.People.All.Where(resident => hunting.Work.JobOf(resident.Id)?.Role == "hunter").Select(resident => resident.Id).ToList();
+        Assert.NotEmpty(hunters);
+        var saved = SaveJson.FromJson(SaveJson.ToJson(hunting.Engine.Save()));
+
+        var withoutHunting = VillageSetup.Data(VillageSetup.Releases().Where(release => release != "hunting").Select(release => $"releases/{release}.json"));
+        var village = Scenario.Load(saved, Sections.Of(withoutHunting));
+
+        Assert.Empty(village.Engine.Stopped);
+        Assert.DoesNotContain(village.Engine.Log, entry => entry.Kind == "module-dormant");
+        Assert.DoesNotContain(village.Building.All, structure => structure.Blueprint == "hunters-lodge");
+        Assert.All(village.Map.Islands, island => Assert.DoesNotContain("game", village.Work.Stock(island.Id).Keys));
+        // once per id, however many lodges and hunters there were
+        var forgotten = village.Engine.Log.Where(entry => entry.Kind == "forgotten").Select(entry => entry.Subject).ToList();
+        Assert.Single(forgotten, "hunters-lodge");
+        Assert.Single(forgotten, "hunter");
+        Assert.Single(forgotten, "game");
+
+        // a day on, as the four weeks of the scenarios hold it
+        var most = 100L * (int)Sections.Of(withoutHunting)["economy"]["startSubsidy"]!;
+        village.Days(1, each: day =>
+        {
+            foreach (var island in day.Ordinary)
+            {
+                var (residents, cash, median) = (day.People.On(island.Id).Count(), day.Work.Of(island.Id).Cash, day.Median(island.Id));
+                var shopping = day.Work.LastShopping(island.Id);
+                Assert.True(residents is >= 6 and <= 60 && cash >= 0 && cash <= most && median is >= 20 and <= 90 && shopping.Short["food"] * 4 <= shopping.Households,
+                    $"{island.Name} on {day.Now:yyyy-MM-dd HH:mm}: {residents} residents, {cash} in the treasury, median happiness {median}, " +
+                    $"{shopping.Short["food"]} of {shopping.Households} households without all their food");
+            }
+        });
+        Assert.Empty(village.Engine.Stopped);
+        Assert.All(hunters, hunter => Assert.NotEqual("hunter", village.Work.JobOf(hunter)?.Role));
     }
 
     [Fact]
@@ -707,7 +757,7 @@ public class HostDatabaseTests(PostgresFixture postgres)
     [Theory]
     [InlineData("another format")]
     [InlineData("not a save")]
-    public async Task A_save_that_cannot_be_loaded_begins_a_new_village_and_leaves_the_old_one_as_it_was(string trouble)
+    public async Task A_save_that_cannot_be_loaded_is_left_as_it_was_and_no_new_village_begins(string trouble)
     {
         var database = await postgres.NewDatabase();
         await using var store = new PostgresVillageStore(database);
@@ -719,11 +769,18 @@ public class HostDatabaseTests(PostgresFixture postgres)
             : $"UPDATE village_save SET state = '{{\"format\": 1}}'::jsonb WHERE village = {old}");
         var before = await Kept(database, old);
 
-        await RunAndStop(database, seed: 3, ticks: 10);
+        await using (var server = Server(database, seed: 3))
+        {
+            var http = server.CreateClient();
+            var deadline = DateTime.UtcNow.AddSeconds(30);
+            while ((await http.GetAsync("/health")).StatusCode != HttpStatusCode.ServiceUnavailable)
+            {
+                if (DateTime.UtcNow > deadline) throw new TimeoutException("Waited in vain for the health to say the village cannot be loaded.");
+                await Task.Delay(20);
+            }
+        }
 
-        var latest = (await store.Latest(CancellationToken.None))!;
-        Assert.NotEqual(old, latest.Id);
-        Assert.Equal(3UL, latest.Seed);
+        Assert.Equal(["1"], await PostgresFixture.Strings(database, "SELECT count(*)::text FROM village"));
         Assert.Equal(before, await Kept(database, old));
     }
 

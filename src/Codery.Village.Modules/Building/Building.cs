@@ -25,7 +25,8 @@ namespace Codery.Village.Modules.Building;
 /// A site that stands still says why, once per reason. Each ordinary island starts with its fireplace, its start
 /// workplaces and a hut per household, Eddie with his house and workshop; all finished. Building gives the homes,
 /// as People moves households in and out of them, the places of the day, and the buildings Work staffs. It also keeps the loose things a visitor
-/// can move: a few at the start, and one by every house that is finished.
+/// can move: a few at the start, and one by every house that is finished. A save that names a blueprint the data no
+/// longer has (its release was taken away) loads without what was built after it.
 /// </summary>
 public sealed class Building : IModule, IHousing, IPlaces, IStructures
 {
@@ -35,9 +36,11 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
     private const string Section = "building";
     private const string Built = "built";
     private const string PutBackKind = "put-back";
+    // a save names something the data no longer has; Work logs it too, with this sentence
+    private const string Forgotten = "forgotten";
     // the work of one builder in one tick, in units: a helper does a share of it
     private const int Full = 100;
-    private static readonly string[] LogKinds = [Built, Waiting(Materials), Waiting(Builders), PutBackKind];
+    private static readonly string[] LogKinds = [Built, Waiting(Materials), Waiting(Builders), PutBackKind, Forgotten];
 
     private readonly List<Structure> _structures = [];
     // the structure on each tile it covers
@@ -601,10 +604,17 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         Read(village);
         var saved = data.Deserialize<SavedBuilding>(SaveJson.Options) ?? throw new InvalidDataException("The building part of the save is empty.");
         Clear();
+        // a blueprint of a release that was taken away: what was built after it is gone, once in the log, in the order of the id
+        var forgotten = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var part in saved.Structures)
         {
-            if (!_blueprints.ContainsKey(part.Blueprint) || IslandAt(part.Anchor) is null)
-                throw new InvalidDataException($"The save has a {part.Blueprint} at {part.Anchor} that the data or the map does not know.");
+            if (!_blueprints.ContainsKey(part.Blueprint))
+            {
+                forgotten.Add(part.Blueprint);
+                continue;
+            }
+            if (IslandAt(part.Anchor) is null)
+                throw new InvalidDataException($"The save has a {part.Blueprint} at {part.Anchor} that the map does not know.");
             var structure = Add(part.Blueprint, part.Anchor, part.Rotation, part.Id);
             structure.Phase = part.Phase;
             // version 1 counted the work in builder ticks
@@ -621,6 +631,7 @@ public sealed class Building : IModule, IHousing, IPlaces, IStructures
         foreach (var (thing, since) in saved.InTheWay ?? new Dictionary<int, long>()) _inTheWay[thing] = since;
         _nextStructure = saved.NextStructure;
         _nextThing = saved.NextThing;
+        foreach (var blueprint in forgotten) village.Log(new LogEntry(village.Clocks.Tick, Forgotten, blueprint));
     }
 
     private sealed record SavedBuilding(int NextStructure, int NextThing, IReadOnlyList<SavedStructure> Structures, IReadOnlyList<LooseThing> Things,

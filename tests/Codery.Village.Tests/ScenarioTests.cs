@@ -679,6 +679,17 @@ internal sealed class Scenario
         return scenario;
     }
 
+    /// <summary>A saved scenario taken up again on <paramref name="sections"/>, at the calendar of the save.</summary>
+    public static Scenario Load(SavedVillage saved, Sections sections)
+    {
+        var map = sections.Island();
+        var data = sections.Quick(Speed);
+        var time = new SimulatedTime(saved.Calendar);
+        IModule[] modules = [.. VillageSetup.Modules(), new Settler(), new Leavers()];
+        var engine = Engine.Load(saved, modules, data, map, time);
+        return new Scenario(engine, time, modules, map, data.Section<Catalog>("catalog"));
+    }
+
     /// <summary>The next quarter: the calendar moves to its start, Day settles, and its ticks run.</summary>
     public void NextQuarter()
     {
