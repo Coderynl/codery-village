@@ -199,12 +199,6 @@ public sealed class VillageHost(
         lock (_gate) return _engine?.Running.OfType<WishesModule>().FirstOrDefault()?.Task;
     }
 
-    /// <summary>The wishes on hold, copied under the lock.</summary>
-    public IReadOnlySet<string> Held()
-    {
-        lock (_gate) return _engine?.Running.OfType<WishesModule>().FirstOrDefault()?.Held.ToHashSet() ?? [];
-    }
-
     /// <summary>Whether the data this village runs on has a blueprint that serves the label of <paramref name="wish"/>.</summary>
     public bool Live(string wish)
     {

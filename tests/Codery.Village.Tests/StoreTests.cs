@@ -154,7 +154,7 @@ public class StoreTests(PostgresFixture postgres)
             await errands.Save(new ErrandRecord("wine", 7, 100, ErrandState.Asking, at, 0, [], false), CancellationToken.None);
             await errands.Save(new ErrandRecord("cafe", 3, 30, ErrandState.Live, at, 0, [], true), CancellationToken.None);
             // one row per wish: the later record of the wine replaces the first
-            await errands.Save(new ErrandRecord("wine", 7, 250, ErrandState.Cooling, at.AddHours(8), 2, failures, true, at.AddHours(9)), CancellationToken.None);
+            await errands.Save(new ErrandRecord("wine", 7, 250, ErrandState.Cooling, at.AddHours(8), 2, failures, true, at.AddHours(9), Baseline: 90), CancellationToken.None);
         }
 
         await using var again = new PostgresErrandStore(database);
@@ -165,6 +165,7 @@ public class StoreTests(PostgresFixture postgres)
         Assert.Equal(("wine", 7, 250L, ErrandState.Cooling, at.AddHours(8), 2, true, (DateTimeOffset?)at.AddHours(9)),
             (wine.Wish, wine.Issue, wine.Command, wine.State, wine.Since, wine.Failures, wine.OwnerMentioned, wine.Reappeared));
         Assert.Equal(failures, wine.History);
+        Assert.Equal(90, wine.Baseline);
         Assert.Null(all[0].Reappeared);
         Assert.Empty(all[0].History);
     }

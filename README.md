@@ -20,9 +20,9 @@ When the residents wish for something the data cannot give them, the village wri
 - opens an issue with the label `wish` for the task and posts Eddie's `/eddie` command under it; an open issue the App opened already for the same wish is used again;
 - reads Eddie's results under the issue (only those of his login count): after `done` it waits until the server runs on data that serves the wish and says so on the issue, then follows the issue until Michael approves or rejects the release;
 - asks again 6 hours after a failure, up to 3 attempts; after the third, after a reject, or when Eddie may not do it, the village puts the wish on hold and stops asking for it;
-- keeps one errand per wish (the table `errands` in the database, or in memory without one) and saves after every step on GitHub, so a restart never opens a second issue or posts a command twice. During a deploy the old and the new server run side by side; a round takes a Postgres advisory lock first, so only one of them acts.
+- keeps one errand per wish (the table `errands` in the database, or in memory without one) and saves after every step on GitHub, so a restart never opens a second issue or posts a command twice. A comment that is not a command can be posted twice, once: when GitHub's answer to it gets lost, the next round posts it again. During a deploy the old and the new server run side by side; a round takes a Postgres advisory lock first, so only one of them acts.
 
-A wish on hold is asked again, on its issue, once Michael released it with `Village__Tasks__Release__0=<wish>` and the village wishes it again.
+The desk's holds live in its errands: each round it puts the wish of every held errand on hold in the village again, should the village have forgotten it. Michael releases such a wish with a comment on its issue that starts with `/village release`; the desk then asks Eddie again on the same issue, counting from 1, or closes the errand when another release serves the wish by then. `Village__Tasks__Release__0=<wish>` releases only holds made outside the desk.
 
 The desk is off unless `Village__Tasks__Enabled=true`; off, it touches nothing, not even GitHub. On, it needs these settings:
 
@@ -32,9 +32,9 @@ The desk is off unless `Village__Tasks__Enabled=true`; off, it touches nothing, 
 | `Village__Desk__PrivateKey` | the App's private key, as PEM |
 | `Village__Desk__AppLogin` | the App's bot login, such as `codery-village[bot]` |
 | `Village__Desk__EddieLogin` | Eddie's bot login |
-| `Village__Desk__Owner` | who is mentioned when Eddie waits or a wish is held, and whose own `/eddie` commands count; `Codery-nl` when not set |
+| `Village__Desk__Owner` | who is mentioned when Eddie waits or a wish is held, whose own `/eddie` commands count, and who releases a held wish; `Codery-nl` when not set |
 | `Village__Desk__Repository` | where the issues go; `Coderynl/codery-village` when not set |
 
-Switched on while one of the first four is missing, the desk names the missing settings once in the log, never their values, and stays idle; the village runs on.
+Switched on while the App id, key or login or Eddie's login is missing, or the owner is set empty, the desk names the missing settings once in the log, never their values, and stays idle; the village runs on.
 
 More about Codery: [codery.nl](https://codery.nl).

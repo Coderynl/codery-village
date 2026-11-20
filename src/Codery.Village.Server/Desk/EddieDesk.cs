@@ -5,8 +5,9 @@ namespace Codery.Village.Server.Desk;
 
 /// <summary>
 /// The desk: once a minute the village asks Eddie on GitHub for what it wishes, and follows him until his release is
-/// live and judged. A round decides with <see cref="Errand.Next"/> for the open task's wish and for every errand that
-/// is neither held nor closed, and carries out each decision as <see cref="Decision"/> says.
+/// live and judged. A round first holds, in the village, the wish of every held errand: the errands are the truth about
+/// the desk's holds. Then it decides with <see cref="Errand.Next"/> for the open task's wish and for every errand that
+/// is not closed, and carries out each decision as <see cref="Decision"/> says.
 /// <para>
 /// Off unless <c>Village:Tasks:Enabled</c>: then it touches nothing, not even GitHub. Switched on without the App's
 /// settings it names the missing ones once, never their values, and stays idle. A round that fails is logged and tried
@@ -66,24 +67,27 @@ public sealed class EddieDesk(VillageHost village, IVillageGitHub github, IErran
         catch (Exception exception)
         {
             logger.LogWarning("The desk's round failed ({Kind}: {Reason}); it tries again in a minute.", exception.GetType().Name, exception.Message);
+            logger.LogDebug(exception, "The desk's round failed.");
         }
     }
 
     private async Task Work(CancellationToken stoppingToken)
     {
         var texts = DeskTexts.From(data);
-        // what the village says now, each read under its lock, before GitHub is asked anything
-        var task = village.OpenTask();
         var facts = new ErrandFacts(options.EddieLogin, options.AppLogin, options.Owner, options.Repository,
-            data.Section<WishSettings>("wishes").Wishes, releases, village.Held());
+            data.Section<WishSettings>("wishes").Wishes, releases);
         var errands = await store.All(stoppingToken);
+        // a hold of the desk lives in its errand: a village that forgot it (another server saved over it) holds it again
+        foreach (var errand in errands.Where(errand => errand.State == ErrandState.Held)) village.Hold(errand.Wish);
+        // what the village says now, read under its lock, before GitHub is asked anything
+        var task = village.OpenTask();
 
-        // the open task's wish with its record, unless that is closed; then every other errand still under way
+        // the open task's wish with its record, unless that is closed; then every other errand that is not closed
         List<(string Wish, ErrandRecord? Errand)> round = [];
         if (task is not null)
             round.Add((task.Wish, errands.FirstOrDefault(errand => errand.Wish == task.Wish && errand.State != ErrandState.Closed)));
         round.AddRange(errands
-            .Where(errand => errand.Wish != task?.Wish && errand.State is not (ErrandState.Held or ErrandState.Closed))
+            .Where(errand => errand.Wish != task?.Wish && errand.State != ErrandState.Closed)
             .Select(errand => (errand.Wish, (ErrandRecord?)errand)));
         var live = round.ToDictionary(item => item.Wish, item => village.Live(item.Wish));
 
@@ -96,22 +100,24 @@ public sealed class EddieDesk(VillageHost village, IVillageGitHub github, IErran
 
     /// <summary>
     /// One errand: decides, then carries out every action of the decision, each followed by saving the record, without
-    /// the stopping token: a stop never falls between an action and its save, and what was decided is done.
+    /// the stopping token: a stop never falls between an action and its save, and what was decided is done. A decision
+    /// that holds the wish is saved only after its last action, so a hold that was not told yet is decided again.
     /// </summary>
     private async Task Carry(ErrandRecord? errand, OpenTask? task, bool wishLive, DeskTexts texts, ErrandFacts facts, CancellationToken stoppingToken)
     {
         IReadOnlyList<IssueComment> comments = errand is { Issue: > 0 } ? await github.Comments(errand.Issue, stoppingToken) : [];
-        var decision = Errand.Next(Adopted(errand, comments), task, comments, wishLive, time.GetUtcNow(), texts, facts);
+        var decision = Errand.Next(errand, task, comments, wishLive, time.GetUtcNow(), texts, facts);
         if (decision.Errand is not { } record) return;
         if (decision.Actions.Count == 0)
         {
             if (record != errand) await Keep(record);
             return;
         }
-        foreach (var action in decision.Actions)
+        var holding = decision.Actions.Any(action => action is HoldWish);
+        for (var i = 0; i < decision.Actions.Count; i++)
         {
-            record = await Do(action, record);
-            await Keep(record);
+            record = await Do(decision.Actions[i], record);
+            if (!holding || i == decision.Actions.Count - 1) await Keep(record);
         }
     }
 
@@ -133,6 +139,9 @@ public sealed class EddieDesk(VillageHost village, IVillageGitHub github, IErran
             case HoldWish hold:
                 village.Hold(hold.Wish);
                 return errand;
+            case ReleaseWish release:
+                village.Release(release.Wish);
+                return errand;
             default:
                 throw new InvalidOperationException($"The desk does not know the action {action.GetType().Name}.");
         }
@@ -140,8 +149,8 @@ public sealed class EddieDesk(VillageHost village, IVillageGitHub github, IErran
 
     /// <summary>
     /// The issue of a new errand: the open one the App opened already with the same title and label, when its number got
-    /// lost or an earlier errand for the wish used it; else a new one. On an issue used again, only the App's later
-    /// commands are the errand's.
+    /// lost or an earlier errand for the wish used it; else a new one. On an issue used again, the App's last command is
+    /// the baseline: nothing up to it counts for this errand.
     /// </summary>
     private async Task<ErrandRecord> Opened(OpenIssue open, ErrandRecord errand)
     {
@@ -151,18 +160,7 @@ public sealed class EddieDesk(VillageHost village, IVillageGitHub github, IErran
             .MinBy(issue => issue.Number);
         if (found is null) return errand with { Issue = await github.OpenIssue(open.Title, open.Body, [open.Label], none) };
         var commands = (await github.Comments(found.Number, none)).Where(IsAppCommand).Select(comment => comment.Id);
-        return errand with { Issue = found.Number, Command = commands.DefaultIfEmpty(0).Max() };
-    }
-
-    /// <summary>
-    /// An asking errand on an issue used again, whose new command was posted while GitHub's answer got lost: the App's
-    /// later command is the errand's. <see cref="Errand"/> adopts it only while the command is 0.
-    /// </summary>
-    private ErrandRecord? Adopted(ErrandRecord? errand, IReadOnlyList<IssueComment> comments)
-    {
-        if (errand is not { State: ErrandState.Asking, Command: > 0 }) return errand;
-        var later = comments.Where(comment => comment.Id > errand.Command && IsAppCommand(comment)).MaxBy(comment => comment.Id);
-        return later is null ? errand : errand with { Command = later.Id };
+        return errand with { Issue = found.Number, Baseline = commands.DefaultIfEmpty(0).Max() };
     }
 
     // a record is kept only once it has its issue
@@ -173,7 +171,7 @@ public sealed class EddieDesk(VillageHost village, IVillageGitHub github, IErran
     private bool IsAppCommand(IssueComment comment) => IsApp(comment.Author) && comment.Body.StartsWith("/eddie ", StringComparison.Ordinal);
 
     private static IReadOnlyList<string> Missing(DeskOptions options) =>
-        [.. new (string Name, string Value)[] { ("AppId", options.AppId), ("PrivateKey", options.PrivateKey), ("AppLogin", options.AppLogin), ("EddieLogin", options.EddieLogin) }
+        [.. new (string Name, string Value)[] { ("AppId", options.AppId), ("PrivateKey", options.PrivateKey), ("AppLogin", options.AppLogin), ("EddieLogin", options.EddieLogin), ("Owner", options.Owner) }
             .Where(setting => string.IsNullOrWhiteSpace(setting.Value))
             .Select(setting => $"Village:Desk:{setting.Name}")];
 }

@@ -12,10 +12,12 @@ public enum ErrandState { Asking, Waiting, Budget, Delivered, Live, Cooling, Hel
 /// <paramref name="Failures"/> so far with their <paramref name="History"/>, and whether Michael was mentioned while
 /// Eddie waited for him. An <paramref name="Issue"/> or <paramref name="Command"/> of 0 is one the desk has yet to fill
 /// in; see <see cref="Decision"/>. <paramref name="Reappeared"/> is when the task of a live wish came back because its
-/// release went away; it stays until the wish is live again.
+/// release went away; it stays until the wish is live again. The comments up to <paramref name="Baseline"/> belong to an
+/// earlier round on the issue: no command, result or release among them counts. It is the App's last command on an
+/// issue used again, and the last comment the errand saw when it held its wish.
 /// </summary>
 public sealed record ErrandRecord(string Wish, int Issue, long Command, ErrandState State, DateTimeOffset Since,
-    int Failures, IReadOnlyList<Failure> History, bool OwnerMentioned, DateTimeOffset? Reappeared = null);
+    int Failures, IReadOnlyList<Failure> History, bool OwnerMentioned, DateTimeOffset? Reappeared = null, long Baseline = 0);
 
 /// <summary>A failed attempt: a fixed <paramref name="Code"/> and a link to Eddie's result or to the issue.</summary>
 public sealed record Failure(string Code, string Link, DateTimeOffset At);
@@ -25,15 +27,19 @@ public sealed record Failure(string Code, string Link, DateTimeOffset At);
 /// when there is none. The desk:
 /// <list type="bullet">
 /// <item>carries out <paramref name="Actions"/> in order, all on the errand's issue, each followed by saving the
-/// record, without the stopping token, so a stop never falls between an action and its save;</item>
+/// record, without the stopping token, so a stop never falls between an action and its save. A decision that holds the
+/// wish is saved only after its last action: until the wish is held and the owner told, the stored record decides the
+/// hold again;</item>
 /// <item>writes what GitHub gives back into the record: the number of the issue <see cref="OpenIssue"/> opens into
 /// <see cref="ErrandRecord.Issue"/>, the id of the comment <see cref="PostCommand"/> posts into
 /// <see cref="ErrandRecord.Command"/>; it never saves a record whose issue is still 0;</item>
 /// <item>stops at the first action that fails, and saves nothing more: the next round decides again from the stored
 /// record. A command that was posted although its answer got lost is then adopted, not posted again;</item>
 /// <item>before <see cref="OpenIssue"/>, looks for an open issue by the App, labelled as the action says, with its
-/// title, and takes that number instead of opening a second one;</item>
-/// <item>finds <see cref="HoldWish"/> first in its decision, so a held record is saved only once the wish is held.</item>
+/// title, and takes that number instead of opening a second one, with the App's last command on it as the
+/// <see cref="ErrandRecord.Baseline"/>;</item>
+/// <item>holds the wish of every held record in the village at the start of each round: the errands are the truth
+/// about the holds the desk made.</item>
 /// </list>
 /// </summary>
 public sealed record Decision(ErrandRecord? Errand, IReadOnlyList<DeskAction> Actions);
@@ -53,13 +59,16 @@ public sealed record AddLabel(string Label) : DeskAction;
 /// <summary>The village stops asking for <paramref name="Wish"/> (<c>VillageHost.Hold</c>).</summary>
 public sealed record HoldWish(string Wish) : DeskAction;
 
+/// <summary>The village may ask for <paramref name="Wish"/> again (<c>VillageHost.Release</c>).</summary>
+public sealed record ReleaseWish(string Wish) : DeskAction;
+
 /// <summary>
 /// What the errand takes from outside the data: Eddie's bot login, the App's own login (whose <c>/eddie</c> comments
-/// are the desk's commands), the <paramref name="Owner"/> to mention and whose later commands count, the repository
-/// for links, the wishes of the data, the ids of the releases live now, and the wishes on hold.
+/// are the desk's commands), the <paramref name="Owner"/> to mention, whose later commands count and who releases a
+/// held wish, the repository for links, the wishes of the data, and the ids of the releases live now.
 /// </summary>
 public sealed record ErrandFacts(string EddieLogin, string AppLogin, string Owner, string Repository, IReadOnlyList<Wish> Wishes,
-    IReadOnlyList<string> Releases, IReadOnlySet<string> Held);
+    IReadOnlyList<string> Releases);
 
 /// <summary>A sentence of the desk in Dutch, for the issue and its comments.</summary>
 public sealed record DeskLine(string Nl);
@@ -71,10 +80,11 @@ public sealed record DeskOrder(string En);
 /// The section <c>desk</c> of <c>wishes.json</c>. <see cref="Assignment"/> follows <c>/eddie </c>, with <c>{wish}</c>,
 /// <c>{label}</c>, <c>{attempt}</c>, <c>{history}</c> (the <see cref="Attempt"/>s before, or <see cref="None"/>) and
 /// <c>{releases}</c> (or <see cref="None"/>); <see cref="Attempt"/> has <c>{attempt}</c>, <c>{code}</c> and <c>{link}</c>.
-/// The Dutch lines may have <c>{owner}</c>, <c>{attempt}</c> and <c>{code}</c>.
+/// The Dutch lines may have <c>{owner}</c>, <c>{attempt}</c> and <c>{code}</c>. <see cref="Release"/> follows every
+/// comment that holds a wish: how the owner lets it go.
 /// </summary>
 public sealed record DeskTexts(DeskLine IssueNote, DeskOrder Assignment, DeskOrder Attempt, DeskOrder None, DeskLine Waiting,
-    DeskLine Rejected, DeskLine NotAllowed, DeskLine Live, DeskLine Failed, DeskLine Held, DeskLine Answered)
+    DeskLine Rejected, DeskLine NotAllowed, DeskLine Live, DeskLine Failed, DeskLine Held, DeskLine Answered, DeskLine Release)
 {
     /// <summary>The desk's texts of <paramref name="data"/>; throws <see cref="InvalidDataException"/> when one is missing.</summary>
     public static DeskTexts From(DataSet data) => data.Section<WishesDesk>("wishes").Desk;
@@ -105,16 +115,17 @@ public static partial class Errand
 
     /// <summary>
     /// What to do now with one record: <paramref name="errand"/> for its own wish, or null to begin one for
-    /// <paramref name="task"/>. The desk calls it once per round for each record that is neither Held nor Closed, and for
-    /// the open task's wish: its record when that is not Closed, otherwise null. <paramref name="task"/> is the open task
+    /// <paramref name="task"/>. The desk calls it once per round for each record that is not Closed, and for the open
+    /// task's wish: its record when that is not Closed, otherwise null. <paramref name="task"/> is the open task
     /// of the land, which may be for another wish; <paramref name="comments"/> are those of the record's issue (oldest
     /// first, none without an issue), and <paramref name="wishLive"/> says whether the data serves the record's wish.
     /// <para>
     /// Results count only when Eddie's login wrote them, for the desk's command or for a later <c>/eddie</c> command by
     /// the owner. An errand that waits for Eddie does not end because the task went away: Eddie's result ends it. A live
     /// errand follows Eddie's results until Michael's approve closes it (a reject holds the wish), and asks again on the
-    /// same issue when its task comes back without the wish being live. A held wish is asked again on its issue once
-    /// Michael released it and the land wishes it again. A record is never replaced by one for another wish.
+    /// same issue when its task comes back without the wish being live. A held wish is asked again on its issue once the
+    /// owner released it there with <c>/village release</c>; a released wish that is live by then is answered. A record
+    /// is never replaced by one for another wish.
     /// </para>
     /// </summary>
     public static Decision Next(ErrandRecord? errand, OpenTask? task, IReadOnlyList<IssueComment> comments, bool wishLive,
@@ -128,7 +139,7 @@ public static partial class Errand
         return errand.State switch
         {
             ErrandState.Closed => round.Stay(),
-            ErrandState.Held => wished && !facts.Held.Contains(errand.Wish) ? round.Again() : round.Stay(),
+            ErrandState.Held => round.Released(wishLive),
             ErrandState.Live => round.AfterLive(wished, wishLive),
             ErrandState.Asking when errand.Command == 0 => round.Ask(),
             ErrandState.Asking or ErrandState.Waiting => round.Follow(),
@@ -159,6 +170,9 @@ public static partial class Errand
 
         public Decision Stay() => new(errand, []);
 
+        // the comments of this round on the issue: after the baseline and after the errand's command
+        private long Floor => Math.Max(errand.Baseline, errand.Command);
+
         private Decision Move(ErrandState state, params DeskAction[] actions) => new(errand with { State = state, Since = now }, actions);
 
         private Round With(ErrandRecord changed) => new(changed, comments, now, texts, facts);
@@ -171,7 +185,7 @@ public static partial class Errand
         {
             var asking = errand with { State = ErrandState.Asking, Since = now };
             var posted = comments
-                .Where(comment => comment.Id > errand.Command && Is(comment.Author, facts.AppLogin) && IsCommand(comment))
+                .Where(comment => comment.Id > Floor && Is(comment.Author, facts.AppLogin) && IsCommand(comment))
                 .MaxBy(comment => comment.Id);
             if (posted is not null) return new Decision(asking with { Command = posted.Id }, []);
 
@@ -250,8 +264,21 @@ public static partial class Errand
             return now - since >= Cooling ? Fail("release-gone", IssueLink, askAtOnce: true) : Stay();
         }
 
-        /// <summary>A new round on the same issue: the count starts over, as Michael released the wish.</summary>
-        public Decision Again() => With(errand with { Failures = 0, History = [], OwnerMentioned = false, Reappeared = null }).Ask();
+        /// <summary>
+        /// Held: the owner's <c>/village release</c> after the hold lets the wish go, and starts a new round on the same
+        /// issue with a new count; when another release serves the wish by then, it is answered instead.
+        /// </summary>
+        public Decision Released(bool wishLive)
+        {
+            var released = comments.Any(comment => comment.Id > errand.Baseline && Is(comment.Author, facts.Owner)
+                && comment.Body.StartsWith("/village release", StringComparison.Ordinal));
+            if (!released) return Stay();
+            DeskAction release = new ReleaseWish(errand.Wish);
+            if (wishLive) return Move(ErrandState.Closed, release, new PostComment(Line(texts.Answered)));
+            // nothing of the earlier rounds counts: the desk's next command is a new one
+            var again = With(errand with { Command = 0, Baseline = Floor, Failures = 0, History = [], OwnerMentioned = false, Reappeared = null }).Ask();
+            return again with { Actions = [release, .. again.Actions] };
+        }
 
         private Decision Fail(string code, string link, bool askAtOnce = false)
         {
@@ -264,25 +291,28 @@ public static partial class Errand
 
         private Decision Rejected() => Hold(texts.Rejected, label: true);
 
+        /// <summary>Holds the wish and tells why, and how to release it; a release counts only after what the errand saw now.</summary>
         private Decision Hold(DeskLine line, bool label)
         {
-            List<DeskAction> actions = [new HoldWish(errand.Wish), new PostComment(Line(line))];
+            List<DeskAction> actions = [new HoldWish(errand.Wish), new PostComment($"{Line(line)}\n\n{Line(texts.Release)}")];
             if (label) actions.Add(new AddLabel("on-hold"));
-            return Move(ErrandState.Held, [.. actions]);
+            var seen = comments.Select(comment => comment.Id).DefaultIfEmpty(0).Max();
+            return new Decision(errand with { State = ErrandState.Held, Since = now, Baseline = Math.Max(Floor, seen) }, [.. actions]);
         }
 
         private string Line(DeskLine line, params (string Name, string Value)[] values) => Fill(line.Nl, [("owner", facts.Owner), .. values]);
 
-        // the latest result by Eddie's login with one of these outcomes, for the desk's command or a later one by the owner
+        // the latest result by Eddie's login with one of these outcomes, for the desk's command or a later one by the owner;
+        // never for a command up to the baseline
         private (long Id, string Outcome)? Latest(IReadOnlySet<string> outcomes)
         {
             var owners = comments
-                .Where(comment => comment.Id > errand.Command && Is(comment.Author, facts.Owner) && IsCommand(comment))
+                .Where(comment => comment.Id > Floor && Is(comment.Author, facts.Owner) && IsCommand(comment))
                 .Select(comment => comment.Id)
                 .ToHashSet();
             foreach (var comment in comments.OrderByDescending(comment => comment.Id))
             {
-                if (EddieResult.Parse(comment, facts.EddieLogin) is { } result
+                if (EddieResult.Parse(comment, facts.EddieLogin) is { } result && result.Command > errand.Baseline
                     && (result.Command == errand.Command || owners.Contains(result.Command)) && outcomes.Contains(result.Outcome))
                     return (comment.Id, result.Outcome);
             }

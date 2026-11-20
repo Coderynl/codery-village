@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using WishesModule = Codery.Village.Modules.Wishes.Wishes;
 
 namespace Codery.Village.Tests;
 
@@ -19,7 +20,10 @@ namespace Codery.Village.Tests;
 /// - while another server (the old one, during a deploy) has the round, this one acts too and posts twice;
 /// - a stop, a refusal or a lost answer between opening and commanding opens a second issue or posts the command twice;
 /// - an issue the App opened already is opened again, or an old command or result on it is taken for the new one;
-/// - a live wish's errand is forgotten while the desk asks for another wish, so Michael's reject never holds it.
+/// - a live wish's errand is forgotten while the desk asks for another wish, so Michael's reject never holds it;
+/// - a refused command on an issue used again lets an old result count for the new errand;
+/// - a hold of the desk is lost when the village forgets it, or ends without Michael's release, or by anyone else's;
+/// - a refused hold comment is never posted, so Michael never hears of the hold.
 /// </summary>
 [Collection(RealTimeCollection.Name)]
 public class DeskTests
@@ -98,6 +102,14 @@ public class DeskTests
     private static async Task<ErrandRecord> Record(MemoryErrandStore errands, string wish) =>
         Assert.Single(await errands.All(default), errand => errand.Wish == wish);
 
+    private static IReadOnlySet<string> Held(VillageHost host) =>
+        host.Inspect(engine => engine.Running.OfType<WishesModule>().Single().Held.ToHashSet());
+
+    private static int HeldLines(VillageHost host) => host.Inspect(engine => engine.Save().Log.Count(line => line.Kind == "task-held"));
+
+    // what the desk says when it holds a wish: the reason, and how to release it
+    private static string Holding(DeskTexts texts, DeskLine line) => $"{line.Nl}\n\n{texts.Release.Nl}";
+
     [Fact]
     public async Task A_task_goes_round_to_a_live_release()
     {
@@ -112,9 +124,10 @@ public class DeskTests
             using var stopping = new CancellationTokenSource();
             _github.Once("issue", after: true, stopping.Cancel);
             await desk.Round(stopping.Token);
+            var issue = Assert.Single(_github.Issues);
+            Assert.Single(issue.Comments);
             await desk.Round(default);
 
-            var issue = Assert.Single(_github.Issues);
             Assert.Equal(host.OpenTask()!.TitleNl, issue.Title);
             Assert.Equal(["wish"], issue.Labels);
             var command = Assert.Single(issue.Comments);
@@ -160,7 +173,7 @@ public class DeskTests
 
         Assert.Equal(0, _github.Calls);
         Assert.Empty(await _errands.All(default));
-        Assert.Empty(host.Held());
+        Assert.Empty(Held(host));
     }
 
     [Fact]
@@ -255,16 +268,107 @@ public class DeskTests
 
         await Desk(host, data).Round(default);
 
-        Assert.Contains("cafe", host.Held());
+        Assert.Contains("cafe", Held(host));
         Assert.Equal(ErrandState.Held, (await Record(_errands, "cafe")).State);
         var held = _github.Issues.Single(issue => issue.Number == cafe);
-        Assert.Equal(DeskTexts.From(data).Rejected.Nl, held.Comments[^1].Body);
+        var texts = DeskTexts.From(data);
+        Assert.Equal(Holding(texts, texts.Rejected), held.Comments[^1].Body);
         Assert.Contains("on-hold", held.Labels);
 
         var wine = await Record(_errands, "wine");
         Assert.NotEqual(cafe, wine.Issue);
         Assert.Equal(ErrandState.Asking, wine.State);
         Assert.StartsWith("/eddie ", Assert.Single(_github.Issues.Single(issue => issue.Number == wine.Issue).Comments).Body);
+    }
+
+    [Fact]
+    public async Task A_refused_command_on_an_issue_used_again_is_posted_the_next_round()
+    {
+        var data = Data();
+        await using var server = Server(new FakeStore(), data);
+        var host = await Asking(server);
+        var earlier = _github.Opened(host.OpenTask()!.TitleNl, App);
+        var old = _github.Add(earlier, App, "/eddie build wine, attempt 1");
+        _github.Add(earlier, Eddie, Result(old, "done"));
+
+        // GitHub refuses the new command on the issue used again: nothing is posted
+        var desk = Desk(host, data);
+        _github.Once("comment", after: false, () => throw new GitHubException(502, "/repos/x/issues/1/comments"));
+        await desk.Round(default);
+        Assert.Equal(2, _github.Issues.Single().Comments.Count);
+
+        // the next round posts it, and the old done never counts for it
+        await desk.Round(default);
+        await desk.Round(default);
+
+        var command = _github.Issues.Single().Comments[^1];
+        Assert.True(command.Id > old);
+        Assert.Equal((earlier, command.Id, ErrandState.Asking), Of(await Record(_errands, "wine")));
+    }
+
+    [Fact]
+    public async Task A_desk_hold_lasts_until_the_owner_releases_it()
+    {
+        var data = Data();
+        await using var server = Server(new FakeStore(), data);
+        var host = await Asking(server);
+        // the desk held wine before, on its issue; the village forgot (another server saved over it)
+        var issue = _github.Opened(host.OpenTask()!.TitleNl, App);
+        var asked = _github.Add(issue, App, "/eddie build wine, attempt 3");
+        var hold = _github.Add(issue, App, "@Codery-nl Na 3 pogingen is deze wens nog niet gelukt.");
+        await _errands.Save(new ErrandRecord("wine", issue, asked, ErrandState.Held, _clock.Now, 3, [], true, Baseline: hold), default);
+        var desk = Desk(host, data);
+
+        await desk.Round(default);
+        await desk.Round(default);
+
+        // held again, once, and not asked again
+        Assert.Contains("wine", Held(host));
+        Assert.Null(host.OpenTask());
+        Assert.Equal(1, HeldLines(host));
+        Assert.Equal(2, _github.Issues.Single().Comments.Count);
+
+        // a release by anyone else does nothing
+        _github.Add(issue, "stranger", "/village release");
+        await desk.Round(default);
+        Assert.Contains("wine", Held(host));
+        Assert.Equal(ErrandState.Held, (await Record(_errands, "wine")).State);
+
+        // Michael's release lets the wish go and asks Eddie again on the same issue, with a new count
+        _github.Add(issue, "Codery-nl", "/village release");
+        await desk.Round(default);
+
+        Assert.DoesNotContain("wine", Held(host));
+        var command = _github.Issues.Single().Comments[^1];
+        Assert.StartsWith("/eddie ", command.Body);
+        var errand = await Record(_errands, "wine");
+        Assert.Equal((issue, command.Id, ErrandState.Asking, 0), (errand.Issue, errand.Command, errand.State, errand.Failures));
+    }
+
+    [Fact]
+    public async Task A_refused_hold_comment_is_posted_the_next_round()
+    {
+        var data = Data();
+        await using var server = Server(new FakeStore(), data);
+        var host = await Asking(server);
+        var cafe = _github.Opened("Het dorp wenst een café", App);
+        var asked = _github.Add(cafe, App, "/eddie build cafe, attempt 1");
+        await _errands.Save(new ErrandRecord("cafe", cafe, asked, ErrandState.Live, _clock.Now, 0, [], false), default);
+        _github.Add(cafe, Eddie, Result(asked, "reverted"));
+
+        // GitHub refuses the hold comment: the village holds the café, but the record is not held until all is said
+        _github.Once("comment", after: false, () => throw new GitHubException(502, "/repos/x/issues/1/comments"), issue: cafe);
+        await Desk(host, data).Round(default);
+        Assert.Contains("cafe", Held(host));
+        Assert.Equal(ErrandState.Live, (await Record(_errands, "cafe")).State);
+
+        await Desk(host, data).Round(default);
+
+        var texts = DeskTexts.From(data);
+        var held = _github.Issues.Single(issue => issue.Number == cafe);
+        Assert.Equal(Holding(texts, texts.Rejected), Assert.Single(held.Comments, comment => comment.Author == App && !comment.Body.StartsWith('/')).Body);
+        Assert.Contains("on-hold", held.Labels);
+        Assert.Equal(ErrandState.Held, (await Record(_errands, "cafe")).State);
     }
 
     private static (int Issue, long Command, ErrandState State) Of(ErrandRecord errand) => (errand.Issue, errand.Command, errand.State);
@@ -286,13 +390,13 @@ public class DeskTests
 
         public int Calls { get; private set; }
 
-        private (string Call, bool After, Action Act)? _once;
+        private (string Call, bool After, Action Act, int? Issue)? _once;
 
         /// <summary>
         /// Runs <paramref name="act"/> once, at the next <paramref name="call"/> (<c>issue</c>, <c>comment</c> or <c>label</c>),
-        /// before the change or after it: to refuse it, lose its answer or stop the server.
+        /// on <paramref name="issue"/> when given, before the change or after it: to refuse it, lose its answer or stop the server.
         /// </summary>
-        public void Once(string call, bool after, Action act) => _once = (call, after, act);
+        public void Once(string call, bool after, Action act, int? issue = null) => _once = (call, after, act, issue);
 
         public int Opened(string title, string author, string label = "wish")
         {
@@ -310,18 +414,18 @@ public class DeskTests
         public Task<int> OpenIssue(string title, string body, IReadOnlyList<string> labels, CancellationToken cancellation)
         {
             Calls++;
-            At("issue", after: false);
+            At("issue", after: false, null);
             Issues.Add(new Issue(Issues.Count + 1, title, app, [.. labels], []));
-            At("issue", after: true);
+            At("issue", after: true, null);
             return Task.FromResult(Issues.Count);
         }
 
         public Task<long> Comment(int issue, string body, CancellationToken cancellation)
         {
             Calls++;
-            At("comment", after: false);
+            At("comment", after: false, issue);
             var id = Add(issue, app, body);
-            At("comment", after: true);
+            At("comment", after: true, issue);
             return Task.FromResult(id);
         }
 
@@ -334,9 +438,9 @@ public class DeskTests
         public Task Label(int issue, string label, CancellationToken cancellation)
         {
             Calls++;
-            At("label", after: false);
+            At("label", after: false, issue);
             Issues.Single(item => item.Number == issue).Labels.Add(label);
-            At("label", after: true);
+            At("label", after: true, issue);
             return Task.CompletedTask;
         }
 
@@ -347,9 +451,9 @@ public class DeskTests
                 [.. Issues.Where(issue => issue.Labels.Contains(label)).Select(issue => new IssueSummary(issue.Number, issue.Title, issue.Author))]);
         }
 
-        private void At(string call, bool after)
+        private void At(string call, bool after, int? issue)
         {
-            if (_once is not { } once || once.Call != call || once.After != after) return;
+            if (_once is not { } once || once.Call != call || once.After != after || (once.Issue is { } only && only != issue)) return;
             _once = null;
             once.Act();
         }

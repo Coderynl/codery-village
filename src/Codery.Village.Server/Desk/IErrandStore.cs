@@ -62,7 +62,7 @@ public sealed class PostgresErrandStore(string connectionString) : IErrandStore,
     public async Task<IReadOnlyList<ErrandRecord>> All(CancellationToken cancellation)
     {
         await using var command = _source.CreateCommand(
-            "SELECT wish, issue, command, state, since, failures, history::text, owner_mentioned, reappeared FROM errands");
+            "SELECT wish, issue, command, state, since, failures, history::text, owner_mentioned, reappeared, baseline FROM errands");
         await using var reader = await command.ExecuteReaderAsync(cancellation);
         var errands = new List<ErrandRecord>();
         while (await reader.ReadAsync(cancellation))
@@ -75,18 +75,19 @@ public sealed class PostgresErrandStore(string connectionString) : IErrandStore,
                 reader.GetInt32(5),
                 JsonSerializer.Deserialize<List<Failure>>(reader.GetString(6), Json) ?? [],
                 reader.GetBoolean(7),
-                reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8)));
+                reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8),
+                reader.GetInt64(9)));
         return errands;
     }
 
     public async Task Save(ErrandRecord errand, CancellationToken cancellation)
     {
         await using var command = _source.CreateCommand("""
-            INSERT INTO errands (wish, issue, command, state, since, failures, history, owner_mentioned, reappeared)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO errands (wish, issue, command, state, since, failures, history, owner_mentioned, reappeared, baseline)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             ON CONFLICT (wish) DO UPDATE SET issue = EXCLUDED.issue, command = EXCLUDED.command, state = EXCLUDED.state,
                 since = EXCLUDED.since, failures = EXCLUDED.failures, history = EXCLUDED.history,
-                owner_mentioned = EXCLUDED.owner_mentioned, reappeared = EXCLUDED.reappeared
+                owner_mentioned = EXCLUDED.owner_mentioned, reappeared = EXCLUDED.reappeared, baseline = EXCLUDED.baseline
             """);
         command.Parameters.Add(new NpgsqlParameter { Value = errand.Wish });
         command.Parameters.Add(new NpgsqlParameter { Value = errand.Issue });
@@ -102,6 +103,7 @@ public sealed class PostgresErrandStore(string connectionString) : IErrandStore,
             Value = (object?)errand.Reappeared?.ToUniversalTime() ?? DBNull.Value,
             NpgsqlDbType = NpgsqlDbType.TimestampTz,
         });
+        command.Parameters.Add(new NpgsqlParameter { Value = errand.Baseline });
         await command.ExecuteNonQueryAsync(cancellation);
     }
 
@@ -134,6 +136,12 @@ public sealed class PostgresErrandStore(string connectionString) : IErrandStore,
             {
                 await using var command = new NpgsqlCommand("SELECT pg_advisory_unlock($1)", connection) { Parameters = { new() { Value = RoundLock } } };
                 await command.ExecuteScalarAsync(CancellationToken.None);
+            }
+            catch
+            {
+                // a session that may still hold the lock never goes back to the pool
+                NpgsqlConnection.ClearPool(connection);
+                throw;
             }
             finally
             {

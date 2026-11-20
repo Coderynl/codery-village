@@ -48,10 +48,13 @@ public sealed class Wishes : IModule, IWishSource
     /// <summary>The wishes on hold: they are tallied and fulfilled as ever, but no task is written for them.</summary>
     public IReadOnlySet<string> Held => _held;
 
-    /// <summary>Puts a wish on hold. The open task for it is dropped, as <see cref="TaskClosed"/> with a <c>task-held</c> line.</summary>
+    /// <summary>
+    /// Puts a wish on hold. The open task for it is dropped, as <see cref="TaskClosed"/> with a <c>task-held</c> line.
+    /// A wish on hold already stays as it is, without a line.
+    /// </summary>
     public void Hold(string wish)
     {
-        _held.Add(wish);
+        if (!_held.Add(wish)) return;
         if (_task is not { } task || task.Wish != wish) return;
         _task = null;
         _village.Publish(new TaskClosed(_village.Clocks.Tick, wish));

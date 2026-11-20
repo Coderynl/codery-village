@@ -42,14 +42,17 @@ public class ErrandTests
         Live: new("Het draait."),
         Failed: new("Poging {attempt} lukte niet ({code})."),
         Held: new("@{owner} Drie keer niet gelukt."),
-        Answered: new("Al beantwoord."));
+        Answered: new("Al beantwoord."),
+        Release: new("Zet de wens weer aan met: /village release"));
 
     private static readonly ErrandFacts Facts = new(Eddie, App, Owner, "Coderynl/codery-village",
-        [new Wish("cafe", "een café", "a café", "cafe-label", 1), new Wish("park", "een park", "a park", "park", 1)], ["harbour", "bakery"],
-        new HashSet<string>());
+        [new Wish("cafe", "een café", "a café", "cafe-label", 1), new Wish("park", "een park", "a park", "park", 1)], ["harbour", "bakery"]);
 
     private static readonly OpenTask Cafe = new("cafe", 1, 100, 20, "Het dorp wenst een café", "The village wishes for a café", "Twaalf bewoners wensen een café.");
     private static readonly OpenTask Park = new("park", 2, 900, 18, "Het dorp wenst een park", "The village wishes for a park", "Tien bewoners wensen een park.");
+
+    // the comment of a hold: the reason, and how Michael releases the wish
+    private static PostComment Holding(string line) => new($"{line}\n\nZet de wens weer aan met: /village release");
 
     private const string FirstCommand = "/eddie build cafe-label (a café), attempt 1; before: none; live: harbour, bakery";
 
@@ -140,7 +143,7 @@ public class ErrandTests
         var history = new[] { new Failure("timeout", Issue, Start.AddDays(-2)), new Failure("eddie-failed", $"{Issue}#issuecomment-90", Start.AddDays(-1)) };
         var held = Next(Asking(2, history), Cafe, [Command(), Result(201, 100, "failed")], Start.AddHours(1));
 
-        Assert.Equal<DeskAction>([new HoldWish("cafe"), new PostComment("@Codery-nl Drie keer niet gelukt."), new AddLabel("on-hold")], held.Actions);
+        Assert.Equal<DeskAction>([new HoldWish("cafe"), Holding("@Codery-nl Drie keer niet gelukt."), new AddLabel("on-hold")], held.Actions);
         Assert.Equal((ErrandState.Held, 3, 3), (held.Errand!.State, held.Errand.Failures, held.Errand.History.Count));
 
         // held: the errand asks nothing more, also when the land wishes something else
@@ -195,12 +198,12 @@ public class ErrandTests
 
         var held = Next(waitingForReject, Cafe, comments, Start.AddHours(2));
 
-        Assert.Equal<DeskAction>([new HoldWish("cafe"), new PostComment("Teruggedraaid."), new AddLabel("on-hold")], held.Actions);
+        Assert.Equal<DeskAction>([new HoldWish("cafe"), Holding("Teruggedraaid."), new AddLabel("on-hold")], held.Actions);
         Assert.Equal(ErrandState.Held, held.Errand!.State);
 
         // Eddie may not do it at all: held too, and Michael is told
         var notAllowed = Next(Asking(), Cafe, [Command(), Result(150, 100, "not_allowed")], Start.AddHours(1));
-        Assert.Equal<DeskAction>([new HoldWish("cafe"), new PostComment("@Codery-nl Dit mag Eddie niet.")], notAllowed.Actions);
+        Assert.Equal<DeskAction>([new HoldWish("cafe"), Holding("@Codery-nl Dit mag Eddie niet.")], notAllowed.Actions);
         Assert.Equal(ErrandState.Held, notAllowed.Errand!.State);
     }
 
@@ -228,22 +231,33 @@ public class ErrandTests
 
         var held = Next(live, null, comments, Start.AddDays(1));
 
-        Assert.Equal<DeskAction>([new HoldWish("cafe"), new PostComment("Teruggedraaid."), new AddLabel("on-hold")], held.Actions);
+        Assert.Equal<DeskAction>([new HoldWish("cafe"), Holding("Teruggedraaid."), new AddLabel("on-hold")], held.Actions);
         Assert.Equal(ErrandState.Held, held.Errand!.State);
     }
 
     [Fact]
-    public void A_released_wish_is_asked_again_on_the_same_issue()
+    public void A_held_wish_is_asked_again_on_the_same_issue_once_the_owner_releases_it()
     {
-        var history = new[] { new Failure("timeout", Issue, Start), new Failure("timeout", Issue, Start), new Failure("timeout", Issue, Start) };
-        var held = Asking(3, history) with { State = ErrandState.Held, OwnerMentioned = true };
+        var history = new[] { new Failure("timeout", Issue, Start), new Failure("timeout", Issue, Start) };
+        List<IssueComment> comments = [Command(), ByOwner(150, "/village release"), Result(160, 100, "failed")];
+        var held = Next(Asking(2, history), Cafe, comments, Start.AddHours(1)).Errand!;
+        Assert.Equal(ErrandState.Held, held.State);
 
-        // Michael released the wish, and the land wishes it again
-        var again = Next(held, Cafe, [Command()], Start.AddDays(5));
+        // a release from before the hold, or by anyone else, does nothing
+        List<IssueComment> stranger = [.. comments, ByOwner(170, "/village release", owner: "someone-else")];
+        Assert.Empty(Next(held, Cafe, stranger, Start.AddDays(1)).Actions);
 
-        Assert.Equal<DeskAction>([new PostCommand(FirstCommand)], again.Actions);
+        // Michael's release lets the wish go and starts a new count on the same issue; an old result never counts again
+        var again = Next(held, null, [.. stranger, ByOwner(180, "/village release")], Start.AddDays(2));
+
+        Assert.Equal<DeskAction>([new ReleaseWish("cafe"), new PostCommand(FirstCommand)], again.Actions);
         var errand = again.Errand!;
-        Assert.Equal((7, ErrandState.Asking, 0, 0, false), (errand.Issue, errand.State, errand.Failures, errand.History.Count, errand.OwnerMentioned));
+        Assert.Equal((7, 0L, ErrandState.Asking, 0, 0, false), (errand.Issue, errand.Command, errand.State, errand.Failures, errand.History.Count, errand.OwnerMentioned));
+
+        // released while another release serves the wish: it is answered, not asked
+        var answered = Next(held, null, [.. comments, ByOwner(180, "/village release")], Start.AddDays(2), wishLive: true);
+        Assert.Equal<DeskAction>([new ReleaseWish("cafe"), new PostComment("Al beantwoord.")], answered.Actions);
+        Assert.Equal(ErrandState.Closed, answered.Errand!.State);
     }
 
     [Fact]
@@ -281,7 +295,7 @@ public class ErrandTests
 
         var held = Next(live, Cafe, [Command(), Result(150, 100, "done")], Start.AddDays(1).AddHours(6));
 
-        Assert.Equal<DeskAction>([new HoldWish("cafe"), new PostComment("@Codery-nl Drie keer niet gelukt."), new AddLabel("on-hold")], held.Actions);
+        Assert.Equal<DeskAction>([new HoldWish("cafe"), Holding("@Codery-nl Drie keer niet gelukt."), new AddLabel("on-hold")], held.Actions);
         Assert.Equal((ErrandState.Held, 3, "release-gone"), (held.Errand!.State, held.Errand.Failures, held.Errand.History[^1].Code));
     }
 
@@ -307,7 +321,7 @@ public class ErrandTests
 
         var held = Next(delivered, null, comments, Start.AddHours(1));
 
-        Assert.Equal<DeskAction>([new HoldWish("cafe"), new PostComment("Teruggedraaid."), new AddLabel("on-hold")], held.Actions);
+        Assert.Equal<DeskAction>([new HoldWish("cafe"), Holding("Teruggedraaid."), new AddLabel("on-hold")], held.Actions);
         Assert.Equal(ErrandState.Held, held.Errand!.State);
     }
 
@@ -346,7 +360,7 @@ public class ErrandTests
 
         var held = Next(live, Park, comments, Start.AddDays(1));
 
-        Assert.Equal<DeskAction>([new HoldWish("cafe"), new PostComment("Teruggedraaid."), new AddLabel("on-hold")], held.Actions);
+        Assert.Equal<DeskAction>([new HoldWish("cafe"), Holding("Teruggedraaid."), new AddLabel("on-hold")], held.Actions);
         Assert.Equal(("cafe", ErrandState.Held), (held.Errand!.Wish, held.Errand.State));
     }
 
@@ -363,15 +377,6 @@ public class ErrandTests
         // closed: never acted on again
         List<IssueComment> later = [.. comments, ByOwner(180, "/eddie reject"), Result(190, 180, "reverted")];
         Assert.Equal(closed.Errand, Next(closed.Errand, Cafe, later, Start.AddDays(3)).Errand);
-    }
-
-    [Fact]
-    public void A_wish_still_held_is_not_asked_again()
-    {
-        var held = Asking(3) with { State = ErrandState.Held };
-        var facts = Facts with { Held = new HashSet<string> { "cafe" } };
-
-        Assert.Empty(Next(held, Cafe, [Command()], Start.AddHours(1), facts: facts).Actions);
     }
 
     [Fact]
@@ -470,6 +475,7 @@ public class ErrandTests
     {
         var texts = DeskTexts.From(VillageSetup.Data([]));
 
+        Assert.Contains("/village release", texts.Release.Nl);
         Assert.Contains("{label}", texts.Assignment.En);
         Assert.Contains("@{owner}", texts.Held.Nl);
     }

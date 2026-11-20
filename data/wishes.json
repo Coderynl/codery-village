@@ -23,7 +23,8 @@
     "live": { "nl": "De release draait: het dorp kent nu wat deze wens vraagt. Het issue blijft open voor je oordeel." },
     "failed": { "nl": "Poging {attempt} van 3 is niet gelukt ({code}). Over 6 uur vraagt het dorp het opnieuw." },
     "held": { "nl": "@{owner} Na 3 pogingen is deze wens nog niet gelukt. Het dorp vraagt er voorlopig niet meer om." },
-    "answered": { "nl": "Een andere release brengt deze wens al. Het dorp vraagt hier niet meer om." }
+    "answered": { "nl": "Een andere release brengt deze wens al. Het dorp vraagt hier niet meer om." },
+    "release": { "nl": "Zet de wens weer aan met een reactie: /village release" }
   },
   "wishes": [
     { "id": "cafe", "nl": "een café", "en": "a café", "label": "cafe", "weight": 1,

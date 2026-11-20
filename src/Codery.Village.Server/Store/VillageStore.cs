@@ -79,7 +79,8 @@ public sealed class PostgresVillageStore(string connectionString) : IVillageStor
                 failures        integer NOT NULL,
                 history         jsonb NOT NULL,
                 owner_mentioned boolean NOT NULL,
-                reappeared      timestamptz
+                reappeared      timestamptz,
+                baseline        bigint NOT NULL DEFAULT 0
             );
             """);
         await command.ExecuteNonQueryAsync(cancellation);
