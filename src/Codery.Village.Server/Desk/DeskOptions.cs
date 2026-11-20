@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+
 namespace Codery.Village.Server.Desk;
 
 /// <summary>Set under <c>Village:Desk</c>; the switch itself is <c>Village:Tasks:Enabled</c>.</summary>
@@ -17,5 +20,13 @@ public sealed record DeskOptions
     {
         var options = configuration.GetSection("Village:Desk").Get<DeskOptions>() ?? new DeskOptions();
         return options with { Enabled = configuration.GetValue<bool>("Village:Tasks:Enabled") };
+    }
+
+    // the key never shows up in a log or an error: only whether there is one
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append(CultureInfo.InvariantCulture,
+            $"Enabled = {Enabled}, Repository = {Repository}, AppId = {AppId}, PrivateKey = {(string.IsNullOrEmpty(PrivateKey) ? "none" : "set")}, EddieLogin = {EddieLogin}, Owner = {Owner}");
+        return true;
     }
 }

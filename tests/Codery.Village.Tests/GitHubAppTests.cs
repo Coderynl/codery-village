@@ -15,7 +15,7 @@ public class GitHubAppTests
         public override DateTimeOffset GetUtcNow() => Now;
     }
 
-    private sealed record Seen(HttpMethod Method, string Path, string? Authorization, string Body);
+    private sealed record Seen(HttpMethod Method, string Host, string Path, string? Authorization, string Body);
 
     private sealed class FakeGitHub(Func<Seen, HttpResponseMessage> answer) : HttpMessageHandler
     {
@@ -24,7 +24,7 @@ public class GitHubAppTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellation)
         {
             var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellation);
-            var seen = new Seen(request.Method, request.RequestUri!.PathAndQuery, request.Headers.Authorization?.ToString(), body);
+            var seen = new Seen(request.Method, request.RequestUri!.Host, request.RequestUri!.PathAndQuery, request.Headers.Authorization?.ToString(), body);
             Requests.Add(seen);
             return answer(seen);
         }
@@ -56,7 +56,7 @@ public class GitHubAppTests
     });
 
     private GitHubApp App(FakeGitHub handler) =>
-        new(new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com") }, Options(), _clock);
+        new(new HttpClient(handler), Options(), _clock);
 
     [Fact]
     public async Task Opening_an_issue_gets_a_token_once_and_sends_it()
@@ -136,6 +136,66 @@ public class GitHubAppTests
         Assert.Equal(422, thrown.Status);
         Assert.Equal("/repos/Coderynl/codery-village/issues/5/labels", thrown.Path);
         Assert.DoesNotContain("secret", thrown.Message);
+    }
+
+    [Fact]
+    public async Task A_next_link_never_takes_the_token_to_another_host()
+    {
+        var handler = GitHub(seen => seen.Path.StartsWith("//")
+            ? Json("[]")
+            : Page("""[{"id": 1, "user": {"login": "a"}, "body": "one", "created_at": "2026-11-20T10:00:00Z"}]""",
+                "<https://api.github.com//evil.com/x?page=2>; rel=\"next\""));
+
+        await App(handler).Comments(5, default);
+
+        Assert.All(handler.Requests, r => Assert.Equal("api.github.com", r.Host));
+    }
+
+    [Fact]
+    public async Task A_next_link_to_another_host_is_not_followed()
+    {
+        var handler = GitHub(seen => Page("[]", "<https://evil.com/x?page=2>; rel=\"next\""));
+
+        await Assert.ThrowsAsync<GitHubException>(() => App(handler).Comments(5, default));
+
+        Assert.All(handler.Requests, r => Assert.Equal("api.github.com", r.Host));
+    }
+
+    [Fact]
+    public void The_private_key_does_not_show_in_ToString()
+    {
+        var text = Options().ToString();
+
+        Assert.DoesNotContain("PRIVATE KEY", text);
+        Assert.DoesNotContain(_key.ExportRSAPrivateKeyPem().Split((char)10)[1], text);
+    }
+
+    [Fact]
+    public async Task A_rejected_cached_token_is_replaced_and_the_call_retried()
+    {
+        var rejected = false;
+        var handler = GitHub(seen =>
+        {
+            if (seen.Authorization == "Bearer ghs_1" && !rejected) { rejected = true; return Json("{}", HttpStatusCode.Unauthorized); }
+            return Json("""{"id": 9}""");
+        });
+        var app = App(handler);
+
+        var id = await app.Comment(1, "x", default);
+
+        Assert.Equal(9, id);
+        Assert.Equal(2, _tokens);
+        Assert.Equal("Bearer ghs_2", handler.Requests.Last().Authorization);
+    }
+
+    [Fact]
+    public async Task A_comment_from_a_deleted_account_has_no_author()
+    {
+        var handler = GitHub(seen => Json("""[{"id": 1, "user": null, "body": "one", "created_at": "2026-11-20T10:00:00Z"}]"""));
+
+        var comments = await App(handler).Comments(5, default);
+
+        Assert.Equal("", comments.Single().Author);
     }
 
     private static HttpResponseMessage Page(string json, string link)

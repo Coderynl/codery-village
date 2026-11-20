@@ -17,6 +17,8 @@ public sealed class GitHubException(int status, string path) : Exception($"GitHu
 /// <summary>The village as a GitHub App: signs a JWT, trades it for an installation token and keeps that until shortly before it expires.</summary>
 public sealed partial class GitHubApp(HttpClient http, DeskOptions options, TimeProvider time) : IVillageGitHub
 {
+    private const string Api = "https://api.github.com";
+    private const int MaxPages = 50;
     private static readonly TimeSpan RenewBefore = TimeSpan.FromMinutes(5);
 
     private readonly SemaphoreSlim _tokenLock = new(1, 1);
@@ -38,19 +40,20 @@ public sealed partial class GitHubApp(HttpClient http, DeskOptions options, Time
     public async Task<IReadOnlyList<IssueComment>> Comments(int issue, CancellationToken cancellation)
     {
         var comments = new List<IssueComment>();
-        string? next = $"/repos/{options.Repository}/issues/{issue}/comments?per_page=100";
-        while (next is not null)
+        var path = $"/repos/{options.Repository}/issues/{issue}/comments?per_page=100";
+        var next = new Uri(Api + path);
+        for (var pages = 0; next is not null && pages < MaxPages; pages++)
         {
-            using var request = Request(HttpMethod.Get, next, await Token(cancellation));
-            using var response = await http.SendAsync(request, cancellation);
-            using var page = await Read(response, next, cancellation);
+            using var response = await Authorized(HttpMethod.Get, next, null, cancellation);
+            using var page = await Read(response, path, cancellation);
             foreach (var item in page.RootElement.EnumerateArray())
                 comments.Add(new IssueComment(
                     item.GetProperty("id").GetInt64(),
-                    item.GetProperty("user").GetProperty("login").GetString() ?? "",
+                    item.TryGetProperty("user", out var user) && user.ValueKind == JsonValueKind.Object
+                        ? user.GetProperty("login").GetString() ?? "" : "",
                     item.GetProperty("body").GetString() ?? "",
                     item.GetProperty("created_at").GetDateTimeOffset()));
-            next = NextPage(response);
+            next = NextPage(response, path);
         }
         return comments;
     }
@@ -60,12 +63,15 @@ public sealed partial class GitHubApp(HttpClient http, DeskOptions options, Time
         using var answer = await Post($"/repos/{options.Repository}/issues/{issue}/labels", new { labels = new[] { label } }, cancellation);
     }
 
-    /// <summary>The path and query of <c>rel="next"</c> in the <c>Link</c> header, or null at the last page.</summary>
-    private static string? NextPage(HttpResponseMessage response)
+    /// <summary>The <c>rel="next"</c> link of the <c>Link</c> header, or null at the last page. Only GitHub's own API is followed: the token goes along.</summary>
+    private static Uri? NextPage(HttpResponseMessage response, string path)
     {
         if (!response.Headers.TryGetValues("Link", out var values)) return null;
         var match = NextLink().Match(string.Join(",", values));
-        return match.Success ? new Uri(match.Groups[1].Value).PathAndQuery : null;
+        if (!match.Success) return null;
+        if (!Uri.TryCreate(match.Groups[1].Value, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps || uri.Host != "api.github.com")
+            throw new GitHubException(0, path);
+        return uri;
     }
 
     [GeneratedRegex("<([^>]+)>\\s*;\\s*rel=\"next\"")]
@@ -73,10 +79,29 @@ public sealed partial class GitHubApp(HttpClient http, DeskOptions options, Time
 
     private async Task<JsonDocument> Post(string path, object body, CancellationToken cancellation)
     {
-        using var request = Request(HttpMethod.Post, path, await Token(cancellation));
-        request.Content = JsonContent.Create(body);
-        using var response = await http.SendAsync(request, cancellation);
+        using var response = await Authorized(HttpMethod.Post, new Uri(Api + path), body, cancellation);
         return await Read(response, path, cancellation);
+    }
+
+    /// <summary>A call with the installation token. A 401 means the cached token is no good (revoked): drop it and try once with a new one.</summary>
+    private async Task<HttpResponseMessage> Authorized(HttpMethod method, Uri uri, object? body, CancellationToken cancellation)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            using var request = Request(method, uri, await Token(cancellation));
+            if (body is not null) request.Content = JsonContent.Create(body);
+            var response = await http.SendAsync(request, cancellation);
+            if (response.StatusCode != System.Net.HttpStatusCode.Unauthorized || attempt > 0) return response;
+            response.Dispose();
+            await Forget(cancellation);
+        }
+    }
+
+    private async Task Forget(CancellationToken cancellation)
+    {
+        await _tokenLock.WaitAsync(cancellation);
+        _token = null;
+        _tokenLock.Release();
     }
 
     private static async Task<JsonDocument> Read(HttpResponseMessage response, string path, CancellationToken cancellation)
@@ -85,9 +110,9 @@ public sealed partial class GitHubApp(HttpClient http, DeskOptions options, Time
         return await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellation), cancellationToken: cancellation);
     }
 
-    private static HttpRequestMessage Request(HttpMethod method, string path, string bearer)
+    private static HttpRequestMessage Request(HttpMethod method, Uri uri, string bearer)
     {
-        var request = new HttpRequestMessage(method, path);
+        var request = new HttpRequestMessage(method, uri);
         request.Headers.Accept.ParseAdd("application/vnd.github+json");
         request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
         request.Headers.UserAgent.ParseAdd("codery-village");
@@ -114,7 +139,7 @@ public sealed partial class GitHubApp(HttpClient http, DeskOptions options, Time
 
     private async Task<JsonDocument> AsApp(HttpMethod method, string path, CancellationToken cancellation)
     {
-        using var request = Request(method, path, Jwt());
+        using var request = Request(method, new Uri(Api + path), Jwt());
         using var response = await http.SendAsync(request, cancellation);
         return await Read(response, path, cancellation);
     }
