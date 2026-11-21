@@ -17,7 +17,10 @@ public sealed partial class Decency(TalkServerSettings settings)
     private readonly Words _en = new(settings.Words.En);
 
     /// <summary>The first listed word in the lines, or null when there is none.</summary>
-    public string? Forbidden(TalkLines lines) => _nl.FirstIn(lines.Nl) ?? _en.FirstIn(lines.En);
+    public string? Forbidden(TalkLines lines) => Forbidden(string.Join(' ', lines.Nl), string.Join(' ', lines.En));
+
+    /// <summary>The first listed word in a Dutch and an English text, or null when there is none; an empty text has none.</summary>
+    public string? Forbidden(string nl, string en) => _nl.FirstIn([nl]) ?? _en.FirstIn([en]);
 
     /// <summary>The call that asks the model for its judgement on the lines.</summary>
     public ModelCall CheckCall(TalkLines lines) => new(

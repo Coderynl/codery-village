@@ -10,15 +10,15 @@
     "claude-haiku-5-5": { "inputPerMillion": 0.10, "outputPerMillion": 0.50 }
   },
   "prompt": {
-    "conversation": "You write very short conversations between two residents of a village on a website. The village is fictional. It goes through the ages, from prehistory to the future, so keep the lines timeless: no machines, money or places the facts do not name. You get only these facts: the two names, their phase of life, their work, a few traits that stand out, and the topic. Do not invent other people, places or events. Write two to four short lines in Dutch, and the same conversation in two to four short lines in English. Each line starts with the speaker's name and a colon, for example 'Anna: ...'. Each line is at most 100 characters. Keep it friendly, light and everyday. Life and death belong to the village and may be named plainly (a hunt, an illness, a loss), but never with blood, gore or cruelty. Never write about sexual content, religion, discrimination, alcohol or drugs, and never about real politics, real people, real places or real brands. Answer only with JSON: {\"nl\": [lines], \"en\": [lines]}.",
-    "check": "You check a few lines of dialogue for a family-friendly website about a fictional village. Life and death belong to the village: a hunt, an illness or a death may be named plainly and is ok. Answer 'refuse' when the lines show blood, gore or cruelty, or mention or hint at sexual content, religion, discrimination, alcohol or drugs, real politics, real people, real places or real brands, or when they are rude, unkind or not about everyday village life. Otherwise answer 'ok'. Give a short reason in English. Answer only with JSON: {\"verdict\": \"ok\" or \"refuse\", \"reason\": \"...\"}."
+    "conversation": "You write very short conversations between two residents of a village on a website. The village is fictional. It goes through the ages, from prehistory to the future, so keep the lines timeless: no machines, money or places the facts do not name. You get only these facts: the two names, their phase of life, their work, a few traits that stand out, and the topic. Do not invent other people, places or events. Write two to four short lines in Dutch, and the same conversation in two to four short lines in English. Each line starts with the speaker's name and a colon, for example 'Anna: ...'. Each line is at most 100 characters. Keep it friendly, light and everyday. Life and death belong to the village and may be named plainly (a hunt, an illness, a loss), but never with blood, gore or cruelty. Never write about sexual content, religion, discrimination, drunkenness or drugs (wine with a meal is fine), and never about real politics, real people, real places or real brands. Answer only with JSON: {\"nl\": [lines], \"en\": [lines]}.",
+    "check": "You check a few lines of dialogue for a family-friendly website about a fictional village. Life and death belong to the village: a hunt, an illness or a death may be named plainly and is ok. Answer 'refuse' when the lines show blood, gore or cruelty, or mention or hint at sexual content, religion, discrimination, drunkenness or drugs (wine with a meal is fine), real politics, real people, real places or real brands, or when they are rude, unkind or not about everyday village life. Otherwise answer 'ok'. Give a short reason in English. Answer only with JSON: {\"verdict\": \"ok\" or \"refuse\", \"reason\": \"...\"}."
   },
   "words": {
     "nl": [
       "bloed*", "pijn",
       "seks*", "sexy", "naakt", "bloot", "kus", "kussen", "verliefd",
       "god", "goden", "kerk*", "bid", "bidden", "gebed*", "bijbel", "koran", "heilig*", "duivel*", "hel",
-      "dronken", "bier", "wijn", "drugs", "joint",
+      "dronken", "bier", "drugs", "joint",
       "lelijk", "dom", "stom", "idioot", "haat", "haten",
       "verkiezing*", "partij", "politiek*", "minister*", "koning*", "president*"
     ],
@@ -26,7 +26,7 @@
       "blood*", "hurt", "pain",
       "sex*", "naked", "nude", "kiss*", "lover*",
       "god", "gods", "church*", "pray*", "bible", "quran", "holy", "devil*", "hell",
-      "drunk", "beer", "wine", "drugs", "weed",
+      "drunk", "beer", "drugs", "weed",
       "ugly", "stupid", "idiot*", "hate", "hates",
       "election*", "party", "politic*", "minister*", "king", "kings", "president*"
     ]

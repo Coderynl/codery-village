@@ -36,6 +36,9 @@ public static class VillageSetup
     /// <summary>The data the live village runs on: the base in <see cref="Folder"/> with every release in its <c>releases</c> folder.</summary>
     public static DataSet Live() => DataFolder.LoadLive(Folder);
 
+    /// <summary>The ids of the releases the live village runs on, in load order.</summary>
+    public static IReadOnlyList<string> Releases() => DataFolder.Releases(Folder);
+
     public static IslandMap Map() => MapText.Parse(File.ReadAllText(Path.Combine(Folder, "map.txt")));
 
     /// <summary>A new village, started.</summary>

@@ -23,7 +23,11 @@ public static class DataFolder
     /// does not change what the village knows.
     /// </summary>
     public static DataSet LoadLive(string folder) =>
-        Load(folder, Directory.EnumerateFiles(Path.Combine(folder, "releases"), "*.json", SearchOption.TopDirectoryOnly)
-            .Select(path => Path.Combine("releases", Path.GetFileName(path)))
-            .Order(StringComparer.Ordinal));
+        Load(folder, Releases(folder).Select(id => Path.Combine("releases", id + ".json")));
+
+    /// <summary>The ids of the releases in the <c>releases</c> folder: the file names without <c>.json</c>, in the order they load.</summary>
+    public static IReadOnlyList<string> Releases(string folder) =>
+        [.. Directory.EnumerateFiles(Path.Combine(folder, "releases"), "*.json", SearchOption.TopDirectoryOnly)
+            .Select(path => Path.GetFileNameWithoutExtension(path))
+            .Order(StringComparer.Ordinal)];
 }

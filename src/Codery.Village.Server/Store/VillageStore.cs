@@ -32,7 +32,7 @@ public interface IVillageStore
     Task SaveTalkSpent(DateOnly day, decimal spent, CancellationToken cancellation);
 }
 
-/// <summary>The village in Postgres: four tables, made by the store itself when they are not there.</summary>
+/// <summary>The village in Postgres: four tables, and the desk's <c>errands</c>, made by the store itself when they are not there.</summary>
 public sealed class PostgresVillageStore(string connectionString) : IVillageStore, IAsyncDisposable, IDisposable
 {
     /// <summary>How many saves of a village are kept: the latest.</summary>
@@ -69,6 +69,18 @@ public sealed class PostgresVillageStore(string connectionString) : IVillageStor
             CREATE TABLE IF NOT EXISTS talk_budget (
                 day   date PRIMARY KEY,
                 spent numeric NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS errands (
+                wish            text PRIMARY KEY,
+                issue           integer NOT NULL,
+                command         bigint NOT NULL,
+                state           text NOT NULL,
+                since           timestamptz NOT NULL,
+                failures        integer NOT NULL,
+                history         jsonb NOT NULL,
+                owner_mentioned boolean NOT NULL,
+                reappeared      timestamptz,
+                baseline        bigint NOT NULL DEFAULT 0
             );
             """);
         await command.ExecuteNonQueryAsync(cancellation);

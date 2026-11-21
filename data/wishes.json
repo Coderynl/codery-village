@@ -9,7 +9,22 @@
   },
   "log": {
     "task-opened": { "nl": "Het dorp schrijft een taak uit voor Eddie: {subject}.", "en": "The village writes a task for Eddie: {subject}." },
-    "task-closed": { "nl": "De taak is klaar: {subject} kan er nu komen.", "en": "The task is done: {subject} can come now." }
+    "task-closed": { "nl": "De taak is klaar: {subject} kan er nu komen.", "en": "The task is done: {subject} can come now." },
+    "task-held": { "nl": "Het dorp vraagt voorlopig niet meer om {subject}.", "en": "The village stops asking for {subject} for now." }
+  },
+  "desk": {
+    "issueNote": { "nl": "Deze taak schreef het dorp zelf. Eddie bouwt er een release voor, en het dorp volgt hier hoe het gaat." },
+    "assignment": { "en": "Build one release file in data/releases/ that serves the wish {label} (\"{wish}\"), following EDDIE.md. This is attempt {attempt} of 3; the earlier attempts: {history}. The releases live now: {releases}." },
+    "attempt": { "en": "attempt {attempt}: {code} {link}" },
+    "none": { "en": "none" },
+    "waiting": { "nl": "@{owner} Eddie wacht op jou. Komt er binnen 3 dagen geen antwoord, dan telt deze poging als mislukt." },
+    "rejected": { "nl": "De release is teruggedraaid. Het dorp vraagt voorlopig niet meer om deze wens." },
+    "notAllowed": { "nl": "@{owner} Eddie mag deze opdracht niet doen. Kijk of de App van het dorp in zijn AllowedUsers staat. Na 3 dagen telt deze poging als mislukt en vraagt het dorp het opnieuw." },
+    "live": { "nl": "De release draait: het dorp kent nu wat deze wens vraagt. Het issue blijft open voor je oordeel." },
+    "failed": { "nl": "Poging {attempt} van 3 is niet gelukt ({code}). Over 6 uur vraagt het dorp het opnieuw." },
+    "held": { "nl": "@{owner} Na 3 pogingen is deze wens nog niet gelukt. Het dorp vraagt er voorlopig niet meer om." },
+    "answered": { "nl": "Een andere release brengt deze wens al. Het dorp vraagt hier niet meer om." },
+    "release": { "nl": "Zet de wens weer aan met een reactie: /village release" }
   },
   "wishes": [
     { "id": "cafe", "nl": "een café", "en": "a café", "label": "cafe", "weight": 1,

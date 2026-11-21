@@ -46,7 +46,8 @@ namespace Codery.Village.Modules.Work;
 /// done again that day, and with the food nowhere in store nobody walks. The purchase is booked at midnight all the same, also
 /// for a household with nobody to send. Who leaves the
 /// village takes his money with him; the island books it the tick after. Eddie works
-/// in his workshop for nothing: he is outside the economy.
+/// in his workshop for nothing: he is outside the economy. A save that names a material, a role or a yield the data no
+/// longer has (its release was taken away) loads without it: the stock of it goes, and so does a job in that role.
 /// </summary>
 public sealed class Work : IModule, IJobs, IStock
 {
@@ -57,6 +58,8 @@ public sealed class Work : IModule, IJobs, IStock
     private const string Food = "food";
     // the block of a rhythm in which a shift works
     private const string WorkBlock = "work";
+    // a save names something the data no longer has; the sentence is Building's
+    private const string Forgotten = "forgotten";
 
     private readonly Dictionary<int, Treasury> _treasuries = [];
     // per island, its stores
@@ -999,14 +1002,16 @@ public sealed class Work : IModule, IJobs, IStock
 
     // ── saving ──
 
-    public JsonNode Save() =>
-        JsonSerializer.SerializeToNode(new SavedWork(
+    public JsonNode Save()
+    {
+        var standing = _village?.Find<IStructures>()?.Standing().ToDictionary(structure => structure.Id, structure => structure.Blueprint) ?? [];
+        return JsonSerializer.SerializeToNode(new SavedWork(
             _day,
             [.. _treasuries.OrderBy(item => item.Key).Select(item => new SavedIsland(item.Key, item.Value.Cash, item.Value.Subsidy, item.Value.Upkeep,
                 item.Value.Spent, _wages.GetValueOrDefault(item.Key), null, item.Value.Departed,
                 _shopping.TryGetValue(item.Key, out var shopping) ? shopping : null,
                 [.. StoresOf(item.Key).All.Select(store => new SavedStore(store.Store, store.Stock))]))],
-            [.. _jobs.Select(job => new SavedJob(job.Key, job.Value, _owed.GetValueOrDefault(job.Key), _since.GetValueOrDefault(job.Key)))],
+            [.. _jobs.Select(job => new SavedJob(job.Key, job.Value, _owed.GetValueOrDefault(job.Key), _since.GetValueOrDefault(job.Key), RoleAt(job.Value, standing)))],
             [.. _vacant.OrderBy(item => (item.Key.Island, item.Key.Structure, item.Key.Job, item.Key.Index)).Select(item => new SavedVacancy(item.Key, item.Value))],
             [.. _batches.Select(batch => new SavedBatch(batch.Key, batch.Value))],
             [.. _felled.OrderBy(item => (item.Key.Row, item.Key.Col)).Select(item => new SavedFelled(item.Key, item.Value))],
@@ -1019,11 +1024,29 @@ public sealed class Work : IModule, IJobs, IStock
             _fetchQuarter != 0 ? _fetchQuarter : null,
             _atHome.Count > 0 ? [.. _atHome] : null,
             _moved != default ? _moved : null), SaveJson.Options)!;
+    }
+
+    // the role of a seat in a building, as its blueprint has it: saved with the job, so a load knows the roles a release brought
+    private string? RoleAt(Seat seat, Dictionary<int, string> standing) =>
+        standing.TryGetValue(seat.Structure, out var id) && _blueprints.TryGetValue(id, out var blueprint) && blueprint.Jobs is { } jobs && seat.Job < jobs.Count
+            ? jobs[seat.Job].Role
+            : null;
 
     public void Load(ModuleContext village, JsonNode data, int version)
     {
         Read(village);
         var saved = data.Deserialize<SavedWork>(SaveJson.Options) ?? throw new InvalidDataException("The work part of the save is empty.");
+        // what the save names that the data no longer has, from a release that was taken away: it goes, once in the log
+        var catalog = village.Data.Section<Catalog>("catalog");
+        var materials = catalog.Materials.Select(material => material.Id).ToHashSet();
+        var roles = catalog.Roles.Select(role => role.Id).ToHashSet();
+        var forgotten = new SortedSet<string>(StringComparer.Ordinal);
+        bool Known(string id, IReadOnlySet<string> known)
+        {
+            if (known.Contains(id)) return true;
+            forgotten.Add(id);
+            return false;
+        }
         _day = saved.Day;
         _treasuries.Clear();
         _stores.Clear();
@@ -1038,8 +1061,11 @@ public sealed class Work : IModule, IJobs, IStock
         _earned.Clear();
         _stood.Clear();
         _fetch.Clear();
-        // a save from before nature ran out has every tile full; up to version 3 every tile was of its ground's own layer
-        _nature = saved.Nature is { } nature ? new Nature(_natureSettings, nature.Day, nature.Tiles, _layers) : new Nature(_natureSettings, saved.Day, layers: _layers);
+        // a save from before nature ran out has every tile full; up to version 3 every tile was of its ground's own layer;
+        // a tile of a layer the data no longer has is left out
+        var layers = _layers.Keys.ToHashSet();
+        var tiles = saved.Nature?.Tiles.Where(tile => tile.Layer is not { } layer || Known(layer, layers)).ToList();
+        _nature = saved.Nature is { } nature ? new Nature(_natureSettings, nature.Day, tiles, _layers) : new Nature(_natureSettings, saved.Day, layers: _layers);
         foreach (var island in village.Map.Islands)
         {
             _treasuries[island.Id] = new Treasury();
@@ -1051,14 +1077,18 @@ public sealed class Work : IModule, IJobs, IStock
             _wages[island.Id] = island.Wages;
             var stores = StoresOf(island.Id);
             // a save from when an island had one stock: it lies where the island gathers, until it is spread
-            foreach (var (material, amount) in island.Stock ?? new Dictionary<string, int>()) stores.Add(Stores.Gathering, material, amount);
+            foreach (var (material, amount) in island.Stock ?? new Dictionary<string, int>())
+                if (Known(material, materials)) stores.Add(Stores.Gathering, material, amount);
             foreach (var store in island.Stores ?? [])
-                foreach (var (material, amount) in store.Stock) stores.Add(store.Store, material, amount);
+                foreach (var (material, amount) in store.Stock)
+                    if (Known(material, materials)) stores.Add(store.Store, material, amount);
             if (island.Shopping is { } shopping) _shopping[island.Id] = shopping;
         }
         _spread = version < 2 || saved.Spread == true;
         foreach (var job in saved.Jobs)
         {
+            // a job in a role the data no longer has is let go; its building is gone too, so no place comes free
+            if (job.Role is { } role && !Known(role, roles)) continue;
             _jobs[job.Resident] = job.Seat;
             _owed[job.Resident] = job.Owed;
             // up to version 2 nobody knew since when he had his job: all as from the start
@@ -1071,11 +1101,13 @@ public sealed class Work : IModule, IJobs, IStock
         _working = [.. saved.Working ?? []];
         foreach (var stood in saved.Stood ?? []) _stood[stood.Structure] = [.. stood.Tiles];
         // a save from before households fetched their food has nothing to fetch
-        foreach (var fetch in saved.Fetch ?? []) _fetch[fetch.Household] = fetch.Material;
+        foreach (var fetch in saved.Fetch ?? [])
+            if (Known(fetch.Material, materials)) _fetch[fetch.Household] = fetch.Material;
         _fetchQuarter = saved.FetchQuarter ?? 0;
         _atHome = [.. saved.AtHome ?? []];
         // up to version 2 nobody moved: the first day shift after loading they do
         _moved = saved.Moved ?? default;
+        foreach (var id in forgotten) village.Log(new LogEntry(village.Clocks.Tick, Forgotten, id));
     }
 
     /// <summary>A place to work: a builder's of the island (<see cref="Structure"/> −1), or one of a building's jobs.</summary>
@@ -1120,8 +1152,8 @@ public sealed class Work : IModule, IJobs, IStock
     private sealed record SavedIsland(int Id, long Cash, long Subsidy, long Upkeep, long Spent, long Wages, IReadOnlyDictionary<string, int>? Stock = null, long Departed = 0,
         Shopping? Shopping = null, IReadOnlyList<SavedStore>? Stores = null);
 
-    // up to version 2 a job had no Since
-    private sealed record SavedJob(int Resident, Seat Seat, long Owed, long? Since = null);
+    // up to version 2 a job had no Since; a job saved before the roles went with it, or a builder's, has no Role
+    private sealed record SavedJob(int Resident, Seat Seat, long Owed, long? Since = null, string? Role = null);
 
     private sealed record SavedVacancy(Seat Seat, long Freed);
 

@@ -26,6 +26,8 @@ public sealed class Day : IModule
     private const string Free = "free";
     private const string Out = "out";
     private const string Idle = "idle";
+    // a save names something the data no longer has; the sentence is Building's
+    private const string Forgotten = "forgotten";
     private static readonly string[] RhythmNames = ["toddler", "pupil", "student", "day", "early", "night", Idle, "retired", "eddie"];
     private static readonly TimeSpan Quarter = TimeSpan.FromMinutes(15);
     private static readonly IReadOnlyList<OutingChoice> AtTheWater = [new(Outing.Water, 1)];
@@ -585,8 +587,25 @@ public sealed class Day : IModule
         var saved = data.Deserialize<SavedDay>(SaveJson.Options) ?? throw new InvalidDataException("The day part of the save is empty.");
         _quarter = saved.Quarter;
         _plans.Clear();
-        foreach (var plan in saved.Plans) _plans[plan.Resident] = new Plan(plan.Block, plan.InsideThere, plan.Doing) { Trip = plan.Trip };
+        // a material of a release that was taken away is no longer carried, once in the log, in the order of the id
+        // (without a catalog, as in some tests, every material is known)
+        var materials = village.Data.Names.Contains("catalog")
+            ? village.Data.Section<Catalog>("catalog").Materials.Select(material => material.Id).ToHashSet()
+            : null;
+        var forgotten = new SortedSet<string>(StringComparer.Ordinal);
+        string? Known(string? material)
+        {
+            if (material is null || materials is null || materials.Contains(material)) return material;
+            forgotten.Add(material);
+            return null;
+        }
+        foreach (var plan in saved.Plans)
+        {
+            var trip = plan.Trip is { Errand: var errand } ? plan.Trip with { Errand = errand with { There = Known(errand.There), Back = Known(errand.Back) } } : null;
+            _plans[plan.Resident] = new Plan(plan.Block, plan.InsideThere, plan.Doing with { Carry = Known(plan.Doing.Carry) }) { Trip = trip };
+        }
         _wear.Load(saved.Wear);
+        foreach (var id in forgotten) village.Log(new LogEntry(village.Clocks.Tick, Forgotten, id));
     }
 
     private sealed record SavedDay(DateTimeOffset Quarter, IReadOnlyList<SavedPlan> Plans, Wear.SavedWear? Wear = null);

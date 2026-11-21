@@ -24,6 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Codery.Village.Checks\Codery.Village.Checks.csproj" />
     <ProjectReference Include="..\..\src\Codery.Village.Core\Codery.Village.Core.csproj" />
     <ProjectReference Include="..\..\src\Codery.Village.Modules\Codery.Village.Modules.csproj" />
     <ProjectReference Include="..\..\src\Codery.Village.Server\Codery.Village.Server.csproj" />

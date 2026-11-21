@@ -7,6 +7,9 @@ using Codery.Village.Server.Store;
 using Codery.Village.Server.Talk;
 using Microsoft.AspNetCore.SignalR;
 using BuildingModule = Codery.Village.Modules.Building.Building;
+using OpenTask = Codery.Village.Modules.Wishes.OpenTask;
+using WishSettings = Codery.Village.Modules.Wishes.WishSettings;
+using WishesModule = Codery.Village.Modules.Wishes.Wishes;
 using TalkModule = Codery.Village.Modules.Talk.Talk;
 using WorkModule = Codery.Village.Modules.Work.Work;
 
@@ -178,12 +181,48 @@ public sealed class VillageHost(
         return engine;
     }
 
+    /// <summary>Puts a wish on hold, under the lock: the village writes no task for it until it is released.</summary>
+    public void Hold(string wish)
+    {
+        lock (_gate) Wishes().Hold(wish);
+    }
+
+    /// <summary>Takes a wish off hold, under the lock.</summary>
+    public void Release(string wish)
+    {
+        lock (_gate) Wishes().Release(wish);
+    }
+
+    /// <summary>The open task of the land, under the lock; null when there is none, or no village yet.</summary>
+    public OpenTask? OpenTask()
+    {
+        lock (_gate) return _engine?.Running.OfType<WishesModule>().FirstOrDefault()?.Task;
+    }
+
+    /// <summary>Whether the data this village runs on has a blueprint that serves the label of <paramref name="wish"/>.</summary>
+    public bool Live(string wish)
+    {
+        lock (_gate)
+        {
+            var label = data.Section<WishSettings>("wishes").Wishes.FirstOrDefault(known => known.Id == wish)?.Label;
+            return label is not null && data.Section<Catalog>("catalog").Blueprints.Any(blueprint => blueprint.Serves == label);
+        }
+    }
+
+    private WishesModule Wishes() =>
+        (_engine ?? throw new InvalidOperationException("The village is not there yet.")).Running.OfType<WishesModule>().FirstOrDefault()
+            ?? throw new InvalidOperationException("The village has no wishes.");
+
     /// <summary>Makes a village the one that runs.</summary>
     private void Use(Engine engine, long? village)
     {
         lock (_gate)
         {
             _engine = engine;
+            // Michael's switch: the wishes in Village:Tasks:Release are let go of at start
+            if (engine.Running.OfType<WishesModule>().FirstOrDefault() is { } wishes)
+                foreach (var wish in configuration.GetSection("Village:Tasks:Release").Get<string[]>() ?? [])
+                    wishes.Release(wish);
             _feed = new VillageFeed(data, map, time);
             _hand!.Clear();
             _said.Clear();
@@ -204,7 +243,8 @@ public sealed class VillageHost(
             try
             {
                 await store.Prepare(stoppingToken);
-                var (village, engine) = await LoadOrBegin(store, stoppingToken);
+                // a saved village that cannot be loaded is not tried again before the next start
+                if (await LoadOrBegin(store, stoppingToken) is not (var village, var engine)) return;
                 var (day, _) = budget.Today;
                 budget.Restore(day, await store.TalkSpent(day, stoppingToken));
                 Use(engine, village);
@@ -219,25 +259,28 @@ public sealed class VillageHost(
     }
 
     /// <summary>
-    /// The last village goes on, unless its seed is not the one in the settings or its save cannot be read or loaded.
-    /// Then a new one begins, next to it: the old one is left as it is.
+    /// The last village goes on. A new one begins when there is none, or when the seed of the last is not the one in
+    /// the settings: next to it, the old one left as it is. A saved village that cannot be read or loaded is never
+    /// replaced: then there is no village (null) and <see cref="Unloadable"/> says so.
     /// </summary>
-    private async Task<(long Village, Engine Engine)> LoadOrBegin(IVillageStore store, CancellationToken cancellation)
+    private async Task<(long Village, Engine Engine)?> LoadOrBegin(IVillageStore store, CancellationToken cancellation)
     {
-        StoredVillage? latest = null;
+        StoredVillage? latest;
         try
         {
             latest = await store.Latest(cancellation);
         }
         catch (SaveException exception)
         {
-            logger.LogWarning("The last village cannot be read: {Reason} A new village begins; the old one stays as it is.", exception.Message);
+            CannotLoad("The last village", exception);
+            return null;
         }
 
         if (latest is not null && latest.Seed != _seed)
             logger.LogInformation("Village {Village} has seed {Seed}; the settings say {Wanted}, so a new village begins.", latest.Id, latest.Seed, _seed);
-        else if (latest is { Save: { } save } && Restore(latest.Id, save) is { } restored)
+        else if (latest is { Save: { } save })
         {
+            if (Restore(latest.Id, save) is not { } restored) return null;
             logger.LogInformation("Village {Village} goes on at tick {Tick}.", latest.Id, restored.Tick);
             if (_advance is not null)
                 logger.LogInformation("Village:Advance is ignored: village {Village} is saved, and a saved village is never replaced.", latest.Id);
@@ -258,9 +301,21 @@ public sealed class VillageHost(
         }
         catch (SaveException exception)
         {
-            logger.LogWarning("Village {Village} cannot be loaded: {Reason} A new village begins; the old one stays as it is.", village, exception.Message);
+            CannotLoad($"Village {village}", exception);
             return null;
         }
+    }
+
+    /// <summary>True when the saved village cannot be read or loaded: the server then runs without a village until its next start.</summary>
+    public bool Unloadable => _unloadable;
+
+    private volatile bool _unloadable;
+
+    private void CannotLoad(string village, SaveException exception)
+    {
+        _unloadable = true;
+        logger.LogError("{Village} cannot be loaded: {Reason} It is not replaced: the server runs without a village, and tries again when it starts again.",
+            village, exception.Message);
     }
 
     /// <summary>
@@ -304,6 +359,29 @@ public sealed class VillageHost(
         finally
         {
             _saving.Release();
+        }
+    }
+
+    // the save the public gets: a copy taken at most once a minute
+    private SavedVillage? _public;
+    private DateTimeOffset _publicAt;
+
+    /// <summary>
+    /// The village as saved for the public <c>/save</c>: a copy, taken under the lock and then kept for a minute, so
+    /// requests never make the village work. Null while the village is loading.
+    /// </summary>
+    public SavedVillage? LastSave()
+    {
+        lock (_gate)
+        {
+            if (_engine is null) return null;
+            var now = time.GetUtcNow();
+            if (_public is null || now - _publicAt >= TimeSpan.FromMinutes(1) || now < _publicAt)
+            {
+                _public = _engine.Save();
+                _publicAt = now;
+            }
+            return _public;
         }
     }
 

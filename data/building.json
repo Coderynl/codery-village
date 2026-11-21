@@ -21,6 +21,7 @@
     "built": { "nl": "Er staat een nieuw bouwsel: {subject}.", "en": "A new building stands: {subject}." },
     "waiting-materials": { "nl": "De bouwplaats ({subject}) wacht op materiaal.", "en": "The site ({subject}) waits for materials." },
     "waiting-builders": { "nl": "De bouwplaats ({subject}) wacht op bouwers.", "en": "The site ({subject}) waits for builders." },
-    "put-back": { "nl": "{subject} zet de {detail} terug.", "en": "{subject} puts the {detail} back." }
+    "put-back": { "nl": "{subject} zet de {detail} terug.", "en": "{subject} puts the {detail} back." },
+    "forgotten": { "nl": "Het dorp vergeet {subject}: dat bestaat niet meer.", "en": "The village forgets {subject}: it no longer exists." }
   }
 }

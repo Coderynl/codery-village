@@ -1,6 +1,7 @@
 using System.Globalization;
 using Codery.Village.Core.Data;
 using Codery.Village.Server;
+using Codery.Village.Server.Desk;
 using Codery.Village.Server.Feed;
 using Codery.Village.Server.Store;
 using Codery.Village.Server.Talk;
@@ -69,6 +70,16 @@ builder.Services.AddSingleton(services => new InterventionLimiter(
 builder.Services.AddHostedService(services => services.GetRequiredService<VillageHost>());
 builder.Services.AddHostedService(services => services.GetRequiredService<TalkWorker>());
 
+// the desk asks Eddie on GitHub for the village's wishes; it does nothing unless Village:Tasks:Enabled is true
+builder.Services.AddSingleton(services => DeskOptions.From(services.GetRequiredService<IConfiguration>()));
+builder.Services.AddSingleton<IVillageGitHub>(services => new GitHubApp(
+    new HttpClient { Timeout = TimeSpan.FromSeconds(30) }, services.GetRequiredService<DeskOptions>(), services.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton<IErrandStore>(_ => string.IsNullOrWhiteSpace(database) ? new MemoryErrandStore() : new PostgresErrandStore(database));
+builder.Services.AddHostedService(services => new EddieDesk(
+    services.GetRequiredService<VillageHost>(), services.GetRequiredService<IVillageGitHub>(), services.GetRequiredService<IErrandStore>(),
+    services.GetRequiredService<DeskOptions>(), services.GetRequiredService<DataSet>(), VillageSetup.Releases(),
+    services.GetRequiredService<TimeProvider>(), services.GetRequiredService<ILogger<EddieDesk>>()));
+
 var app = builder.Build();
 
 // only pages of the site itself may connect; a browser always says where a page comes from
@@ -88,7 +99,16 @@ app.Use(async (context, next) =>
 });
 app.UseWebSockets();
 
-app.MapGet("/health", () => Results.Text("ok"));
+// unhealthy while the saved village cannot be loaded: it waits for a fix, and is never replaced by a new one
+app.MapGet("/health", (VillageHost host) => host.Unloadable
+    ? Results.Text("cannot load the saved village", statusCode: StatusCodes.Status503ServiceUnavailable)
+    : Results.Text("ok"));
+// what runs here, and the village as it stands, for the tools that work on the village; no visitors in it
+var commit = app.Configuration["VILLAGE_COMMIT"] is { Length: > 0 } built ? built : "dev";
+var releases = VillageSetup.Releases();
+app.MapGet("/version", () => Results.Json(new { commit, releases }, Protocol.Json));
+app.MapGet("/save", (VillageHost host) =>
+    host.LastSave() is { } save ? Results.Json(save, Protocol.Json) : Results.StatusCode(StatusCodes.Status503ServiceUnavailable));
 app.MapHub<VillageHub>("/hub", options => options.Transports = HttpTransportType.WebSockets);
 
 // the flat map, to watch along: on a developer's machine only
