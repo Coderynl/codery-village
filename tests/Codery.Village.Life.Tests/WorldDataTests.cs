@@ -10,7 +10,11 @@ namespace Codery.Village.Life.Tests;
 public class WorldDataTests
 {
     [Fact]
-    public void The_world_has_no_problems() => Assert.Empty(Problems.Of(World.Laws));
+    public void The_world_has_no_problems()
+    {
+        var problems = Problems.Of(World.Laws);
+        Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
+    }
 
     [Fact]
     public void Bronze_lies_within_reach_but_is_not_known()

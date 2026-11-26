@@ -33,6 +33,11 @@
     "when": [
       {
         "kind": "peat"
+      },
+      {
+        "kind": "peat",
+        "property": "flammability",
+        "max": 60
       }
     ],
     "then": [
@@ -56,6 +61,11 @@
     "when": [
       {
         "kind": "clay"
+      },
+      {
+        "kind": "clay",
+        "property": "hardness",
+        "max": 24
       }
     ],
     "then": [
@@ -75,6 +85,11 @@
     "when": [
       {
         "kind": "hide"
+      },
+      {
+        "kind": "hide",
+        "property": "hardness",
+        "max": 20
       }
     ],
     "then": [
@@ -94,6 +109,11 @@
     "when": [
       {
         "kind": "kelp"
+      },
+      {
+        "kind": "kelp",
+        "property": "flammability",
+        "max": 25
       }
     ],
     "then": [
@@ -113,6 +133,11 @@
     "when": [
       {
         "kind": "wood"
+      },
+      {
+        "kind": "wood",
+        "property": "flammability",
+        "max": 74
       }
     ],
     "then": [
@@ -126,7 +151,7 @@
       },
       {
         "property": "flammability",
-        "add": 10
+        "add": 15
       }
     ]
   },
@@ -140,12 +165,17 @@
       {
         "kind": "water",
         "min": 20
+      },
+      {
+        "kind": "fibre",
+        "property": "toughness",
+        "max": 42
       }
     ],
     "then": [
       {
         "property": "toughness",
-        "add": 25
+        "add": 30
       }
     ]
   },
@@ -187,6 +217,11 @@
       {
         "kind": "water",
         "min": 20
+      },
+      {
+        "kind": "grain",
+        "property": "durability",
+        "min": 60
       }
     ],
     "then": [
@@ -282,6 +317,11 @@
       {
         "kind": "sand",
         "min": 10
+      },
+      {
+        "kind": "clay",
+        "property": "toughness",
+        "max": 15
       }
     ],
     "then": [
@@ -301,6 +341,11 @@
       {
         "kind": "fibre",
         "min": 10
+      },
+      {
+        "kind": "clay",
+        "property": "toughness",
+        "max": 25
       }
     ],
     "then": [
@@ -354,6 +399,11 @@
       {
         "kind": "pitch",
         "min": 10
+      },
+      {
+        "kind": "wood",
+        "property": "watertightness",
+        "max": 50
       }
     ],
     "then": [
@@ -407,6 +457,11 @@
       {
         "kind": "salt",
         "min": 10
+      },
+      {
+        "kind": "meat",
+        "property": "durability",
+        "max": 50
       }
     ],
     "then": [
@@ -442,6 +497,11 @@
     "when": [
       {
         "kind": "metal"
+      },
+      {
+        "kind": "metal",
+        "property": "toughness",
+        "max": 52
       }
     ],
     "then": [
@@ -461,6 +521,11 @@
     "when": [
       {
         "kind": "alloy"
+      },
+      {
+        "kind": "alloy",
+        "property": "toughness",
+        "max": 57
       }
     ],
     "then": [
@@ -480,6 +545,11 @@
     "when": [
       {
         "kind": "hide"
+      },
+      {
+        "kind": "hide",
+        "property": "flexibility",
+        "max": 80
       }
     ],
     "then": [
@@ -499,6 +569,11 @@
     "when": [
       {
         "kind": "fibre"
+      },
+      {
+        "kind": "fibre",
+        "property": "durability",
+        "max": 54
       }
     ],
     "then": [
@@ -508,7 +583,7 @@
       },
       {
         "property": "durability",
-        "add": 5
+        "add": 25
       }
     ]
   },
@@ -707,7 +782,13 @@
     "process": "ferment",
     "when": [
       {
-        "kind": "dough"
+        "kind": "dough",
+        "min": 100
+      },
+      {
+        "kind": "dough",
+        "property": "flexibility",
+        "max": 70
       }
     ],
     "then": [
@@ -833,6 +914,11 @@
     "when": [
       {
         "kind": "meat"
+      },
+      {
+        "kind": "meat",
+        "property": "durability",
+        "max": 25
       }
     ],
     "then": [
@@ -1004,6 +1090,11 @@
       {
         "kind": "ash",
         "min": 10
+      },
+      {
+        "kind": "ceramic",
+        "property": "watertightness",
+        "max": 94
       }
     ],
     "then": [
