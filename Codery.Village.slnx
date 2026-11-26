@@ -6,6 +6,7 @@
     <Project Path="src/Codery.Village.Checks/Codery.Village.Checks.csproj" />
     <Project Path="src/Codery.Village.Laws/Codery.Village.Laws.csproj" />
     <Project Path="src/Codery.Village.Life/Codery.Village.Life.csproj" />
+    <Project Path="src/Codery.Village.Chronicle/Codery.Village.Chronicle.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Codery.Village.Life.Tests/Codery.Village.Life.Tests.csproj" />

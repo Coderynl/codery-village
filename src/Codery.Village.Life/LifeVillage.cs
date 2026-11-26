@@ -12,15 +12,18 @@ public static class LifeVillage
     /// <summary>A new village on <paramref name="world"/>, started, its calendar at <paramref name="start"/> and moving 250 ms a tick.</summary>
     public static Engine Start(ulong seed, DataSet world, IslandMap map, DateTimeOffset start)
     {
-        var engine = new Engine(Modules(), world, map, seed, new SimulatedTime(start));
+        var engine = new Engine(Modules(seed), world, map, seed, new SimulatedTime(start));
         engine.Start();
         return engine;
     }
 
-    /// <summary>Fresh instances of the modules, in the order they step. Living works what Knowing says a person knows.</summary>
-    public static IReadOnlyList<IModule> Modules()
+    /// <summary>
+    /// Fresh instances of the modules, in the order they step. Living works what Knowing says a person knows; the chronicle,
+    /// last, tells what the others did and keeps <paramref name="seed"/> for its title (a loaded chronicle has it from the save).
+    /// </summary>
+    public static IReadOnlyList<IModule> Modules(ulong seed = 0)
     {
         var knowing = new Knowing.Knowing();
-        return [new Folk.Folk(), new Living.Living(knowing.Knows), knowing, new Inventing.Inventing(), new Feelings.Feelings()];
+        return [new Folk.Folk(), new Living.Living(knowing.Knows), knowing, new Inventing.Inventing(), new Feelings.Feelings(), new Chronicle.Chronicle(seed)];
     }
 }
