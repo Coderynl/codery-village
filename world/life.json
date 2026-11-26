@@ -1,0 +1,98 @@
+{
+  "ticksPerLifeYear": 2419200,
+  "stages": {
+    "pupil": 6,
+    "adult": 18,
+    "old": 67
+  },
+  "pairing": {
+    "chance": 0.8,
+    "crowd": 2,
+    "ageGap": 10
+  },
+  "births": {
+    "chance": 0.45,
+    "motherFrom": 20,
+    "motherTo": 42,
+    "gapYears": 2,
+    "spread": 15
+  },
+  "dying": [
+    {
+      "from": 70,
+      "chance": 0.03
+    },
+    {
+      "from": 75,
+      "chance": 0.06
+    },
+    {
+      "from": 80,
+      "chance": 0.12
+    },
+    {
+      "from": 85,
+      "chance": 0.22
+    },
+    {
+      "from": 90,
+      "chance": 0.4
+    },
+    {
+      "from": 95,
+      "chance": 0.65
+    },
+    {
+      "from": 100,
+      "chance": 1
+    }
+  ],
+  "trades": {
+    "parent": 3,
+    "interest": 2,
+    "missing": 2,
+    "agreeableFrom": 50,
+    "agreeable": [
+      "teacher",
+      "carer"
+    ],
+    "interests": {
+      "farmer": [
+        "gardening",
+        "animals",
+        "nature"
+      ],
+      "woodcutter": [
+        "walking",
+        "nature"
+      ],
+      "miller": [
+        "technology",
+        "numbers"
+      ],
+      "baker": [
+        "cooking"
+      ],
+      "builder": [
+        "crafts",
+        "technology"
+      ],
+      "gatherer": [
+        "walking",
+        "nature",
+        "fishing"
+      ],
+      "carer": [
+        "cooking",
+        "music"
+      ],
+      "teacher": [
+        "reading",
+        "history",
+        "numbers",
+        "stars",
+        "art"
+      ]
+    }
+  }
+}

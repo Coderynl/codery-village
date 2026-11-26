@@ -1,0 +1,287 @@
+{
+  "names": {
+    "man": [
+      "Daan",
+      "Sem",
+      "Lucas",
+      "Levi",
+      "Finn",
+      "Milan",
+      "Bram",
+      "Thijs",
+      "Jesse",
+      "Ruben",
+      "Noah",
+      "Liam",
+      "Luuk",
+      "Mees",
+      "Teun",
+      "Sven",
+      "Stijn",
+      "Tim",
+      "Jeroen",
+      "Mark",
+      "Bas",
+      "Erik",
+      "Peter",
+      "Hans",
+      "Kees",
+      "Wim",
+      "Jan",
+      "Gerrit",
+      "Henk",
+      "Wouter",
+      "Joost",
+      "Pieter",
+      "Maarten",
+      "Niels",
+      "Rik",
+      "Joris",
+      "Koen",
+      "Mats",
+      "Julian",
+      "Jayden",
+      "Mohamed",
+      "Yusuf",
+      "Mehmet",
+      "Emre",
+      "Omar",
+      "Ayoub",
+      "Rayan",
+      "Hamza",
+      "Bilal",
+      "Kevin",
+      "Dennis",
+      "Ravi",
+      "Sanjay",
+      "Tomasz",
+      "Piotr",
+      "Xavier",
+      "Romano",
+      "Ricardo",
+      "Bayu",
+      "Arjen"
+    ],
+    "woman": [
+      "Emma",
+      "Julia",
+      "Mila",
+      "Tess",
+      "Sophie",
+      "Zoë",
+      "Sara",
+      "Nora",
+      "Yara",
+      "Eva",
+      "Anna",
+      "Lotte",
+      "Fleur",
+      "Sanne",
+      "Lisa",
+      "Femke",
+      "Iris",
+      "Anouk",
+      "Marieke",
+      "Ingrid",
+      "Ria",
+      "Annie",
+      "Truus",
+      "Els",
+      "Marja",
+      "Esther",
+      "Linda",
+      "Monique",
+      "Petra",
+      "Ilse",
+      "Noor",
+      "Saar",
+      "Liv",
+      "Maud",
+      "Roos",
+      "Isa",
+      "Lieke",
+      "Naomi",
+      "Chantal",
+      "Wilma",
+      "Fatima",
+      "Aisha",
+      "Yasmina",
+      "Elif",
+      "Zeynep",
+      "Salma",
+      "Nadia",
+      "Amira",
+      "Hanna",
+      "Ellen",
+      "Priya",
+      "Sharmila",
+      "Agnieszka",
+      "Kasia",
+      "Dewi",
+      "Indah",
+      "Shanice",
+      "Gabriela",
+      "Mirjam",
+      "Joyce",
+      "Bo",
+      "Merel",
+      "Tamara"
+    ]
+  },
+  "interests": [
+    {
+      "id": "gardening",
+      "nl": "tuinieren",
+      "en": "gardening"
+    },
+    {
+      "id": "cooking",
+      "nl": "koken",
+      "en": "cooking"
+    },
+    {
+      "id": "reading",
+      "nl": "lezen",
+      "en": "reading"
+    },
+    {
+      "id": "music",
+      "nl": "muziek",
+      "en": "music"
+    },
+    {
+      "id": "football",
+      "nl": "voetbal",
+      "en": "football"
+    },
+    {
+      "id": "walking",
+      "nl": "wandelen",
+      "en": "walking"
+    },
+    {
+      "id": "fishing",
+      "nl": "vissen",
+      "en": "fishing"
+    },
+    {
+      "id": "animals",
+      "nl": "dieren",
+      "en": "animals"
+    },
+    {
+      "id": "puzzles",
+      "nl": "puzzelen",
+      "en": "puzzles"
+    },
+    {
+      "id": "crafts",
+      "nl": "knutselen",
+      "en": "crafts"
+    },
+    {
+      "id": "technology",
+      "nl": "techniek",
+      "en": "technology"
+    },
+    {
+      "id": "nature",
+      "nl": "natuur",
+      "en": "nature"
+    },
+    {
+      "id": "history",
+      "nl": "geschiedenis",
+      "en": "history"
+    },
+    {
+      "id": "art",
+      "nl": "kunst",
+      "en": "art"
+    },
+    {
+      "id": "stars",
+      "nl": "sterren",
+      "en": "stars"
+    },
+    {
+      "id": "numbers",
+      "nl": "rekenen",
+      "en": "numbers"
+    }
+  ],
+  "personality": {
+    "openness": {
+      "mean": 50,
+      "spread": 18
+    },
+    "conscientiousness": {
+      "mean": 55,
+      "spread": 15
+    },
+    "extraversion": {
+      "mean": 50,
+      "spread": 18
+    },
+    "agreeableness": {
+      "mean": 60,
+      "spread": 15
+    },
+    "sensitivity": {
+      "mean": 45,
+      "spread": 15
+    },
+    "status": {
+      "mean": 45,
+      "spread": 18
+    },
+    "comfort": {
+      "mean": 50,
+      "spread": 15
+    },
+    "thrift": {
+      "mean": 50,
+      "spread": 15
+    }
+  },
+  "start": {
+    "min": 12,
+    "max": 15,
+    "children": [
+      {
+        "count": 0,
+        "weight": 1
+      },
+      {
+        "count": 1,
+        "weight": 2
+      },
+      {
+        "count": 2,
+        "weight": 3
+      },
+      {
+        "count": 3,
+        "weight": 2
+      }
+    ],
+    "pairAges": [
+      {
+        "from": 20,
+        "to": 35,
+        "weight": 3
+      },
+      {
+        "from": 36,
+        "to": 50,
+        "weight": 3
+      },
+      {
+        "from": 51,
+        "to": 60,
+        "weight": 1
+      }
+    ],
+    "partnerGap": 4
+  }
+}

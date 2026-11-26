@@ -23,6 +23,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Codery.Village.Core\Codery.Village.Core.csproj" />
     <ProjectReference Include="..\..\src\Codery.Village.Laws\Codery.Village.Laws.csproj" />
+    <ProjectReference Include="..\..\src\Codery.Village.Life\Codery.Village.Life.csproj" />
+    <ProjectReference Include="..\..\src\Codery.Village.Modules\Codery.Village.Modules.csproj" />
   </ItemGroup>
 
 </Project>

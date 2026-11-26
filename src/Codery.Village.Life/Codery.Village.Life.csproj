@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The life of the new core: people, their living, knowing, inventing and feelings. Pure: no network, files, processes or System.Random. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Codery.Village.Core\Codery.Village.Core.csproj" />
+    <ProjectReference Include="..\Codery.Village.Laws\Codery.Village.Laws.csproj" />
+    <ProjectReference Include="..\Codery.Village.Modules\Codery.Village.Modules.csproj" />
+  </ItemGroup>
+
+</Project>
