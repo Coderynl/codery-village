@@ -24,6 +24,7 @@ Each release is named once in this list, with what it brings and the wish it ser
 14. `vegetable-garden.json` — vegetable garden (vegetables, grown on fertile soil by gardeners). Wish `vegetables`.
 15. `orchard.json` — orchard (apples, grown on fertile soil by the gardeners of `vegetable-garden.json`). Wish `orchard`.
 16. `hunting.json` — hunters' lodge (game, hunted in the forest within reach; the lodge stands on land next to forest). Game is a yield of its own (`nature.game` in `economy.json`): it runs out and grows back apart from what the forest gives the gatherers. Wish `meat`.
+17. `winery.json` — winery (wine from the grapes of `grapes.json`, pressed on land by a winemaker). Wish `wine`.
 
 What an island can do with a release depends on its soil: Oost has no forest and no fertile soil, so no lumberyard, hunters' lodge, farm, mill, bakery, vines, vegetable garden or orchard; West has no rock, clay or fishing ground.
 

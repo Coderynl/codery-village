@@ -1,0 +1,22 @@
+{
+  "materials": [
+    { "id": "wine", "nl": "wijn", "en": "wine" }
+  ],
+  "roles": [
+    { "id": "winemaker", "nl": "wijnmaker", "en": "winemaker" }
+  ],
+  "blueprints": [
+    {
+      "id": "winery", "nl": "wijnmakerij", "en": "winery", "on": ["land"], "serves": "wine",
+      "jobs": [{ "role": "winemaker", "count": 1, "shift": "day", "outdoor": false }],
+      "recipe": { "in": { "grapes": 4 }, "out": { "wine": 2 }, "ticks": 480 },
+      "phases": [
+        { "id": "foundation", "nl": "fundering", "en": "foundation", "ticks": 300, "cost": { "branches": 2 } },
+        { "id": "frame", "nl": "geraamte", "en": "frame", "ticks": 400, "cost": { "branches": 3 } },
+        { "id": "roof", "nl": "dak", "en": "roof", "ticks": 300, "cost": { "reed": 2 } },
+        { "id": "cellar", "nl": "kelder", "en": "cellar", "ticks": 300, "cost": {} }
+      ],
+      "look": { "form": "building", "size": "small", "walls": "wood", "roof": "thatch", "extras": ["door", "crates"] }
+    }
+  ]
+}
