@@ -408,11 +408,11 @@
       "nl": "bot",
       "en": "bone",
       "profile": {
-        "hardness": 50,
+        "hardness": 40,
         "toughness": 40,
         "flexibility": 5,
         "density": 60,
-        "flammability": 5,
+        "flammability": 30,
         "meltingPoint": 100,
         "nutrition": 10,
         "durability": 80
@@ -452,11 +452,11 @@
       "nl": "steen",
       "en": "stone",
       "profile": {
-        "hardness": 70,
-        "toughness": 40,
+        "hardness": 60,
+        "toughness": 25,
         "density": 70,
-        "meltingPoint": 50,
-        "watertightness": 60,
+        "meltingPoint": 55,
+        "watertightness": 30,
         "durability": 100,
         "conductivity": 5
       }
@@ -468,10 +468,10 @@
       "en": "flint",
       "profile": {
         "hardness": 80,
-        "toughness": 30,
+        "toughness": 15,
         "density": 65,
         "meltingPoint": 75,
-        "watertightness": 60,
+        "watertightness": 20,
         "durability": 100
       }
     },
@@ -587,7 +587,7 @@
         "hardness": 25,
         "toughness": 10,
         "density": 80,
-        "meltingPoint": 12,
+        "meltingPoint": 50,
         "durability": 100,
         "conductivity": 40
       }

@@ -38,6 +38,48 @@ public class WorldDataTests
     }
 
     [Fact]
+    public void What_a_household_wants_that_the_start_does_not_know_waits_for_a_discovery()
+    {
+        var world = World.Laws;
+        var atHand = world.Substances.Values.ToList();
+        var waiting = world.Uses.Where(u => u.Household && !world.Start.Uses.Contains(u.Id)).ToList();
+
+        Assert.NotEmpty(waiting);
+        foreach (var use in waiting)
+        {
+            var served = atHand.Where(s => use.Score(s.Profile) > 0).Select(s => s.Id).ToList();
+            Assert.True(served.Count == 0, $"{use.Id} is served at the start by {string.Join(", ", served)}");
+        }
+    }
+
+    [Fact]
+    public void The_kiln_waits_for_bricks_and_bronze_cuts_better_than_flint()
+    {
+        var world = World.Laws;
+        var nature = world.Nature;
+        var raw = world.Raw.ToDictionary(s => s.Id);
+        Substance Make(string process, params (Substance S, int Parts)[] inputs) =>
+            nature.Apply(process, [.. inputs.Select(i => new Portion(i.S, i.Parts))]) ?? throw new InvalidOperationException($"{process} makes nothing");
+        var use = world.Uses.ToDictionary(u => u.Id);
+
+        var tempered = Make("mix", (raw["clay"], 3), (raw["sand"], 1));
+        var brick = Make("fire", (tempered, 1));
+        var stoneware = Make("kiln", (tempered, 1));
+        foreach (var wall in new[] { use["kiln-wall"], use["furnace-wall"] })
+            Assert.DoesNotContain(world.Substances.Values, s => wall.Score(s.Profile) >= wall.Threshold);
+        Assert.True(use["kiln-wall"].Score(brick.Profile) >= use["kiln-wall"].Threshold);
+        Assert.True(use["furnace-wall"].Score(brick.Profile) < use["furnace-wall"].Threshold);
+        Assert.True(use["furnace-wall"].Score(stoneware.Profile) >= use["furnace-wall"].Threshold);
+
+        var charcoal = Make("fire", (raw["wood"], 1));
+        var bronze = Make("beat", (Make("kiln", (Make("kiln", (raw["copper-ore"], 1), (charcoal, 1)), 9), (Make("kiln", (raw["tin-ore"], 1), (charcoal, 1)), 1)), 1));
+        var knife = world.Substances[world.Labels["edge"]];
+        var cut = use["cut"];
+        Assert.Equal(knife.Id, world.Substances.Values.MaxBy(s => cut.Score(s.Profile))!.Id);
+        Assert.True(cut.Score(bronze.Profile) >= cut.Score(knife.Profile) + 0.1);
+    }
+
+    [Fact]
     public void Each_island_draws_its_own_substance()
     {
         var world = World.Laws;

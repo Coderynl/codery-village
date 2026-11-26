@@ -81,8 +81,7 @@ public sealed class WorldData
     public IReadOnlyList<Substance> Raw { get; }
 
     /// <summary>Every substance the world knows at the start by id: the raw ones and what the start recipes make.</summary>
-    public IReadOnlyDictionary<string, Substance> Substances =>
-        Raw.Concat(_start.Value.Made.Values).ToDictionary(s => s.Id, StringComparer.Ordinal);
+    public IReadOnlyDictionary<string, Substance> Substances => _start.Value.Made;
 
     public IReadOnlyList<Deposit> Deposits { get; }
     public IReadOnlyList<Process> Processes { get; }
@@ -109,7 +108,7 @@ public sealed class WorldData
         var names = new Dictionary<string, Name>(_names, StringComparer.Ordinal);
         var known = Raw.ToDictionary(s => s.Id, StringComparer.Ordinal);
         var labels = new Dictionary<string, string>(StringComparer.Ordinal);
-        var made = new Dictionary<string, Substance>(StringComparer.Ordinal);
+        var made = Raw.ToDictionary(s => s.Id, StringComparer.Ordinal);
         var recipes = new List<Recipe>();
         var recipeOfLabel = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var r in StartData.Recipes)
@@ -124,7 +123,7 @@ public sealed class WorldData
             var result = Nature.Apply(r.Process, inputs)
                 ?? throw new InvalidDataException($"Start recipe '{r.Label}': the laws make nothing of it by '{r.Process}'.");
             known[result.Id] = result;
-            made[result.Id] = result;
+            made.TryAdd(result.Id, result);
             labels[r.Label] = result.Id;
             names[result.Id] = new Name(r.Nl, r.En);
             var recipe = new Recipe($"{r.Process}:{result.Id}", r.Process, [.. inputs.Select(i => new RecipeInput(i.Substance.Id, i.Parts))], result.Id);

@@ -388,6 +388,10 @@
       {
         "property": "durability",
         "add": 5
+      },
+      {
+        "property": "toughness",
+        "add": 20
       }
     ],
     "becomes": "candle"
@@ -427,7 +431,7 @@
       },
       {
         "property": "toughness",
-        "add": -10
+        "add": 5
       }
     ],
     "becomes": "edge"
@@ -733,7 +737,7 @@
       },
       {
         "property": "watertightness",
-        "add": 30
+        "add": 40
       },
       {
         "property": "flexibility",
@@ -761,7 +765,7 @@
       },
       {
         "property": "nutrition",
-        "add": 10
+        "add": 20
       },
       {
         "property": "density",
@@ -885,7 +889,7 @@
       },
       {
         "property": "watertightness",
-        "add": 45
+        "add": 55
       },
       {
         "property": "flexibility",

@@ -7,12 +7,12 @@
     "needs": [
       {
         "property": "hardness",
-        "min": 40,
+        "min": 50,
         "weight": 1
       },
       {
         "property": "toughness",
-        "min": 20,
+        "min": 10,
         "weight": 2
       }
     ]
@@ -24,12 +24,12 @@
     "needs": [
       {
         "property": "hardness",
-        "min": 40,
+        "min": 50,
         "weight": 1
       },
       {
         "property": "toughness",
-        "min": 40,
+        "min": 20,
         "weight": 2
       }
     ]
@@ -55,6 +55,13 @@
         "min": 30,
         "weight": 1,
         "max": 65
+      },
+      {
+        "property": "flammability",
+        "min": 0,
+        "weight": 1,
+        "max": 10,
+        "low": true
       }
     ]
   },
@@ -95,6 +102,11 @@
       {
         "property": "durability",
         "min": 70,
+        "weight": 1
+      },
+      {
+        "property": "hardness",
+        "min": 30,
         "weight": 1
       }
     ]
@@ -164,6 +176,16 @@
         "property": "durability",
         "min": 30,
         "weight": 1
+      },
+      {
+        "property": "hardness",
+        "min": 10,
+        "weight": 1
+      },
+      {
+        "property": "meltingPoint",
+        "min": 50,
+        "weight": 1
       }
     ]
   },
@@ -221,12 +243,12 @@
       },
       {
         "property": "toughness",
-        "min": 20,
+        "min": 50,
         "weight": 1
       },
       {
         "property": "durability",
-        "min": 30,
+        "min": 40,
         "weight": 1
       }
     ]
@@ -276,6 +298,16 @@
         "weight": 1
       },
       {
+        "property": "hardness",
+        "min": 15,
+        "weight": 1
+      },
+      {
+        "property": "durability",
+        "min": 40,
+        "weight": 1
+      },
+      {
         "property": "density",
         "min": 0,
         "weight": 1,
@@ -301,6 +333,21 @@
         "weight": 1,
         "max": 40,
         "low": true
+      },
+      {
+        "property": "toughness",
+        "min": 30,
+        "weight": 1
+      },
+      {
+        "property": "durability",
+        "min": 55,
+        "weight": 1
+      },
+      {
+        "property": "meltingPoint",
+        "min": 50,
+        "weight": 1
       }
     ]
   },
@@ -380,7 +427,7 @@
     "needs": [
       {
         "property": "flammability",
-        "min": 75,
+        "min": 70,
         "weight": 1
       },
       {
@@ -389,10 +436,15 @@
         "weight": 1
       },
       {
+        "property": "toughness",
+        "min": 30,
+        "weight": 1
+      },
+      {
         "property": "meltingPoint",
         "min": 0,
         "weight": 1,
-        "max": 10,
+        "max": 30,
         "low": true
       }
     ]
@@ -404,13 +456,20 @@
     "needs": [
       {
         "property": "hardness",
-        "min": 45,
+        "min": 35,
         "weight": 1
       },
       {
         "property": "toughness",
         "min": 30,
         "weight": 1
+      },
+      {
+        "property": "flammability",
+        "min": 0,
+        "weight": 1,
+        "max": 30,
+        "low": true
       }
     ]
   },
@@ -473,6 +532,11 @@
         "property": "conductivity",
         "min": 50,
         "weight": 1
+      },
+      {
+        "property": "toughness",
+        "min": 30,
+        "weight": 1
       }
     ]
   },
@@ -534,8 +598,15 @@
       },
       {
         "property": "toughness",
-        "min": 20,
+        "min": 25,
         "weight": 1
+      },
+      {
+        "property": "flammability",
+        "min": 0,
+        "weight": 1,
+        "max": 10,
+        "low": true
       }
     ]
   },
@@ -555,6 +626,18 @@
         "property": "hardness",
         "min": 50,
         "weight": 1
+      },
+      {
+        "property": "toughness",
+        "min": 25,
+        "weight": 1
+      },
+      {
+        "property": "flammability",
+        "min": 0,
+        "weight": 1,
+        "max": 10,
+        "low": true
       }
     ]
   },
@@ -565,10 +648,15 @@
     "needs": [
       {
         "property": "hardness",
-        "min": 0,
+        "min": 10,
         "weight": 1,
         "max": 30,
         "low": true
+      },
+      {
+        "property": "toughness",
+        "min": 10,
+        "weight": 1
       },
       {
         "property": "durability",
@@ -577,9 +665,16 @@
       },
       {
         "property": "flexibility",
-        "min": 0,
+        "min": 10,
         "weight": 1,
         "max": 40,
+        "low": true
+      },
+      {
+        "property": "nutrition",
+        "min": 0,
+        "weight": 1,
+        "max": 10,
         "low": true
       }
     ]
