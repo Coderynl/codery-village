@@ -86,9 +86,13 @@ public sealed class Chronicle(ulong seed = 0) : IModule
         _openLast = DateOnly.FromDateTime(village.Clocks.Calendar.Now.DateTime);
         if (tick % _ticksPerYear != 0) return;
         Wishes(tick - 1);
-        _years.Add(new LifeYear(_openYear, _openFirst, _openLast, Numbers(Folk, Feelings)));
+        // a year ends the day before the next one begins, so headings never overlap (when the clocks go forward a year
+        // begins at 01:00, on the day its predecessor's last tick fell)
+        var next = DateOf(tick, tick);
+        var last = next.AddDays(-1) < _openFirst ? _openFirst : next.AddDays(-1);
+        _years.Add(new LifeYear(_openYear, _openFirst, last, Numbers(Folk, Feelings)));
         _openYear = (int)(tick / _ticksPerYear) + 1;
-        _openFirst = _openLast = DateOf(tick, tick);
+        _openFirst = _openLast = next;
         _tally = new Tally(0, 0, 0, 0, 0, 0);
     }
 

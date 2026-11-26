@@ -42,6 +42,16 @@ public class ChronicleTests
     }
 
     [Fact]
+    public void Year_headings_do_not_overlap_when_the_clocks_change()
+    {
+        // the clocks go forward on 28 March 2027, so the fifth life year begins at 01:00 on the 29th
+        var chronicle = Write(SixYears.Value, "en");
+
+        Assert.Contains("## Year 4 (22–28 March", chronicle);
+        Assert.Contains("## Year 5 (29 March", chronicle);
+    }
+
+    [Fact]
     public void A_discovery_line_says_who_how_and_what_for()
     {
         var engine = SixYears.Value;
