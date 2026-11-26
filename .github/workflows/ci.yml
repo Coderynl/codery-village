@@ -84,8 +84,10 @@ jobs:
             filter: Category=Scenario&FullyQualifiedName~ScenarioTests.Everyone_saves
           - name: other scenarios
             filter: Category=Scenario&FullyQualifiedName!~ScenarioTests.Four_weeks&FullyQualifiedName!~ScenarioTests.Everyone_saves
+          - name: chronicle guardrails
+            filter: Category=Chronicle
           - name: rest
-            filter: Category!=Scenario
+            filter: Category!=Scenario&Category!=Chronicle
     name: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@v4

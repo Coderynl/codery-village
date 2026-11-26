@@ -35,7 +35,7 @@ public class LivingTests
         DataSet Weather(double chance) => WithLiving(living =>
         {
             living["start"] = new JsonObject();
-            living["output"]!["farmer"] = 60;
+            living["output"]!["farmer"] = 20;
             living["output"]!["miller"] = 0;
             living["output"]!["baker"] = 0;
             living["drought"]!["chance"] = chance;

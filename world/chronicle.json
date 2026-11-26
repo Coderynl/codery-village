@@ -37,6 +37,7 @@
     "age.baby": { "nl": "nog geen jaar oud", "en": "not yet a year old" },
     "came-of-age": { "nl": "{name} is volwassen en wordt {trade}.", "en": "{name} came of age and became a {trade}." },
     "came-of-age.no-trade": { "nl": "{name} is volwassen geworden.", "en": "{name} came of age." },
+    "changed-trade": { "nl": "{name} was {from}, maar het dorp komt tekort en {name} wordt {to}.", "en": "{name} was a {from}, but the village is running short, and {name} becomes a {to}." },
 
     "discovered.trying": { "nl": "{name} probeerde {inputs} te {process} en vond zo {substance}. Het dient als {use}.", "en": "{name} found {substance} by trying something new: {process} {inputs}. It serves as {use}." },
     "discovered.accident": { "nl": "{name} vond per ongeluk {substance}, toen het {process} van {inputs} anders liep dan bedoeld. Het dient als {use}.", "en": "{name} found {substance} by accident, when work with {inputs} ({process}) went otherwise than meant. It serves as {use}." },

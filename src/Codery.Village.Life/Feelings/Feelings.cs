@@ -116,7 +116,12 @@ public sealed class Feelings : IModule
                 case Died d:
                     _hearts.Remove(d.Person);
                     if (Folk.Get(d.Person) is { } dead)
-                        foreach (var kin in Kin(dead)) Remember(kin, e.Tick, kin == dead.Partner ? "partner-died" : "kin-died", d.Person.ToString());
+                    {
+                        var kin = Kin(dead).ToHashSet();
+                        foreach (var k in kin) Remember(k, e.Tick, k == dead.Partner ? "partner-died" : "kin-died", d.Person.ToString());
+                        // a small village mourns together
+                        foreach (var id in _hearts.Keys.Where(id => !kin.Contains(id)).ToList()) Remember(id, e.Tick, "village-died", d.Person.ToString());
+                    }
                     break;
                 case FellIll ill:
                     Remember(ill.Person, e.Tick, "ill", "");
@@ -133,6 +138,8 @@ public sealed class Feelings : IModule
                     foreach (var p in Members(lost.Household)) Lose(p, lost.Use, e.Tick);
                     break;
                 case Discovered found:
+                    // and is proud together of what one of them found
+                    foreach (var id in _hearts.Keys.ToList()) Remember(id, e.Tick, "village-found", found.D.Substance);
                     Promise(found.D.Substance, e.Tick);
                     break;
             }

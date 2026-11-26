@@ -142,6 +142,10 @@ public sealed class Chronicle(ulong seed = 0) : IModule
                         ? _rules.Say("came-of-age.no-trade", l, ("name", NameOf(c.Person)))
                         : _rules.Say("came-of-age", l, ("name", NameOf(c.Person)), ("trade", Named(trade, l))));
                     break;
+                case ChangedTrade changed:
+                    Tell(e.Tick, now, "changed-trade", [changed.Person], l => _rules.Say("changed-trade", l, ("name", NameOf(changed.Person)),
+                        ("from", Named(changed.From, l)), ("to", Named(changed.To, l))));
+                    break;
                 case Discovered found:
                     TellDiscovery(found.D, now);
                     break;

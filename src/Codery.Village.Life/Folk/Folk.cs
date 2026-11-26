@@ -157,6 +157,8 @@ public sealed class Folk : IModule
         foreach (var row in _rules.Dying)
             if (row.From <= age && row.From > from) (from, chance) = (row.From, row.Chance);
         if (chance > 0 && random.NextDouble() < Daily(chance)) Die(p, Age);
+        else if (_rules.Accident > 0 && p.Trade is not null && StageOf(p, tick) == LifeStage.Adult && random.NextDouble() < Daily(_rules.Accident))
+            Die(p, "accident");
     }
 
     private void Die(Person p, string cause)

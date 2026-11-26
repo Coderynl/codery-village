@@ -279,7 +279,12 @@
       {
         "from": 51,
         "to": 60,
-        "weight": 1
+        "weight": 2
+      },
+      {
+        "from": 61,
+        "to": 72,
+        "weight": 2
       }
     ],
     "partnerGap": 4

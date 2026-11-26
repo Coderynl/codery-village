@@ -12,8 +12,11 @@ public sealed record FolkStart(int Min, int Max, IReadOnlyList<ChildCount> Child
 
 public sealed record ChildCount(int Count, int Weight);
 
-/// <summary>The section "life" of the world: the rules of a life, in life years and chances per life year.</summary>
-public sealed record LifeRules(Stages Stages, PairingRules Pairing, BirthRules Births, IReadOnlyList<AgeChance> Dying, TradeRules Trades);
+/// <summary>
+/// The section "life" of the world: the rules of a life, in life years and chances per life year. <paramref name="Accident"/> is
+/// the chance a life year that an adult with a trade dies in an accident.
+/// </summary>
+public sealed record LifeRules(Stages Stages, PairingRules Pairing, BirthRules Births, IReadOnlyList<AgeChance> Dying, TradeRules Trades, double Accident = 0);
 
 /// <summary>The ages a stage begins at.</summary>
 public sealed record Stages(int Pupil, int Adult, int Old);

@@ -1,6 +1,6 @@
 {
   "base": 55,
-  "temper": 15,
+  "temper": 50,
   "maxStepPerHour": 3,
   "memorySize": 12,
   "memoryHalfLife": 3,
@@ -38,6 +38,8 @@
     "paired": 10,
     "kin-died": -15,
     "partner-died": -25,
-    "ill": -4
+    "ill": -4,
+    "village-found": 5,
+    "village-died": -4
   }
 }
