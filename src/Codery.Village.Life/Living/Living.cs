@@ -77,6 +77,9 @@ public sealed partial class Living : IModule
     /// <summary>The tiles that hold a substance; empty for one not at hand.</summary>
     public IReadOnlyList<Cell> TilesOf(string substance) => _tiles.TryGetValue(substance, out var tiles) ? tiles : [];
 
+    /// <summary>A substance Living knows (raw, the island's own, or made), or null.</summary>
+    public Substance? SubstanceOf(string id) => _substances.GetValueOrDefault(id);
+
     /// <summary>What a household has, one possession per use, in use order.</summary>
     public IReadOnlyList<Possession> Of(int household) =>
         _possessions.TryGetValue(household, out var owned) ? [.. owned.Values] : [];

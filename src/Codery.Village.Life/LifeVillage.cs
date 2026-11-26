@@ -21,6 +21,6 @@ public static class LifeVillage
     public static IReadOnlyList<IModule> Modules()
     {
         var knowing = new Knowing.Knowing();
-        return [new Folk.Folk(), new Living.Living(knowing.Knows), knowing];
+        return [new Folk.Folk(), new Living.Living(knowing.Knows), knowing, new Feelings.Feelings()];
     }
 }
