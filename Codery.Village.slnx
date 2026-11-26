@@ -4,8 +4,10 @@
     <Project Path="src/Codery.Village.Modules/Codery.Village.Modules.csproj" />
     <Project Path="src/Codery.Village.Server/Codery.Village.Server.csproj" />
     <Project Path="src/Codery.Village.Checks/Codery.Village.Checks.csproj" />
+    <Project Path="src/Codery.Village.Laws/Codery.Village.Laws.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Codery.Village.Life.Tests/Codery.Village.Life.Tests.csproj" />
     <Project Path="tests/Codery.Village.Tests/Codery.Village.Tests.csproj" />
   </Folder>
 </Solution>
