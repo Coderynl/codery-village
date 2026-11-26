@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Codery.Village.Core;
 using Codery.Village.Core.Data;
 using Codery.Village.Core.Modules;
+using Codery.Village.Core.Save;
 using Codery.Village.Core.Time;
 using Codery.Village.Life.Folk;
 using Codery.Village.Life.Knowing;
@@ -99,6 +100,24 @@ public class KnowingTests
         Assert.True(without < 0.4, $"without a school {without:P0} of the pupils know weaving");
     }
 
+    [Fact]
+    public void Knowing_comes_back_the_same_after_saving()
+    {
+        var unbroken = LifeVillage.Start(1, World.Data, World.Map, Spring);
+        Run(unbroken, 6 * TicksPerYear);
+
+        var first = LifeVillage.Start(1, World.Data, World.Map, Spring);
+        var children = FolkOf(first).Living.Where(p => FolkOf(first).StageOf(p, 0) < LifeStage.Adult).Select(p => p.Id).ToList();
+        Run(first, 5 * TicksPerYear);
+        Assert.Contains(children, id => Items(first).Any(item => KnowingOf(first).Knows(id, item)));
+        var saved = SaveJson.FromJson(SaveJson.ToJson(first.Save()));
+        var loaded = Engine.Load(saved, LifeVillage.Modules(), World.Data, World.Map, new SimulatedTime(saved.Calendar));
+        Run(loaded, TicksPerYear);
+
+        Assert.Equal(KnowingOf(unbroken).KnownOnIsland(), KnowingOf(loaded).KnownOnIsland());
+        Assert.Equal(Knowledge(unbroken), Knowledge(loaded));
+    }
+
     // ── a village to watch ──
 
     private sealed record Watched(Engine Engine, FolkModule Folk, LivingModule Living, KnowingModule Knowing, Recorder Events);
@@ -122,6 +141,27 @@ public class KnowingTests
         }
         throw new InvalidOperationException("No seed up to 200 fits.");
     }
+
+    private static FolkModule FolkOf(Engine engine) => engine.Running.OfType<FolkModule>().Single();
+
+    private static KnowingModule KnowingOf(Engine engine) => engine.Running.OfType<KnowingModule>().Single();
+
+    // every item anyone could hold here: start processes, uses and recipes, every use, and what the island knows now
+    private static SortedSet<string> Items(Engine engine)
+    {
+        var laws = World.Laws;
+        var items = new SortedSet<string>(StringComparer.Ordinal);
+        items.UnionWith(laws.Start.Processes);
+        items.UnionWith(laws.Start.Recipes.Select(r => r.Id));
+        items.UnionWith(laws.Uses.Select(u => u.Id));
+        items.UnionWith(KnowingOf(engine).KnownOnIsland());
+        return items;
+    }
+
+    // for every living person and every item: whether they know it, and at what level
+    private static List<(int Person, string Item, bool Knows, int Level)> Knowledge(Engine engine) =>
+        [.. FolkOf(engine).Living.SelectMany(p => Items(engine).Select(item =>
+            (p.Id, item, KnowingOf(engine).Knows(p.Id, item), KnowingOf(engine).Level(p.Id, item))))];
 
     private static double Age(FolkModule folk, Person p) => folk.AgeOf(p, 0);
 
