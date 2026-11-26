@@ -31,6 +31,7 @@ public sealed partial class Living : IModule
     private Dictionary<string, Trade> _trades = [];
     private List<Recipe> _recipes = [];
     private readonly List<(Recipe Recipe, Substance Output)> _learned = [];
+    private readonly SortedDictionary<string, double> _site = new(StringComparer.Ordinal);
     private Dictionary<string, Recipe> _recipeById = [];
     private Dictionary<string, Substance> _substances = [];
     private List<Use> _householdUses = [];
@@ -95,6 +96,9 @@ public sealed partial class Living : IModule
         _recipeById[recipe.Id] = recipe;
         _substances.TryAdd(output.Id, output);
     }
+
+    /// <summary>For how many days in a row <paramref name="what"/> (<c>food</c> or <c>fuel</c>) has run short; 0 when it has not.</summary>
+    public int DaysShort(string what) => what == Food ? _foodShortDays : what == Fuel ? _fuelShortDays : 0;
 
     /// <summary>A substance Living knows (raw, the island's own, or made), or null.</summary>
     public Substance? SubstanceOf(string id) => _substances.GetValueOrDefault(id);
@@ -236,7 +240,8 @@ public sealed partial class Living : IModule
         Weather.Drought,
         _droughtLeft,
         Weather.Cold,
-        [.. _learned.Select(l => new SavedLearned(l.Recipe.Id, l.Recipe.Process, [.. l.Recipe.In], l.Output.Id, l.Output.Kind, [.. l.Output.Profile.Values]))]),
+        [.. _learned.Select(l => new SavedLearned(l.Recipe.Id, l.Recipe.Process, [.. l.Recipe.In], l.Output.Id, l.Output.Kind, [.. l.Output.Profile.Values]))],
+        new Dictionary<string, double>(_site)),
         SaveJson.Options)!;
 
     public void Load(ModuleContext village, JsonNode data, int version)
@@ -266,6 +271,8 @@ public sealed partial class Living : IModule
         _fuelShortDays = saved.FuelShortDays;
         _droughtLeft = saved.DroughtLeft;
         Weather = new Weather(saved.Drought, saved.Cold);
+        _site.Clear();
+        foreach (var (structure, amount) in saved.Site ?? new Dictionary<string, double>()) _site[structure] = amount;
         _learned.Clear();
         foreach (var l in saved.Learned ?? [])
         {
@@ -278,7 +285,7 @@ public sealed partial class Living : IModule
     private sealed record SavedLiving(IReadOnlyList<int> Own, Dictionary<string, List<Cell>> Tiles, Dictionary<string, double> Stock,
         IReadOnlyList<string> Structures, IReadOnlyList<SavedPossession> Possessions, IReadOnlyList<SavedWait> Waiting, IReadOnlyList<int> Ill,
         IReadOnlyList<int> Households, int FoodShortDays, int FuelShortDays, bool Drought, int DroughtLeft, int Cold,
-        IReadOnlyList<SavedLearned>? Learned = null);
+        IReadOnlyList<SavedLearned>? Learned = null, IReadOnlyDictionary<string, double>? Site = null);
 
     private sealed record SavedLearned(string Recipe, string Process, IReadOnlyList<RecipeInput> In, string Out, string Kind, IReadOnlyList<int> Profile);
 

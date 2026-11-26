@@ -20,4 +20,6 @@ public sealed record KnowingRules(
     double TeacherMin,
     double Practice,
     string Teacher,
-    string School);
+    string School,
+    string Builder = "builder",
+    int FoundLevel = 40);

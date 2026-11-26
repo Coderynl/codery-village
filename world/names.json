@@ -4,121 +4,141 @@
       "property": "hardness",
       "high": true,
       "nl": "harde",
-      "en": "hard"
+      "en": "hard",
+      "nlNeuter": "hard"
     },
     {
       "property": "hardness",
       "high": false,
       "nl": "zachte",
-      "en": "soft"
+      "en": "soft",
+      "nlNeuter": "zacht"
     },
     {
       "property": "toughness",
       "high": true,
       "nl": "taaie",
-      "en": "tough"
+      "en": "tough",
+      "nlNeuter": "taai"
     },
     {
       "property": "toughness",
       "high": false,
       "nl": "brosse",
-      "en": "brittle"
+      "en": "brittle",
+      "nlNeuter": "bros"
     },
     {
       "property": "flexibility",
       "high": true,
       "nl": "soepele",
-      "en": "supple"
+      "en": "supple",
+      "nlNeuter": "soepel"
     },
     {
       "property": "flexibility",
       "high": false,
       "nl": "stugge",
-      "en": "stiff"
+      "en": "stiff",
+      "nlNeuter": "stug"
     },
     {
       "property": "density",
       "high": true,
       "nl": "zware",
-      "en": "heavy"
+      "en": "heavy",
+      "nlNeuter": "zwaar"
     },
     {
       "property": "density",
       "high": false,
       "nl": "lichte",
-      "en": "light"
+      "en": "light",
+      "nlNeuter": "licht"
     },
     {
       "property": "flammability",
       "high": true,
       "nl": "brandende",
-      "en": "fiery"
+      "en": "fiery",
+      "nlNeuter": "brandend"
     },
     {
       "property": "flammability",
       "high": false,
       "nl": "onbrandbare",
-      "en": "fireproof"
+      "en": "fireproof",
+      "nlNeuter": "onbrandbaar"
     },
     {
       "property": "meltingPoint",
       "high": true,
       "nl": "vuurvaste",
-      "en": "heat-proof"
+      "en": "heat-proof",
+      "nlNeuter": "vuurvast"
     },
     {
       "property": "meltingPoint",
       "high": false,
       "nl": "smeltende",
-      "en": "melting"
+      "en": "melting",
+      "nlNeuter": "smeltend"
     },
     {
       "property": "watertightness",
       "high": true,
       "nl": "dichte",
-      "en": "tight"
+      "en": "tight",
+      "nlNeuter": "dicht"
     },
     {
       "property": "watertightness",
       "high": false,
       "nl": "poreuze",
-      "en": "porous"
+      "en": "porous",
+      "nlNeuter": "poreus"
     },
     {
       "property": "nutrition",
       "high": true,
       "nl": "voedzame",
-      "en": "hearty"
+      "en": "hearty",
+      "nlNeuter": "voedzaam"
     },
     {
       "property": "nutrition",
       "high": false,
       "nl": "schrale",
-      "en": "meagre"
+      "en": "meagre",
+      "nlNeuter": "schraal"
     },
     {
       "property": "durability",
       "high": true,
       "nl": "duurzame",
-      "en": "lasting"
+      "en": "lasting",
+      "nlNeuter": "duurzaam"
     },
     {
       "property": "durability",
       "high": false,
       "nl": "vergankelijke",
-      "en": "fleeting"
+      "en": "fleeting",
+      "nlNeuter": "vergankelijk"
     },
     {
       "property": "conductivity",
       "high": true,
       "nl": "glanzende",
-      "en": "gleaming"
+      "en": "gleaming",
+      "nlNeuter": "glanzend"
     },
     {
       "property": "conductivity",
       "high": false,
       "nl": "doffe",
-      "en": "dull"
+      "en": "dull",
+      "nlNeuter": "dof"
     }
   ],
   "own": {
@@ -128,5 +148,31 @@
   "numbered": {
     "nl": "{name} {n}",
     "en": "{name} {n}"
-  }
+  },
+  "neuter": [
+    "wood",
+    "grain",
+    "fruit",
+    "meat",
+    "bone",
+    "sand",
+    "salt",
+    "kelp",
+    "wax",
+    "ore",
+    "water",
+    "flour",
+    "dough",
+    "bread",
+    "block",
+    "ceramic",
+    "metal",
+    "steel",
+    "glass",
+    "leather",
+    "rope",
+    "wicker",
+    "brew",
+    "pitch"
+  ]
 }

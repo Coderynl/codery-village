@@ -139,12 +139,12 @@ public sealed class Feelings : IModule
         }
     }
 
-    // a discovery suggests more: the open-minded come to want what it could serve, where nobody has that yet
+    // a discovery suggests more: the open-minded come to want what it could serve at home, where nobody has that yet
     private void Promise(string substance, long tick)
     {
         if (Living.SubstanceOf(substance) is not { } found) return;
         var had = Households().SelectMany(h => Living.Of(h).Select(o => o.Use)).ToHashSet(StringComparer.Ordinal);
-        var promised = _world.Uses.Where(u => !had.Contains(u.Id) && u.Score(found.Profile) > 0)
+        var promised = _householdUses.Where(u => !had.Contains(u.Id) && u.Score(found.Profile) > 0)
             .OrderByDescending(u => u.Score(found.Profile)).ThenBy(u => u.Id, StringComparer.Ordinal).FirstOrDefault();
         if (promised is null) return;
         foreach (var (id, heart) in _hearts)

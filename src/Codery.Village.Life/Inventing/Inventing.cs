@@ -80,7 +80,8 @@ public sealed class Inventing : IModule
         if (!Hourly.DayStarts(village)) return;
         var tick = village.Clocks.Tick;
         foreach (var p in Folk.Living.ToArray())
-            if (Folk.StageOf(p, tick) is LifeStage.Adult or LifeStage.Old && p.Traits.Openness >= _rules.TryOpenness) Try(p, tick);
+            if (Folk.StageOf(p, tick) is LifeStage.Adult or LifeStage.Old && p.Traits.Openness >= _rules.TryOpenness)
+                for (var i = 0; i < _rules.TriesPerDay; i++) Try(p, tick);
         Walls(tick);
     }
 
@@ -93,11 +94,14 @@ public sealed class Inventing : IModule
 
     private IReadOnlyList<(string Use, double Weight)> Pressing() => Feelings?.Pressing() ?? [];
 
-    // uses felt enough that a better answer is noticed: household uses, what is wished, and a hotter fire not yet had
+    // uses felt enough that a better answer is noticed: household uses, what is wished, what the island knows it needs
+    // (fuel, cutting, walls), and a hotter fire not yet had
     private IEnumerable<Use> Felt()
     {
         var wished = Pressing().Select(p => p.Use).ToHashSet(StringComparer.Ordinal);
-        return _world.Uses.Where(u => u.Household || wished.Contains(u.Id) || (u.Structure is { } s && !Living.Structures.Contains(s)));
+        var known = Knowing.KnownOnIsland();
+        return _world.Uses.Where(u => u.Household || wished.Contains(u.Id) || known.Contains(u.Id)
+            || (u.Structure is { } s && !Living.Structures.Contains(s)));
     }
 
     private HashSet<string> Helpful()
@@ -105,6 +109,14 @@ public sealed class Inventing : IModule
         var kinds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (use, _) in Pressing()) kinds.UnionWith(_rules.Helps.GetValueOrDefault(use) ?? []);
         foreach (var u in _world.Uses.Where(u => u.Structure is { } s && !Living.Structures.Contains(s))) kinds.UnionWith(_rules.Helps.GetValueOrDefault(u.Id) ?? []);
+        return kinds;
+    }
+
+    // kinds that help a use the island knows but nobody presses for: a lighter pull than a wish
+    private HashSet<string> Useful()
+    {
+        var kinds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var use in Knowing.KnownOnIsland()) kinds.UnionWith(_rules.Helps.GetValueOrDefault(use) ?? []);
         return kinds;
     }
 
@@ -140,6 +152,7 @@ public sealed class Inventing : IModule
         var random = _village.Random;
         var trade = TradeKinds(p);
         var helpful = Helpful();
+        var useful = Useful();
         var near = Pressing().Where(x => (_rules.Helps.GetValueOrDefault(x.Use) ?? []).Any(trade.Contains)).Sum(x => x.Weight);
         var chance = _rules.TryBase * p.Traits.Openness / 100.0 * (1 + near / _rules.PressingScale);
         if (random.NextDouble() >= chance) return;
@@ -148,7 +161,8 @@ public sealed class Inventing : IModule
         var hand = AtHand();
         if (processes.Count == 0 || hand.Count == 0) return;
         var wild = random.NextDouble() < _rules.WildChance;
-        double Weight(Substance s) => wild ? 1 : (trade.Contains(s.Kind) ? _rules.TradeWeight : 1) * (helpful.Contains(s.Kind) ? _rules.PressingWeight : 1);
+        double Weight(Substance s) => wild ? 1 : (trade.Contains(s.Kind) ? _rules.TradeWeight : 1)
+            * (helpful.Contains(s.Kind) ? _rules.PressingWeight : useful.Contains(s.Kind) ? _rules.UsefulWeight : 1);
 
         (Process Process, IReadOnlyList<Portion> Inputs) attempt = (processes[0], [new Portion(hand[0], 1)]);
         for (var redraw = 0; redraw < 5; redraw++)
@@ -158,7 +172,9 @@ public sealed class Inventing : IModule
             IReadOnlyList<Portion> inputs = [new Portion(a, 1)];
             if (process.MaxInputs >= 2 && hand.Count > 1 && random.NextDouble() < 0.5)
             {
-                var b = Pick([.. hand.Where(s => s.Id != a.Id)], Weight, random);
+                // what goes with it: a kind that helps the same wanted use, as sand goes with clay
+                var partners = wild ? [] : Partners(a.Kind);
+                var b = Pick([.. hand.Where(s => s.Id != a.Id)], s => Weight(s) * (partners.Contains(s.Kind) ? _rules.PressingWeight : 1), random);
                 var ratio = _rules.Ratios[random.Next(_rules.Ratios.Count)];
                 inputs = [new Portion(a, ratio[0]), new Portion(b, ratio[1])];
             }
@@ -171,6 +187,17 @@ public sealed class Inventing : IModule
         var result = _world.Nature.Apply(attempt.Process.Id, attempt.Inputs);
         _village.Publish(new Tried(tick, p.Id, key, result?.Id));
         if (result is not null) Notice(p, attempt.Process, attempt.Inputs, result, "trying", tick);
+    }
+
+    // the kinds that help a pressing (or unbuilt structure's) use together with this kind
+    private HashSet<string> Partners(string kind)
+    {
+        var uses = Pressing().Select(p => p.Use)
+            .Concat(_world.Uses.Where(u => u.Structure is { } s && !Living.Structures.Contains(s)).Select(u => u.Id));
+        var partners = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var use in uses)
+            if (_rules.Helps.GetValueOrDefault(use) is { } kinds && kinds.Contains(kind)) partners.UnionWith(kinds.Where(k => k != kind));
+        return partners;
     }
 
     // a process whose laws work on a kind that would help is the likelier try: people know that fire changes clay
@@ -250,7 +277,8 @@ public sealed class Inventing : IModule
         var best = felt.ToDictionary(u => u.Id, u => known.Max(s => u.Score(s.Profile)), StringComparer.Ordinal);
         (Use Use, double Gain)? Better(Substance s) => felt
             .Select(u => (Use: u, Gain: u.Score(s.Profile) - best[u.Id]))
-            .Where(x => x.Use.Score(s.Profile) > 0 && x.Gain >= _rules.NoticeMargin)
+            // a wall that would not hold the fire is no wall: a structure's use counts only from its threshold
+            .Where(x => x.Use.Score(s.Profile) > 0 && x.Use.Score(s.Profile) >= x.Use.Threshold && x.Gain >= _rules.NoticeMargin)
             .OrderByDescending(x => x.Gain).ThenBy(x => x.Use.Id, StringComparer.Ordinal)
             .Select(x => ((Use, double)?)x).FirstOrDefault();
 
@@ -286,6 +314,7 @@ public sealed class Inventing : IModule
             if (!_names.ContainsKey(stepResult.Id)) _names[stepResult.Id] = Named(stepResult); // found again, it keeps its name
             Living.Learn(recipe, stepResult);
             Knowing.Learn(finder.Id, recipe.Id, _rules.FoundLevel, "found");
+            if (finder.Trade is { } trade) Knowing.JoinTrade(trade, recipe.Id);
             var discovery = new Discovery(tick, finder.Id, stepResult.Id, recipe.Id, use.Use.Id, how, witnesses);
             _discoveries.Add(discovery);
             _village.Publish(new Discovered(tick, discovery));
@@ -307,11 +336,12 @@ public sealed class Inventing : IModule
     private Name Named(Substance s)
     {
         var kind = _world.Kinds.GetValueOrDefault(s.Kind) ?? _naming.Own;
+        var neuter = (_naming.Neuter ?? []).Contains(s.Kind);
         var taken = _names.Values.Select(n => n.Nl).Concat(_world.NamesById.Values.Select(n => n.Nl)).ToHashSet(StringComparer.Ordinal);
         var free = _naming.Adjectives
             .Where(a => (s.Profile[a.Property] >= 50) == a.High)
             .OrderByDescending(a => Math.Abs(s.Profile[a.Property] - 50)).ThenBy(a => a.Property)
-            .Select(a => new Name($"{a.Nl} {kind.Nl}", $"{a.En} {kind.En}"))
+            .Select(a => new Name($"{(neuter ? a.NlNeuter ?? a.Nl : a.Nl)} {kind.Nl}", $"{a.En} {kind.En}"))
             .Where(n => !taken.Contains(n.Nl)).Take(3).ToList();
         if (free.Count > 0) return free[_namer.Next(free.Count)];
         for (var n = 2; ; n++)

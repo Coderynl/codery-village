@@ -1,13 +1,13 @@
 {
   "tryOpenness": 40,
-  "tryBase": 0.5,
+  "tryBase": 1.0,
   "pressingScale": 40,
   "tradeWeight": 3,
   "pressingWeight": 8,
   "retryWeight": 0.1,
   "wildChance": 0.05,
   "accidentChance": 0.03,
-  "noticeMargin": 0.1,
+  "noticeMargin": 0.05,
   "witnessShare": 0.5,
   "foundLevel": 30,
   "wallWeight": 30,
@@ -167,5 +167,7 @@
       "wood",
       "plank"
     ]
-  }
+  },
+  "triesPerDay": 2,
+  "usefulWeight": 2
 }

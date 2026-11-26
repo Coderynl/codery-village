@@ -24,6 +24,7 @@ public sealed class Knowing : IModule
     private IReadOnlyList<string> _startItems = [];
     // a trade's items: its recipes, their processes, and every use its outputs (made or gathered) serve at all
     private Dictionary<string, SortedSet<string>> _tradeItems = [];
+    private readonly List<Joined> _joined = [];
 
     // the state that is saved: levels by person and item; the dead leave once Knowing has seen them die
     private readonly SortedDictionary<int, SortedDictionary<string, double>> _levels = [];
@@ -80,6 +81,7 @@ public sealed class Knowing : IModule
 
         var tick = village.Clocks.Tick;
         Practise(village.Received);
+        Raised(village.Received, tick);
         ForgetTheDead(tick);
         Teach(tick, !village.Clocks.Calendar.Moment.Weekend);
     }
@@ -104,6 +106,16 @@ public sealed class Knowing : IModule
         }, StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// Makes <paramref name="item"/> part of <paramref name="trade"/>: masters teach it to the trade's apprentices and
+    /// household members see it at work. A find joins the finder's trade this way. Kept in the save.
+    /// </summary>
+    public void JoinTrade(string trade, string item)
+    {
+        if (!_tradeItems.TryGetValue(trade, out var items) || !items.Add(item)) return;
+        _joined.Add(new Joined(trade, item));
+    }
+
     private IReadOnlyCollection<string> ItemsOf(string? trade) =>
         trade is not null && _tradeItems.TryGetValue(trade, out var items) ? items : [];
 
@@ -125,6 +137,25 @@ public sealed class Knowing : IModule
             if (!_levels.TryGetValue(maker, out var levels)) continue;
             foreach (var item in items)
                 if (levels.TryGetValue(item, out var level) && level > _rules.Knows) levels[item] = Math.Min(100, level + _rules.Practice);
+        }
+    }
+
+    // a structure that stands opens its processes to those who raised it: whoever knows its wall, and the builders
+    private void Raised(IReadOnlyList<VillageEvent> received, long tick)
+    {
+        foreach (var built in received.OfType<Living.Built>())
+        {
+            var processes = WorldData.From(_village.Data).Processes.Where(p => p.Needs == built.Structure).Select(p => p.Id).ToList();
+            var makers = _folk.Living.Where(p => _folk.StageOf(p, tick) >= LifeStage.Adult
+                && (p.Trade == _rules.Builder || Known(p.Id).Any(k => k.Item.EndsWith(":" + built.Substance, StringComparison.Ordinal)))).ToList();
+            foreach (var process in processes)
+            {
+                foreach (var p in makers)
+                {
+                    Raise(p.Id, process, _rules.FoundLevel, "found", tick);
+                    if (p.Trade is { } trade) JoinTrade(trade, process);
+                }
+            }
         }
     }
 
@@ -221,17 +252,21 @@ public sealed class Knowing : IModule
     // ── saving ──
 
     public JsonNode Save() => JsonSerializer.SerializeToNode(new SavedKnowing(
-        [.. _levels.SelectMany(p => p.Value.Select(l => new SavedLevel(p.Key, l.Key, l.Value)))]), SaveJson.Options)!;
+        [.. _levels.SelectMany(p => p.Value.Select(l => new SavedLevel(p.Key, l.Key, l.Value)))], [.. _joined]), SaveJson.Options)!;
 
     public void Load(ModuleContext village, JsonNode data, int version)
     {
         Read(village);
         var saved = data.Deserialize<SavedKnowing>(SaveJson.Options) ?? throw new InvalidDataException("The knowing part of the save is empty.");
+        _joined.Clear();
+        foreach (var joined in saved.Joined ?? []) JoinTrade(joined.Trade, joined.Item);
         _levels.Clear();
         foreach (var l in saved.Levels) LevelsOf(l.Person)[l.Item] = l.Level;
     }
 
-    private sealed record SavedKnowing(IReadOnlyList<SavedLevel> Levels);
+    private sealed record SavedKnowing(IReadOnlyList<SavedLevel> Levels, IReadOnlyList<Joined>? Joined = null);
+
+    private sealed record Joined(string Trade, string Item);
 
     private sealed record SavedLevel(int Person, string Item, double Level);
 }

@@ -42,4 +42,11 @@ public sealed record AgeChance(int From, double Chance);
 /// nobody living has it. The <paramref name="Agreeable"/> trades are open only from agreeableness <paramref name="AgreeableFrom"/>.
 /// </summary>
 public sealed record TradeRules(double Parent, double Interest, double Missing, int AgreeableFrom, IReadOnlyList<string> Agreeable,
-    IReadOnlyDictionary<string, IReadOnlyList<string>> Interests);
+    IReadOnlyDictionary<string, IReadOnlyList<string>> Interests, IReadOnlyList<string>? Essential = null, Need? Need = null);
+
+/// <summary>
+/// When <c>food</c> or <c>fuel</c> (the keys of <paramref name="Trades"/>) has run short for <paramref name="Days"/> days in a
+/// row, an adult up to <paramref name="UpTo"/> years old takes up the trade that answers it, with <paramref name="Chance"/> a
+/// day for the whole village; a choice at coming of age weighs that trade <paramref name="Weight"/> times.
+/// </summary>
+public sealed record Need(IReadOnlyDictionary<string, string> Trades, int Days, double Chance, int UpTo, double Weight);

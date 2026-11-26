@@ -11,3 +11,6 @@ public sealed record Died(long Tick, int Person, string Cause) : VillageEvent(Ti
 
 /// <summary>Someone turned 18 and chose a trade (<see cref="Person.Trade"/>).</summary>
 public sealed record CameOfAge(long Tick, int Person) : VillageEvent(Tick);
+
+/// <summary>An adult took up another trade, because the village ran short of what it gives.</summary>
+public sealed record ChangedTrade(long Tick, int Person, string From, string To) : VillageEvent(Tick);

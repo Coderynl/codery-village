@@ -46,12 +46,12 @@ public sealed partial class Living
         var structure = StructureToBuild(tick);
         foreach (var p in workers)
         {
-            if (structure is { } s && p.Trade == _rules.Roles.Builder && _knows(p.Id, s.Recipe.Id)) BuildPart(p.Id, s.Use, s.Recipe, tick);
+            if (structure is { } s && _knows(p.Id, s.Recipe.Id)) BuildPart(p.Id, s.Use, s.Recipe, tick);
             else WorkTrade(p, tick);
         }
-        if (structure is { } built && Stock[built.Recipe.Out] >= _rules.StructureCost - Nothing)
+        if (structure is { } built && _site.GetValueOrDefault(built.Use.Structure!) >= _rules.StructureCost - Nothing)
         {
-            Stock.Take(built.Recipe.Out, _rules.StructureCost);
+            _site.Remove(built.Use.Structure!);
             _structures.Add(built.Use.Structure!);
             _village.Publish(new Built(tick, built.Use.Structure!, built.Recipe.Out));
         }
@@ -104,11 +104,13 @@ public sealed partial class Living
 
     // ── structures ──
 
-    // the first structure not yet standing whose use some living builder can serve: by the best recipe a builder knows
+    // the first structure not yet standing whose use someone can serve, while a builder lives to raise it: by the best
+    // recipe an adult knows, who then works on it with the builders
     private (Use Use, Recipe Recipe)? StructureToBuild(long tick)
     {
-        var builders = _folk.Living.Where(p => p.Trade == _rules.Roles.Builder && _folk.StageOf(p, tick) >= LifeStage.Adult).ToList();
-        if (builders.Count == 0) return null;
+        var adults = _folk.Living.Where(p => _folk.StageOf(p, tick) >= LifeStage.Adult).ToList();
+        if (!adults.Any(p => p.Trade == _rules.Roles.Builder)) return null;
+        var builders = adults;
         foreach (var use in _world.Uses)
         {
             if (use.Structure is not { } structure || _structures.Contains(structure)) continue;
@@ -130,7 +132,12 @@ public sealed partial class Living
         for (var i = 0; i < batches; i++)
         {
             var pending = new List<VillageEvent>();
+            var before = Stock[recipe.Out];
             if (!Attempt(() => Batch(recipe, builder, 0, pending))) break;
+            // what is made for a structure goes onto its site, where it neither spoils nor is used for anything else
+            var added = Stock[recipe.Out] - before;
+            Stock.Take(recipe.Out, added);
+            _site[use.Structure!] = _site.GetValueOrDefault(use.Structure!) + added;
             foreach (var e in pending) _village.Publish(e);
             made = true;
         }

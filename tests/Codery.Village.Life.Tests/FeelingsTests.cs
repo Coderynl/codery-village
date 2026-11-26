@@ -137,7 +137,7 @@ public class FeelingsTests
 
         var first = LifeVillage.Start(3, World.Data, World.Map, Spring);
         Run(first, 5 * TicksPerYear);
-        Assert.Contains(Module<FolkModule>(first).Living, p => Module<FeelingsModule>(first).Wishes(p.Id).Count > 0);
+        Assert.Contains(Module<FolkModule>(first).Living, p => Module<FeelingsModule>(first).Memory(p.Id).Count > 0);
         var saved = SaveJson.FromJson(SaveJson.ToJson(first.Save()));
         var loaded = Engine.Load(saved, LifeVillage.Modules(), World.Data, World.Map, new SimulatedTime(saved.Calendar));
         Run(loaded, TicksPerYear);

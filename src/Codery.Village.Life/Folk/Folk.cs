@@ -107,8 +107,14 @@ public sealed class Folk : IModule
                 Add(random.Next(2) == 0 ? Sex.Man : Sex.Woman, youngest + random.NextDouble() * (oldest - youngest), woman.Id, man.Id, household, null);
         }
 
-        foreach (var p in _living)
-            if (StageOf(p, village.Clocks.Tick) >= LifeStage.Adult) p.Trade = ChooseTrade(random, p);
+        // a village begins with the trades it cannot do without, each taken by an adult drawn at random, the rest by choice
+        var adults = _living.Where(p => StageOf(p, village.Clocks.Tick) >= LifeStage.Adult).ToList();
+        foreach (var trade in (_rules.Trades.Essential ?? []).Where(_trades.Contains))
+        {
+            var free = adults.Where(p => p.Trade is null && AgeOf(p, village.Clocks.Tick) < _rules.Stages.Old).ToList();
+            if (free.Count > 0) free[random.Next(free.Count)].Trade = trade;
+        }
+        foreach (var p in adults.Where(p => p.Trade is null)) p.Trade = ChooseTrade(random, p);
     }
 
     public void Step(ModuleContext village)
@@ -121,6 +127,24 @@ public sealed class Folk : IModule
         foreach (var p in _living.ToArray()) ComeOfAge(village, p, tick);
         foreach (var p in _living.ToArray()) TryToPair(village, p, tick);
         foreach (var p in _living.ToArray()) TryForAChild(village, p, tick);
+        AnswerANeed(village, tick);
+    }
+
+    // when food or fuel has run short for days, someone takes up the trade that gives it
+    private void AnswerANeed(ModuleContext village, long tick)
+    {
+        if (_rules.Trades.Need is not { } need || village.Find<Living.Living>() is not { } living) return;
+        foreach (var (what, trade) in need.Trades.Where(n => _trades.Contains(n.Value)).OrderBy(n => n.Key, StringComparer.Ordinal))
+        {
+            if (living.DaysShort(what) < need.Days || village.Random.NextDouble() >= need.Chance) continue;
+            var who = _living.Where(p => p.Trade is not null && p.Trade != trade && StageOf(p, tick) == LifeStage.Adult && AgeOf(p, tick) <= need.UpTo)
+                .OrderBy(p => p.Id).ToList();
+            if (who.Count == 0) continue;
+            var p = who[village.Random.Next(who.Count)];
+            var from = p.Trade!;
+            p.Trade = trade;
+            village.Publish(new ChangedTrade(tick, p.Id, from, trade));
+        }
     }
 
     // ── a life ──
@@ -235,6 +259,8 @@ public sealed class Folk : IModule
             if (parents.Contains(trade)) weight *= rules.Parent;
             if (rules.Interests.TryGetValue(trade, out var interests) && interests.Any(p.Interests.Contains)) weight *= rules.Interest;
             if (!_living.Any(q => q != p && q.Trade == trade)) weight *= rules.Missing;
+            if (rules.Need is { } need && _village?.Find<Living.Living>() is { } living
+                && need.Trades.Any(n => n.Value == trade && living.DaysShort(n.Key) > 0)) weight *= need.Weight;
             weights[i] = weight;
         }
 

@@ -9,5 +9,7 @@
   "teacherMin": 50,
   "practice": 1,
   "teacher": "teacher",
-  "school": "school"
+  "school": "school",
+  "builder": "builder",
+  "foundLevel": 40
 }

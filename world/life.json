@@ -21,12 +21,20 @@
   },
   "dying": [
     {
+      "from": 55,
+      "chance": 0.008
+    },
+    {
+      "from": 62,
+      "chance": 0.015
+    },
+    {
       "from": 70,
-      "chance": 0.03
+      "chance": 0.04
     },
     {
       "from": 75,
-      "chance": 0.06
+      "chance": 0.07
     },
     {
       "from": 80,
@@ -52,7 +60,7 @@
   "trades": {
     "parent": 3,
     "interest": 2,
-    "missing": 2,
+    "missing": 3,
     "agreeableFrom": 50,
     "agreeable": [
       "teacher",
@@ -95,6 +103,23 @@
         "stars",
         "art"
       ]
+    },
+    "essential": [
+      "farmer",
+      "woodcutter",
+      "miller",
+      "baker",
+      "builder"
+    ],
+    "need": {
+      "trades": {
+        "food": "farmer",
+        "fuel": "woodcutter"
+      },
+      "days": 2,
+      "chance": 0.3,
+      "upTo": 50,
+      "weight": 4
     }
   }
 }
