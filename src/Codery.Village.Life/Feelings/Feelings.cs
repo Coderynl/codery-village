@@ -191,7 +191,7 @@ public sealed class Feelings : IModule
             heart.Wishes[had] = heart.Wishes[had] with { Weight = Math.Min(wishes.MaxWeight, heart.Wishes[had].Weight + wishes.StartWeight / 2) };
             return;
         }
-        heart.Wishes.Add(new Wish(use, cause, because, tick, wishes.StartWeight));
+        heart.Wishes.Add(new Wish(use, cause, tick, wishes.StartWeight, because));
         _village.Publish(new Wished(tick, person, use, cause, because));
         Note(heart, new Moment(tick, "wished", use, 0));
         if (heart.Wishes.Count > wishes.MaxWishes)

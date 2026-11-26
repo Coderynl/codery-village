@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Codery.Village.Core;
 using Codery.Village.Core.Data;
 using Codery.Village.Core.Modules;
+using Codery.Village.Core.Save;
 using Codery.Village.Core.Time;
 using Codery.Village.Life.Feelings;
 using FeelingsModule = Codery.Village.Life.Feelings.Feelings;
@@ -110,6 +111,36 @@ public class FeelingsTests
         Assert.NotEmpty(wished);
         Assert.All(wished, w => Assert.Contains(w.Cause, Wish.Causes));
         Assert.Contains(wished, w => w.Cause != "loss");
+    }
+
+    [Fact]
+    public void Feelings_come_back_the_same_after_saving()
+    {
+        var unbroken = LifeVillage.Start(3, World.Data, World.Map, Spring);
+        Run(unbroken, 6 * TicksPerYear);
+
+        var first = LifeVillage.Start(3, World.Data, World.Map, Spring);
+        Run(first, 5 * TicksPerYear);
+        Assert.Contains(Module<FolkModule>(first).Living, p => Module<FeelingsModule>(first).Wishes(p.Id).Count > 0);
+        var saved = SaveJson.FromJson(SaveJson.ToJson(first.Save()));
+        var loaded = Engine.Load(saved, LifeVillage.Modules(), World.Data, World.Map, new SimulatedTime(saved.Calendar));
+        Run(loaded, TicksPerYear);
+
+        Assert.Equal(Hearts(unbroken), Hearts(loaded));
+    }
+
+    private static T Module<T>(Engine engine) => engine.Running.OfType<T>().Single();
+
+    private static string Hearts(Engine engine)
+    {
+        var feelings = Module<FeelingsModule>(engine);
+        return string.Join("|", Module<FolkModule>(engine).Living.Select(p =>
+            $"{p.Id} {feelings.Happiness(p.Id)} {string.Join(",", feelings.Wishes(p.Id).Select(w => $"{w.Use}/{w.Cause}/{w.Because}/{w.Weight:F3}"))} {feelings.Memory(p.Id).Count}"));
+    }
+
+    private static void Run(Engine engine, long ticks)
+    {
+        for (long i = 0; i < ticks; i++) engine.Step();
     }
 
     // ── a village to watch ──

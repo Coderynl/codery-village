@@ -6,7 +6,7 @@ namespace Codery.Village.Life.Feelings;
 /// <c>promise</c> the substance found, for <c>shortage</c> what ran out; null otherwise. <see cref="Weight"/> runs up to
 /// the rules' maximum.
 /// </summary>
-public sealed record Wish(string Use, string Cause, string? Because, long SinceTick, double Weight)
+public sealed record Wish(string Use, string Cause, long SinceTick, double Weight, string? Because = null)
 {
     /// <summary>The causes a wish can have.</summary>
     public static IReadOnlyList<string> Causes { get; } = ["shortage", "comparison", "promise", "habituation", "loss"];
