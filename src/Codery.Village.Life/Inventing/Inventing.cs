@@ -311,7 +311,8 @@ public sealed class Inventing : IModule
                 [.. stepInputs.Select(i => new RecipeInput(i.Substance.Id, i.Parts))], stepResult.Id);
             _found[stepResult.Id] = stepResult;
             _recipes[recipe.Id] = recipe;
-            if (!_names.ContainsKey(stepResult.Id)) _names[stepResult.Id] = Named(stepResult); // found again, it keeps its name
+            if (!_names.ContainsKey(stepResult.Id)) // found again, it keeps its name
+                _names[stepResult.Id] = Named(stepResult, stepInputs.Aggregate((best, i) => i.Parts > best.Parts ? i : best).Substance);
             Living.Learn(recipe, stepResult);
             Knowing.Learn(finder.Id, recipe.Id, _rules.FoundLevel, "found");
             if (finder.Trade is { } trade) Knowing.JoinTrade(trade, recipe.Id);
@@ -333,15 +334,25 @@ public sealed class Inventing : IModule
     // what the island has now: raw substances at hand, and what someone living still knows how to make
     private List<Substance> KnownSubstances() => AtHand();
 
-    private Name Named(Substance s)
+    // the adjective tells what the process did: the property that changed most against the main input, ties by the order
+    // of the properties, the next when that name is taken; when nothing changed, one of the three most marked properties
+    private Name Named(Substance s, Substance main)
     {
         var kind = _world.Kinds.GetValueOrDefault(s.Kind) ?? _naming.Own;
         var neuter = (_naming.Neuter ?? []).Contains(s.Kind);
         var taken = _names.Values.Select(n => n.Nl).Concat(_world.NamesById.Values.Select(n => n.Nl)).ToHashSet(StringComparer.Ordinal);
+        Name NameWith(Adjective a) => new($"{(neuter ? a.NlNeuter ?? a.Nl : a.Nl)} {kind.Nl}", $"{a.En} {kind.En}");
+
+        var changed = Enum.GetValues<Property>().Select(p => (Property: p, Change: s.Profile[p] - main.Profile[p]))
+            .Where(c => c.Change != 0).OrderByDescending(c => Math.Abs(c.Change)).ThenBy(c => c.Property)
+            .SelectMany(c => _naming.Adjectives.Where(a => a.Property == c.Property && a.High == c.Change > 0))
+            .Select(NameWith).FirstOrDefault(n => !taken.Contains(n.Nl));
+        if (changed is not null) return changed;
+
         var free = _naming.Adjectives
             .Where(a => (s.Profile[a.Property] >= 50) == a.High)
             .OrderByDescending(a => Math.Abs(s.Profile[a.Property] - 50)).ThenBy(a => a.Property)
-            .Select(a => new Name($"{(neuter ? a.NlNeuter ?? a.Nl : a.Nl)} {kind.Nl}", $"{a.En} {kind.En}"))
+            .Select(NameWith)
             .Where(n => !taken.Contains(n.Nl)).Take(3).ToList();
         if (free.Count > 0) return free[_namer.Next(free.Count)];
         for (var n = 2; ; n++)

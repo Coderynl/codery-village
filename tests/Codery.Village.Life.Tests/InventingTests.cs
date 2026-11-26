@@ -72,6 +72,44 @@ public class InventingTests
     }
 
     [Fact]
+    public void A_find_is_named_for_what_its_process_did()
+    {
+        // fired meat is meat that lasts, not heat-proof meat: the name follows the property that changed most against the
+        // main input, ties by the order of the properties
+        var v = Village(World.Data, 1);
+        Run(v.Engine, 10.0);
+        var naming = World.Data.Section<NameRules>("names");
+        var named = new HashSet<string>();
+        var taken = new HashSet<string>(v.World.NamesById.Values.Select(n => n.Nl));
+        var checkedOnes = 0;
+
+        foreach (var d in v.Inventing.Discoveries.Where(d => named.Add(d.Substance)))
+        {
+            var found = v.Inventing.Found[d.Substance];
+            var recipe = v.Inventing.Recipes[d.Recipe];
+            var main = recipe.In.Aggregate((best, i) => i.Parts > best.Parts ? i : best);
+            var before = v.Inventing.Substance(main.Substance)!.Profile;
+            var most = Enum.GetValues<Property>().Select(p => (Property: p, Change: found.Profile[p] - before[p]))
+                .Where(c => c.Change != 0).OrderByDescending(c => Math.Abs(c.Change)).FirstOrDefault();
+            var name = v.Inventing.NameOf(d.Substance, "nl");
+            if (most.Change != 0)
+            {
+                var adjective = naming.Adjectives.Single(a => a.Property == most.Property && a.High == most.Change > 0);
+                var kind = v.World.Kinds[found.Kind].Nl;
+                var expected = $"{((naming.Neuter ?? []).Contains(found.Kind) ? adjective.NlNeuter ?? adjective.Nl : adjective.Nl)} {kind}";
+                if (!taken.Contains(expected))
+                {
+                    Assert.Equal(expected, name);
+                    checkedOnes++;
+                }
+            }
+            taken.Add(name);
+        }
+
+        Assert.True(checkedOnes >= 3, $"only {checkedOnes} finds were named by their change");
+    }
+
+    [Fact]
     public void Without_a_kiln_no_metal_is_found()
     {
         // no clay anywhere: nothing can become a kiln wall, so no kiln and no metal

@@ -59,9 +59,9 @@
     {
       "property": "flammability",
       "high": true,
-      "nl": "brandende",
-      "en": "fiery",
-      "nlNeuter": "brandend"
+      "nl": "brandbare",
+      "en": "flammable",
+      "nlNeuter": "brandbaar"
     },
     {
       "property": "flammability",
