@@ -2,9 +2,10 @@ namespace Codery.Village.Laws;
 
 /// <summary>
 /// What a process does to its inputs, when every condition in <see cref="When"/> holds. The effects in
-/// <see cref="Then"/> change the mixed profile in order; <see cref="Becomes"/> gives the result its kind.
+/// <see cref="Then"/> change the mixed profile in order; <see cref="Becomes"/> gives the result its kind, or else the kind its
+/// first condition names.
 /// </summary>
-public sealed record Law(string Id, string Process, IReadOnlyList<Condition> When, IReadOnlyList<Effect> Then, string? Becomes);
+public sealed record Law(string Id, string Process, IReadOnlyList<Condition> When, IReadOnlyList<Effect> Then, string? Becomes = null);
 
 /// <summary>
 /// One test on the inputs. It looks at the inputs of <see cref="Kind"/>, or at all of them when that is null, and tests
@@ -18,11 +19,12 @@ public sealed record Law(string Id, string Process, IReadOnlyList<Condition> Whe
 /// </list>
 /// A condition whose kind is not among the inputs does not hold.
 /// </summary>
-public sealed record Condition(string? Kind, Property? Property, int? Min, int? Max, bool? Melts);
+public sealed record Condition(string? Kind = null, Property? Property = null, int? Min = null, int? Max = null, bool? Melts = null);
 
 /// <summary>
-/// A change to one property: <see cref="Add"/> to it, <see cref="Set"/> it, or set it <see cref="AboveBoth"/>: to the
-/// highest value among the inputs plus that much. A law with an effect above both fires only on two or more different
-/// inputs, all molten. Values stay within 0 and 100.
+/// A change to one property, in this order: start from the mix of the inputs <see cref="Of"/> a kind (the result keeps the
+/// metal's hardness), <see cref="Set"/> it, <see cref="Add"/> to it, or set it <see cref="AboveBoth"/>: to the highest
+/// value among the inputs plus that much. A law with an effect above both fires only on two or more different inputs, all
+/// molten. Values stay within 0 and 100.
 /// </summary>
-public sealed record Effect(Property Property, int? Add, int? Set, int? AboveBoth);
+public sealed record Effect(Property Property, int? Add = null, int? Set = null, int? AboveBoth = null, string? Of = null);

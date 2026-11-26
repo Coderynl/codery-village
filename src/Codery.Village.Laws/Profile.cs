@@ -19,7 +19,7 @@ public sealed record Profile
 
     public Profile(ImmutableArray<int> values)
     {
-        if (values.Length != Count) throw new ArgumentException($"A profile has {Count} values, not {values.Length}.", nameof(values));
+        if (values.IsDefault || values.Length != Count) throw new ArgumentException($"A profile has {Count} values, not {(values.IsDefault ? 0 : values.Length)}.", nameof(values));
         Values = values;
     }
 

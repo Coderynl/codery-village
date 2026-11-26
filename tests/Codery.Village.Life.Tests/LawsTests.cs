@@ -21,8 +21,9 @@ public class LawsTests
     private static readonly Substance Tin = new("tin", "metal", P((Property.Hardness, 25), (Property.MeltingPoint, 12)), Raw: true);
 
     private static Nature Nature() => new(
-        [new Process("fire", 800, null, 2), new Process("embers", 300, null, 2), new Process("smelt", 1200, null, 2)],
+        [new Process("fire", 800, null, 2), new Process("embers", 300, null, 2), new Process("smelt", 1200, null, 2), new Process("soak", 0, null, 2)],
         [
+            new Law("soak-clay", "soak", [new Condition("clay", null, null, null, null)], [new Effect(Property.Flexibility, 10, null, null)], null),
             new Law("fire-clay", "fire",
                 [new Condition("clay", null, null, null, null)],
                 [new Effect(Property.Hardness, 40, null, null), new Effect(Property.Watertightness, 30, null, null), new Effect(Property.Flexibility, null, 0, null)],
@@ -71,6 +72,15 @@ public class LawsTests
         Assert.Equal(55, result.Profile[Property.Hardness]);
         // outside the band the law does not fire, and nothing happens
         Assert.Null(Nature().Apply("smelt", [new Portion(Copper, 1), new Portion(Tin, 1)]));
+    }
+
+    [Fact]
+    public void A_law_keeps_the_kind_it_works_on_whatever_else_went_in()
+    {
+        var result = Nature().Apply("soak", [new Portion(Copper, 1), new Portion(Clay, 1)]);
+
+        Assert.NotNull(result);
+        Assert.Equal("clay", result.Kind);
     }
 
     [Fact]

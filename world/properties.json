@@ -1,0 +1,62 @@
+[
+  {
+    "id": "hardness",
+    "nl": "hardheid",
+    "en": "hardness",
+    "scale": "0 soft as wool, 100 harder than steel"
+  },
+  {
+    "id": "toughness",
+    "nl": "taaiheid",
+    "en": "toughness",
+    "scale": "0 shatters, 100 never breaks"
+  },
+  {
+    "id": "flexibility",
+    "nl": "buigzaamheid",
+    "en": "flexibility",
+    "scale": "0 rigid, 100 flows like water"
+  },
+  {
+    "id": "density",
+    "nl": "dichtheid",
+    "en": "density",
+    "scale": "50 is water: below it floats"
+  },
+  {
+    "id": "flammability",
+    "nl": "brandbaarheid",
+    "en": "flammability",
+    "scale": "0 does not burn, 100 burns at a spark"
+  },
+  {
+    "id": "meltingPoint",
+    "nl": "smeltpunt",
+    "en": "melting point",
+    "scale": "degrees Celsius divided by 20; 100 for what burns before it melts"
+  },
+  {
+    "id": "watertightness",
+    "nl": "waterdichtheid",
+    "en": "watertightness",
+    "scale": "0 soaks through, 100 holds water for ever"
+  },
+  {
+    "id": "nutrition",
+    "nl": "voedingswaarde",
+    "en": "nutrition",
+    "scale": "0 not food, 100 a day's food in a hand"
+  },
+  {
+    "id": "durability",
+    "nl": "duurzaamheid",
+    "en": "durability",
+    "scale": "0 rots in a day, 100 lasts for ever"
+  },
+  {
+    "id": "conductivity",
+    "nl": "geleiding",
+    "en": "conductivity",
+    "scale": "0 holds heat in, 100 passes it at once"
+  }
+]

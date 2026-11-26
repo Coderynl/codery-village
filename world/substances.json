@@ -1,0 +1,845 @@
+{
+  "kinds": [
+    {
+      "id": "wood",
+      "nl": "hout",
+      "en": "wood"
+    },
+    {
+      "id": "fibre",
+      "nl": "vezel",
+      "en": "fibre"
+    },
+    {
+      "id": "grain",
+      "nl": "graan",
+      "en": "grain"
+    },
+    {
+      "id": "fruit",
+      "nl": "vrucht",
+      "en": "fruit"
+    },
+    {
+      "id": "sweet",
+      "nl": "zoetstof",
+      "en": "sweet"
+    },
+    {
+      "id": "meat",
+      "nl": "vlees",
+      "en": "meat"
+    },
+    {
+      "id": "hide",
+      "nl": "huid",
+      "en": "hide"
+    },
+    {
+      "id": "bone",
+      "nl": "bot",
+      "en": "bone"
+    },
+    {
+      "id": "clay",
+      "nl": "klei",
+      "en": "clay"
+    },
+    {
+      "id": "sand",
+      "nl": "zand",
+      "en": "sand"
+    },
+    {
+      "id": "stone",
+      "nl": "steen",
+      "en": "stone"
+    },
+    {
+      "id": "flint",
+      "nl": "vuursteen",
+      "en": "flint"
+    },
+    {
+      "id": "chalk",
+      "nl": "kalksteen",
+      "en": "chalk"
+    },
+    {
+      "id": "peat",
+      "nl": "turf",
+      "en": "peat"
+    },
+    {
+      "id": "salt",
+      "nl": "zout",
+      "en": "salt"
+    },
+    {
+      "id": "kelp",
+      "nl": "wier",
+      "en": "kelp"
+    },
+    {
+      "id": "resin",
+      "nl": "hars",
+      "en": "resin"
+    },
+    {
+      "id": "wax",
+      "nl": "was",
+      "en": "wax"
+    },
+    {
+      "id": "ore",
+      "nl": "erts",
+      "en": "ore"
+    },
+    {
+      "id": "ash",
+      "nl": "as",
+      "en": "ash"
+    },
+    {
+      "id": "water",
+      "nl": "water",
+      "en": "water"
+    },
+    {
+      "id": "flour",
+      "nl": "meel",
+      "en": "flour"
+    },
+    {
+      "id": "dough",
+      "nl": "deeg",
+      "en": "dough"
+    },
+    {
+      "id": "bread",
+      "nl": "brood",
+      "en": "bread"
+    },
+    {
+      "id": "plank",
+      "nl": "plank",
+      "en": "plank"
+    },
+    {
+      "id": "block",
+      "nl": "blok",
+      "en": "block"
+    },
+    {
+      "id": "edge",
+      "nl": "snede",
+      "en": "edge"
+    },
+    {
+      "id": "ceramic",
+      "nl": "aardewerk",
+      "en": "earthenware"
+    },
+    {
+      "id": "charcoal",
+      "nl": "houtskool",
+      "en": "charcoal"
+    },
+    {
+      "id": "lime",
+      "nl": "kalk",
+      "en": "lime"
+    },
+    {
+      "id": "mortar",
+      "nl": "specie",
+      "en": "mortar"
+    },
+    {
+      "id": "pitch",
+      "nl": "pek",
+      "en": "pitch"
+    },
+    {
+      "id": "metal",
+      "nl": "metaal",
+      "en": "metal"
+    },
+    {
+      "id": "alloy",
+      "nl": "legering",
+      "en": "alloy"
+    },
+    {
+      "id": "steel",
+      "nl": "staal",
+      "en": "steel"
+    },
+    {
+      "id": "glass",
+      "nl": "glas",
+      "en": "glass"
+    },
+    {
+      "id": "leather",
+      "nl": "leer",
+      "en": "leather"
+    },
+    {
+      "id": "cloth",
+      "nl": "stof",
+      "en": "cloth"
+    },
+    {
+      "id": "rope",
+      "nl": "touw",
+      "en": "rope"
+    },
+    {
+      "id": "wicker",
+      "nl": "vlechtwerk",
+      "en": "wicker"
+    },
+    {
+      "id": "candle",
+      "nl": "kaars",
+      "en": "candle"
+    },
+    {
+      "id": "brew",
+      "nl": "brouwsel",
+      "en": "brew"
+    }
+  ],
+  "substances": [
+    {
+      "id": "wood",
+      "kind": "wood",
+      "nl": "hout",
+      "en": "wood",
+      "profile": {
+        "hardness": 30,
+        "toughness": 60,
+        "flexibility": 30,
+        "density": 35,
+        "flammability": 70,
+        "meltingPoint": 100,
+        "watertightness": 20,
+        "durability": 50,
+        "conductivity": 5
+      }
+    },
+    {
+      "id": "oak",
+      "kind": "wood",
+      "nl": "eikenhout",
+      "en": "oak",
+      "profile": {
+        "hardness": 45,
+        "toughness": 70,
+        "flexibility": 20,
+        "density": 45,
+        "flammability": 60,
+        "meltingPoint": 100,
+        "watertightness": 30,
+        "durability": 75,
+        "conductivity": 5
+      }
+    },
+    {
+      "id": "willow",
+      "kind": "wood",
+      "nl": "wilgentenen",
+      "en": "willow",
+      "profile": {
+        "hardness": 20,
+        "toughness": 50,
+        "flexibility": 70,
+        "density": 30,
+        "flammability": 70,
+        "meltingPoint": 100,
+        "watertightness": 10,
+        "durability": 35,
+        "conductivity": 5
+      }
+    },
+    {
+      "id": "reed",
+      "kind": "fibre",
+      "nl": "riet",
+      "en": "reed",
+      "profile": {
+        "hardness": 10,
+        "toughness": 30,
+        "flexibility": 70,
+        "density": 20,
+        "flammability": 60,
+        "meltingPoint": 100,
+        "watertightness": 30,
+        "durability": 30
+      }
+    },
+    {
+      "id": "flax",
+      "kind": "fibre",
+      "nl": "vlas",
+      "en": "flax",
+      "profile": {
+        "hardness": 5,
+        "toughness": 40,
+        "flexibility": 90,
+        "density": 30,
+        "flammability": 60,
+        "meltingPoint": 100,
+        "watertightness": 5,
+        "durability": 40
+      }
+    },
+    {
+      "id": "wool",
+      "kind": "fibre",
+      "nl": "wol",
+      "en": "wool",
+      "profile": {
+        "toughness": 30,
+        "flexibility": 90,
+        "density": 25,
+        "flammability": 30,
+        "meltingPoint": 100,
+        "watertightness": 20,
+        "durability": 50
+      }
+    },
+    {
+      "id": "grain",
+      "kind": "grain",
+      "nl": "graan",
+      "en": "grain",
+      "profile": {
+        "hardness": 10,
+        "toughness": 10,
+        "flexibility": 10,
+        "density": 60,
+        "flammability": 30,
+        "meltingPoint": 100,
+        "nutrition": 60,
+        "durability": 70
+      }
+    },
+    {
+      "id": "berries",
+      "kind": "fruit",
+      "nl": "bessen",
+      "en": "berries",
+      "profile": {
+        "flexibility": 20,
+        "density": 55,
+        "meltingPoint": 100,
+        "nutrition": 40,
+        "durability": 10
+      }
+    },
+    {
+      "id": "honey",
+      "kind": "sweet",
+      "nl": "honing",
+      "en": "honey",
+      "profile": {
+        "flexibility": 50,
+        "density": 70,
+        "flammability": 10,
+        "meltingPoint": 100,
+        "watertightness": 60,
+        "nutrition": 70,
+        "durability": 95
+      }
+    },
+    {
+      "id": "fish",
+      "kind": "meat",
+      "nl": "vis",
+      "en": "fish",
+      "profile": {
+        "hardness": 5,
+        "toughness": 10,
+        "flexibility": 40,
+        "density": 50,
+        "flammability": 10,
+        "meltingPoint": 100,
+        "nutrition": 70,
+        "durability": 10
+      }
+    },
+    {
+      "id": "game",
+      "kind": "meat",
+      "nl": "wild",
+      "en": "game",
+      "profile": {
+        "hardness": 5,
+        "toughness": 20,
+        "flexibility": 40,
+        "density": 55,
+        "flammability": 10,
+        "meltingPoint": 100,
+        "nutrition": 75,
+        "durability": 15
+      }
+    },
+    {
+      "id": "hide",
+      "kind": "hide",
+      "nl": "huid",
+      "en": "hide",
+      "profile": {
+        "hardness": 10,
+        "toughness": 60,
+        "flexibility": 70,
+        "density": 45,
+        "flammability": 20,
+        "meltingPoint": 100,
+        "watertightness": 40,
+        "durability": 30
+      }
+    },
+    {
+      "id": "bone",
+      "kind": "bone",
+      "nl": "bot",
+      "en": "bone",
+      "profile": {
+        "hardness": 50,
+        "toughness": 40,
+        "flexibility": 5,
+        "density": 60,
+        "flammability": 5,
+        "meltingPoint": 100,
+        "nutrition": 10,
+        "durability": 80
+      }
+    },
+    {
+      "id": "clay",
+      "kind": "clay",
+      "nl": "klei",
+      "en": "clay",
+      "profile": {
+        "hardness": 20,
+        "toughness": 10,
+        "flexibility": 70,
+        "density": 65,
+        "meltingPoint": 60,
+        "watertightness": 10,
+        "durability": 60,
+        "conductivity": 10
+      }
+    },
+    {
+      "id": "sand",
+      "kind": "sand",
+      "nl": "zand",
+      "en": "sand",
+      "profile": {
+        "hardness": 15,
+        "density": 60,
+        "meltingPoint": 85,
+        "durability": 100
+      }
+    },
+    {
+      "id": "stone",
+      "kind": "stone",
+      "nl": "steen",
+      "en": "stone",
+      "profile": {
+        "hardness": 70,
+        "toughness": 40,
+        "density": 70,
+        "meltingPoint": 50,
+        "watertightness": 60,
+        "durability": 100,
+        "conductivity": 5
+      }
+    },
+    {
+      "id": "flint",
+      "kind": "flint",
+      "nl": "vuursteen",
+      "en": "flint",
+      "profile": {
+        "hardness": 80,
+        "toughness": 30,
+        "density": 65,
+        "meltingPoint": 75,
+        "watertightness": 60,
+        "durability": 100
+      }
+    },
+    {
+      "id": "chalk",
+      "kind": "chalk",
+      "nl": "kalksteen",
+      "en": "chalk",
+      "profile": {
+        "hardness": 20,
+        "toughness": 10,
+        "density": 55,
+        "meltingPoint": 45,
+        "durability": 80
+      }
+    },
+    {
+      "id": "peat",
+      "kind": "peat",
+      "nl": "turf",
+      "en": "peat",
+      "profile": {
+        "hardness": 5,
+        "toughness": 5,
+        "flexibility": 30,
+        "density": 40,
+        "flammability": 50,
+        "meltingPoint": 100,
+        "watertightness": 20,
+        "durability": 40
+      }
+    },
+    {
+      "id": "salt",
+      "kind": "salt",
+      "nl": "zout",
+      "en": "salt",
+      "profile": {
+        "hardness": 30,
+        "density": 55,
+        "meltingPoint": 40,
+        "nutrition": 5,
+        "durability": 100
+      }
+    },
+    {
+      "id": "kelp",
+      "kind": "kelp",
+      "nl": "zeewier",
+      "en": "kelp",
+      "profile": {
+        "toughness": 10,
+        "flexibility": 80,
+        "density": 45,
+        "flammability": 10,
+        "meltingPoint": 100,
+        "nutrition": 20,
+        "durability": 10
+      }
+    },
+    {
+      "id": "resin",
+      "kind": "resin",
+      "nl": "hars",
+      "en": "resin",
+      "profile": {
+        "hardness": 10,
+        "toughness": 10,
+        "flexibility": 40,
+        "density": 45,
+        "flammability": 80,
+        "meltingPoint": 8,
+        "watertightness": 90,
+        "durability": 80
+      }
+    },
+    {
+      "id": "beeswax",
+      "kind": "wax",
+      "nl": "bijenwas",
+      "en": "beeswax",
+      "profile": {
+        "hardness": 10,
+        "toughness": 10,
+        "flexibility": 50,
+        "density": 45,
+        "flammability": 70,
+        "meltingPoint": 3,
+        "watertightness": 90,
+        "durability": 90
+      }
+    },
+    {
+      "id": "copper-ore",
+      "kind": "ore",
+      "nl": "kopererts",
+      "en": "copper ore",
+      "profile": {
+        "hardness": 40,
+        "toughness": 10,
+        "density": 80,
+        "meltingPoint": 54,
+        "durability": 100,
+        "conductivity": 60
+      }
+    },
+    {
+      "id": "tin-ore",
+      "kind": "ore",
+      "nl": "tinerts",
+      "en": "tin ore",
+      "profile": {
+        "hardness": 25,
+        "toughness": 10,
+        "density": 80,
+        "meltingPoint": 12,
+        "durability": 100,
+        "conductivity": 40
+      }
+    },
+    {
+      "id": "iron-ore",
+      "kind": "ore",
+      "nl": "ijzererts",
+      "en": "iron ore",
+      "profile": {
+        "hardness": 60,
+        "toughness": 10,
+        "density": 85,
+        "meltingPoint": 77,
+        "durability": 100,
+        "conductivity": 40
+      }
+    },
+    {
+      "id": "ash",
+      "kind": "ash",
+      "nl": "as",
+      "en": "ash",
+      "profile": {
+        "density": 30,
+        "meltingPoint": 60,
+        "durability": 100
+      }
+    },
+    {
+      "id": "water",
+      "kind": "water",
+      "nl": "water",
+      "en": "water",
+      "profile": {
+        "flexibility": 100,
+        "density": 50,
+        "durability": 100,
+        "conductivity": 10
+      }
+    }
+  ],
+  "deposits": [
+    {
+      "substance": "wood",
+      "ground": "forest",
+      "level": null,
+      "chance": 1.0
+    },
+    {
+      "substance": "oak",
+      "ground": "forest",
+      "level": 2,
+      "chance": 0.5
+    },
+    {
+      "substance": "willow",
+      "ground": "land",
+      "level": 0,
+      "chance": 0.2
+    },
+    {
+      "substance": "reed",
+      "ground": "land",
+      "level": 0,
+      "chance": 0.3
+    },
+    {
+      "substance": "flax",
+      "ground": "fertile",
+      "level": null,
+      "chance": 0.3
+    },
+    {
+      "substance": "wool",
+      "ground": "land",
+      "level": 1,
+      "chance": 0.15
+    },
+    {
+      "substance": "grain",
+      "ground": "fertile",
+      "level": null,
+      "chance": 1.0
+    },
+    {
+      "substance": "berries",
+      "ground": "forest",
+      "level": null,
+      "chance": 0.4
+    },
+    {
+      "substance": "honey",
+      "ground": "forest",
+      "level": null,
+      "chance": 0.1
+    },
+    {
+      "substance": "fish",
+      "ground": "fishing",
+      "level": null,
+      "chance": 1.0
+    },
+    {
+      "substance": "game",
+      "ground": "forest",
+      "level": null,
+      "chance": 0.3
+    },
+    {
+      "substance": "hide",
+      "ground": "forest",
+      "level": null,
+      "chance": 0.3
+    },
+    {
+      "substance": "bone",
+      "ground": "forest",
+      "level": null,
+      "chance": 0.3
+    },
+    {
+      "substance": "clay",
+      "ground": "clay",
+      "level": null,
+      "chance": 1.0
+    },
+    {
+      "substance": "clay",
+      "ground": "land",
+      "level": 0,
+      "chance": 0.25
+    },
+    {
+      "substance": "sand",
+      "ground": "land",
+      "level": 0,
+      "chance": 0.4
+    },
+    {
+      "substance": "stone",
+      "ground": "rock",
+      "level": null,
+      "chance": 1.0
+    },
+    {
+      "substance": "stone",
+      "ground": "land",
+      "level": 2,
+      "chance": 0.5
+    },
+    {
+      "substance": "flint",
+      "ground": "rock",
+      "level": null,
+      "chance": 0.3
+    },
+    {
+      "substance": "flint",
+      "ground": "land",
+      "level": 2,
+      "chance": 0.2
+    },
+    {
+      "substance": "chalk",
+      "ground": "rock",
+      "level": null,
+      "chance": 0.3
+    },
+    {
+      "substance": "chalk",
+      "ground": "land",
+      "level": 1,
+      "chance": 0.1
+    },
+    {
+      "substance": "peat",
+      "ground": "land",
+      "level": 0,
+      "chance": 0.15
+    },
+    {
+      "substance": "salt",
+      "ground": "fishing",
+      "level": null,
+      "chance": 0.5
+    },
+    {
+      "substance": "kelp",
+      "ground": "fishing",
+      "level": null,
+      "chance": 0.5
+    },
+    {
+      "substance": "resin",
+      "ground": "forest",
+      "level": null,
+      "chance": 0.5
+    },
+    {
+      "substance": "beeswax",
+      "ground": "forest",
+      "level": null,
+      "chance": 0.1
+    },
+    {
+      "substance": "copper-ore",
+      "ground": "rock",
+      "level": null,
+      "chance": 0.3
+    },
+    {
+      "substance": "copper-ore",
+      "ground": "land",
+      "level": 2,
+      "chance": 0.08
+    },
+    {
+      "substance": "tin-ore",
+      "ground": "rock",
+      "level": null,
+      "chance": 0.1
+    },
+    {
+      "substance": "tin-ore",
+      "ground": "land",
+      "level": 2,
+      "chance": 0.04
+    },
+    {
+      "substance": "iron-ore",
+      "ground": "rock",
+      "level": null,
+      "chance": 0.3
+    },
+    {
+      "substance": "iron-ore",
+      "ground": "land",
+      "level": 0,
+      "chance": 0.05
+    },
+    {
+      "substance": "ash",
+      "ground": "lot",
+      "level": null,
+      "chance": 1.0
+    },
+    {
+      "substance": "water",
+      "ground": "land",
+      "level": null,
+      "chance": 1.0
+    }
+  ]
+}
