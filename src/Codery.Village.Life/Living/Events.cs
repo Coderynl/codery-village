@@ -5,8 +5,11 @@ namespace Codery.Village.Life.Living;
 /// <summary><paramref name="What"/>, <c>food</c> or <c>fuel</c>, ran out this day; <paramref name="Days"/> is how many days in a row.</summary>
 public sealed record Shortage(long Tick, string What, int Days) : VillageEvent(Tick);
 
-/// <summary>Someone made <paramref name="Substance"/>: as their trade's work, for a household's use, or as a trial (both null).</summary>
-public sealed record Made(long Tick, int Maker, string Substance, string? ForUse, int? ForHousehold) : VillageEvent(Tick);
+/// <summary>
+/// Someone made <paramref name="Substance"/> by <paramref name="Recipe"/> (its id): as their trade's work, for a household's
+/// use, or as a trial (both null).
+/// </summary>
+public sealed record Made(long Tick, int Maker, string Recipe, string Substance, string? ForUse, int? ForHousehold) : VillageEvent(Tick);
 
 public sealed record Built(long Tick, string Structure, string Substance) : VillageEvent(Tick);
 

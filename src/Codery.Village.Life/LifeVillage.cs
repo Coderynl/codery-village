@@ -17,9 +17,10 @@ public static class LifeVillage
         return engine;
     }
 
-    /// <summary>
-    /// Fresh instances of the modules, in the order they step. <paramref name="knower"/> says whether a person knows a recipe
-    /// or process; null until Knowing comes: everyone knows their trade's start recipes and every start process.
-    /// </summary>
-    public static IReadOnlyList<IModule> Modules(Func<int, string, bool>? knower = null) => [new Folk.Folk(), new Living.Living(knower)];
+    /// <summary>Fresh instances of the modules, in the order they step. Living works what Knowing says a person knows.</summary>
+    public static IReadOnlyList<IModule> Modules()
+    {
+        var knowing = new Knowing.Knowing();
+        return [new Folk.Folk(), new Living.Living(knowing.Knows), knowing];
+    }
 }

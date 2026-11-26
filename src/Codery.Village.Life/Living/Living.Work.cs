@@ -98,7 +98,7 @@ public sealed partial class Living
             foreach (var input in recipe.In)
                 if (!_rules.Endless.Contains(input.Substance)) Stock.Take(input.Substance, batches * input.Parts);
             Stock.Add(recipe.Out, batches * yield);
-            _village.Publish(new Made(tick, p.Id, recipe.Out, null, null));
+            _village.Publish(new Made(tick, p.Id, recipe.Id, recipe.Out, null, null));
         }
     }
 
@@ -134,7 +134,7 @@ public sealed partial class Living
             foreach (var e in pending) _village.Publish(e);
             made = true;
         }
-        if (made) _village.Publish(new Made(tick, builder, recipe.Out, use.Id, null));
+        if (made) _village.Publish(new Made(tick, builder, recipe.Id, recipe.Out, use.Id, null));
     }
 
     private void BuildSchool(long tick)
@@ -171,7 +171,7 @@ public sealed partial class Living
                 var pending = new List<VillageEvent>();
                 if (!Attempt(() => Batch(recipe, maker, 0, pending) && Stock.Take(recipe.Out, 1) >= 1 - Nothing)) continue;
                 foreach (var e in pending) _village.Publish(e);
-                _village.Publish(new Made(tick, maker, recipe.Out, use.Id, household));
+                _village.Publish(new Made(tick, maker, recipe.Id, recipe.Out, use.Id, household));
                 Possess(household, use.Id, recipe.Out);
                 return;
             }
@@ -222,7 +222,7 @@ public sealed partial class Living
         while (units > Nothing)
         {
             if (!Batch(recipe, maker, depth + 1, pending)) return false;
-            pending.Add(new Made(_village.Clocks.Tick, maker, substance, null, null));
+            pending.Add(new Made(_village.Clocks.Tick, maker, recipe.Id, substance, null, null));
             units -= Stock.Take(substance, units);
         }
         return true;

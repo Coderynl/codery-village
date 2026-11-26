@@ -106,7 +106,7 @@ public sealed partial class Living : IModule
         if (!_recipeById.TryGetValue(recipe, out var r)) return false;
         // at the deepest step nothing missing is made first: only what is in stock or at hand
         if (!Attempt(() => Batch(r, maker, _rules.MaxDepth, []))) return false;
-        _village.Publish(new Made(_village.Clocks.Tick, maker, r.Out, null, null));
+        _village.Publish(new Made(_village.Clocks.Tick, maker, r.Id, r.Out, null, null));
         return true;
     }
 
