@@ -37,6 +37,26 @@ public class InventingTests
     }
 
     [Fact]
+    public void What_dies_with_its_last_knower_can_be_found_again()
+    {
+        var v = Village(World.Data, 2);
+        foreach (var p in v.Folk.Living) v.Feelings.Want(p.Id, "pot", "shortage", null);
+        var end = v.Engine.Tick + 5 * TicksPerYear;
+        while (v.Engine.Tick < end && !v.Inventing.Discoveries.Any(d => d.Use == "pot")) v.Engine.Step();
+        var first = v.Inventing.Discoveries.First(d => d.Use == "pot");
+
+        // everyone who knows how dies at once, untaught
+        var knowing = v.Engine.Running.OfType<Knowing.Knowing>().Single();
+        foreach (var p in v.Folk.Living.Where(p => knowing.Knows(p.Id, first.Recipe)).ToList()) v.Folk.Harm(p.Id, 100, "accident");
+        Run(v.Engine, 0.05);
+        Assert.DoesNotContain(first.Recipe, knowing.KnownOnIsland());
+        foreach (var p in v.Folk.Living) v.Feelings.Want(p.Id, "pot", "shortage", null);
+        Run(v.Engine, 8.0);
+
+        Assert.Contains(v.Inventing.Discoveries, d => d.Use == "pot" && d.Tick > first.Tick);
+    }
+
+    [Fact]
     public void A_discovery_follows_from_the_laws()
     {
         var v = Village(World.Data, 1);
@@ -76,6 +96,11 @@ public class InventingTests
         {
             var v = Village(World.Data, seed);
             Run(v.Engine, 26.0);
+            foreach (var d in v.Inventing.Discoveries) // and every one of them, accidents too, follows from the laws
+            {
+                var recipe = v.Inventing.Recipes[d.Recipe];
+                Assert.Equal(v.Inventing.Found[d.Substance], v.World.Nature.Apply(recipe.Process, [.. recipe.In.Select(i => new Portion(v.Inventing.Substance(i.Substance)!, i.Parts))]));
+            }
             return string.Join(" ", v.Inventing.Discoveries.Select(d => v.Inventing.Found[d.Substance].Kind));
         }).ToList();
 

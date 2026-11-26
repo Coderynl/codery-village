@@ -72,7 +72,11 @@ public sealed class Inventing : IModule
 
     public void Step(ModuleContext village)
     {
-        if (village.Received.Count > 0) Accidents(village.Received);
+        if (village.Received.Count > 0)
+        {
+            Accidents(village.Received);
+            Forget(village.Received);
+        }
         if (!Hourly.DayStarts(village)) return;
         var tick = village.Clocks.Tick;
         foreach (var p in Folk.Living.ToArray())
@@ -197,6 +201,14 @@ public sealed class Inventing : IModule
     private static string Key(string process, IReadOnlyList<Portion> inputs) =>
         $"{process}|{string.Join("+", inputs.OrderBy(i => i.Substance.Id, StringComparer.Ordinal).Select(i => $"{i.Parts}:{i.Substance.Id}"))}";
 
+    // when a found recipe dies with its last knower, so does the memory of having tried it
+    private void Forget(IReadOnlyList<VillageEvent> events)
+    {
+        foreach (var gone in events.OfType<Knowing.Forgotten>())
+            if (_recipes.GetValueOrDefault(gone.Item) is { } recipe && recipe.In.All(i => Substance(i.Substance) is not null))
+                _tried.Remove(Key(recipe.Process, [.. recipe.In.Select(i => new Portion(Substance(i.Substance)!, i.Parts))]));
+    }
+
     // ── accidents ──
 
     private void Accidents(IReadOnlyList<VillageEvent> events)
@@ -230,12 +242,14 @@ public sealed class Inventing : IModule
 
     private void Notice(Person maker, Process process, IReadOnlyList<Portion> inputs, Substance result, string how, long tick)
     {
-        if (Substance(result.Id) is not null) return;
-        var felt = Felt().ToList();
+        // what the island can still make or gather: a substance whose recipe died with its last knower can be found again
         var known = KnownSubstances();
-        double Best(Use u) => known.Max(s => u.Score(s.Profile));
+        bool Met(Substance s) => known.Any(k => k.Id == s.Id);
+        if (Met(result)) return;
+        var felt = Felt().ToList();
+        var best = felt.ToDictionary(u => u.Id, u => known.Max(s => u.Score(s.Profile)), StringComparer.Ordinal);
         (Use Use, double Gain)? Better(Substance s) => felt
-            .Select(u => (Use: u, Gain: u.Score(s.Profile) - Best(u)))
+            .Select(u => (Use: u, Gain: u.Score(s.Profile) - best[u.Id]))
             .Where(x => x.Use.Score(s.Profile) > 0 && x.Gain >= _rules.NoticeMargin)
             .OrderByDescending(x => x.Gain).ThenBy(x => x.Use.Id, StringComparer.Ordinal)
             .Select(x => ((Use, double)?)x).FirstOrDefault();
@@ -247,7 +261,7 @@ public sealed class Inventing : IModule
         {
             foreach (var heat in Heat.Select(h => _world.Nature.Processes[h]).Where(h => CanDo(maker, h)))
             {
-                if (_world.Nature.Apply(heat.Id, [new Portion(result, 1)]) is not { } next || Substance(next.Id) is not null) continue;
+                if (_world.Nature.Apply(heat.Id, [new Portion(result, 1)]) is not { } next || Met(next)) continue;
                 if (Better(next) is { } promise)
                 {
                     steps.Add((heat, [new Portion(result, 1)], next));
@@ -269,7 +283,7 @@ public sealed class Inventing : IModule
                 [.. stepInputs.Select(i => new RecipeInput(i.Substance.Id, i.Parts))], stepResult.Id);
             _found[stepResult.Id] = stepResult;
             _recipes[recipe.Id] = recipe;
-            _names[stepResult.Id] = Named(stepResult);
+            if (!_names.ContainsKey(stepResult.Id)) _names[stepResult.Id] = Named(stepResult); // found again, it keeps its name
             Living.Learn(recipe, stepResult);
             Knowing.Learn(finder.Id, recipe.Id, _rules.FoundLevel, "found");
             var discovery = new Discovery(tick, finder.Id, stepResult.Id, recipe.Id, use.Use.Id, how, witnesses);
@@ -287,9 +301,8 @@ public sealed class Inventing : IModule
         [.. Folk.Living.Where(q => q.Id != maker.Id && Folk.StageOf(q, _village.Clocks.Tick) != LifeStage.Child
             && (q.Household == maker.Household || (maker.Trade is not null && q.Trade == maker.Trade))).OrderBy(q => q.Id)];
 
-    // what the island has met: raw substances at hand, the start's, and what it found
-    private List<Substance> KnownSubstances() =>
-        [.. Living.AtHand.Values.Concat(_world.Substances.Values.Where(s => !s.Raw)).Concat(_found.Values).DistinctBy(s => s.Id)];
+    // what the island has now: raw substances at hand, and what someone living still knows how to make
+    private List<Substance> KnownSubstances() => AtHand();
 
     private Name Named(Substance s)
     {
@@ -331,7 +344,7 @@ public sealed class Inventing : IModule
         var hand = AtHand();
         var known = Knowing.KnownOnIsland();
         var processes = _world.Processes.Where(x => known.Contains(x.Id) && (x.Needs is null || Living.Structures.Contains(x.Needs))).ToList();
-        if (hand.Concat(KnownSubstances()).Any(s => use.Score(s.Profile) > 0)) return true;
+        if (hand.Any(s => use.Score(s.Profile) > 0)) return true;
         foreach (var process in processes)
             foreach (var a in hand)
             {
