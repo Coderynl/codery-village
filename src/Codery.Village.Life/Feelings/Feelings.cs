@@ -67,7 +67,7 @@ public sealed class Feelings : IModule
     public void Want(int person, string use, string cause, string? because)
     {
         if (!Wish.Causes.Contains(cause)) throw new ArgumentException($"Unknown cause '{cause}'.", nameof(cause));
-        if (_hearts.TryGetValue(person, out var heart)) Add(person, heart, use, cause, because, _village.Clocks.Tick);
+        if (_hearts.TryGetValue(person, out var heart)) Add(person, heart, use, cause, because, _village.Clocks.Tick, _rules.Wishes.StartWeight);
     }
 
     public void Start(ModuleContext village)
@@ -105,7 +105,7 @@ public sealed class Feelings : IModule
             switch (e)
             {
                 case Born b:
-                    _hearts[b.Person] = new Heart { Happiness = _rules.Base };
+                    if (Folk.Get(b.Person) is { } child) _hearts[b.Person] = new Heart { Happiness = _rules.Base + Temper(child) };
                     foreach (var parent in new[] { b.Mother, b.Father }) Remember(parent, e.Tick, "born", b.Person.ToString());
                     break;
                 case Paired pair:
@@ -123,7 +123,7 @@ public sealed class Feelings : IModule
                 case Shortage s:
                     _lastShortage[s.What] = e.Tick;
                     foreach (var (id, heart) in _hearts)
-                        if (Folk.StageOf(Folk.Get(id)!, tick) != LifeStage.Child) Add(id, heart, s.What, "shortage", s.What, tick);
+                        if (Folk.StageOf(Folk.Get(id)!, tick) != LifeStage.Child) Add(id, heart, s.What, "shortage", s.What, tick, _rules.Wishes.MaxWeight);
                     break;
                 case Got got:
                     foreach (var p in Members(got.Household)) Fulfil(p, got.Use, e.Tick);
@@ -149,6 +149,7 @@ public sealed class Feelings : IModule
             joy = _rules.JoyScale * waited * wish.Weight / _rules.Wishes.MaxWeight;
             _village.Publish(new Fulfilled(tick, p.Id, use, tick - wish.SinceTick));
         }
+        else if (heart.Fulfilments.Any(f => f.Use == use)) return; // a better one nobody asked for: the old joy and its age stay
         else joy = _rules.JoyScale * _rules.WaitFloor * _rules.UnwishedStrength;
         heart.Fulfilments.RemoveAll(f => f.Use == use);
         heart.Fulfilments.Add(new Fulfilment(use, tick, joy));
@@ -161,9 +162,10 @@ public sealed class Feelings : IModule
         var had = heart.Fulfilments.FirstOrDefault(f => f.Use == use);
         if (had is null) return;
         heart.Fulfilments.Remove(had);
-        heart.Losses.Add(new Loss(use, tick, _rules.LossAversion * had.Joy));
+        // losing what had become normal hurts more than it ever pleased; losing something new only ends its joy
+        if (Years(tick - had.Tick) >= _rules.ExpectedAfter) heart.Losses.Add(new Loss(use, tick, _rules.LossAversion * had.Joy));
         Note(heart, new Moment(tick, "lost", use, 0));
-        Add(p.Id, heart, use, "loss", null, tick);
+        Add(p.Id, heart, use, "loss", use, tick, _rules.Wishes.StartWeight);
     }
 
     private void Remember(int person, long tick, string kind, string subject)
@@ -182,20 +184,26 @@ public sealed class Feelings : IModule
         heart.Memory.Remove(lightest);
     }
 
-    private void Add(int person, Heart heart, string use, string cause, string? because, long tick)
+    // a new wish, or a heavier old one; a full heart gives up its lightest wish only for a heavier new one, and says so
+    private void Add(int person, Heart heart, string use, string cause, string? because, long tick, double weight)
     {
         var wishes = _rules.Wishes;
         var had = heart.Wishes.FindIndex(w => w.Use == use);
         if (had >= 0)
         {
-            heart.Wishes[had] = heart.Wishes[had] with { Weight = Math.Min(wishes.MaxWeight, heart.Wishes[had].Weight + wishes.StartWeight / 2) };
+            heart.Wishes[had] = heart.Wishes[had] with { Weight = Math.Min(wishes.MaxWeight, Math.Max(weight, heart.Wishes[had].Weight + wishes.StartWeight / 2)) };
             return;
         }
-        heart.Wishes.Add(new Wish(use, cause, tick, wishes.StartWeight, because));
+        if (heart.Wishes.Count >= wishes.MaxWishes)
+        {
+            var lightest = heart.Wishes.OrderBy(w => w.Weight).ThenByDescending(w => w.SinceTick).First();
+            if (lightest.Weight >= weight) return;
+            heart.Wishes.Remove(lightest);
+            _village.Publish(new GaveUp(tick, person, lightest.Use));
+        }
+        heart.Wishes.Add(new Wish(use, cause, tick, weight, because));
         _village.Publish(new Wished(tick, person, use, cause, because));
         Note(heart, new Moment(tick, "wished", use, 0));
-        if (heart.Wishes.Count > wishes.MaxWishes)
-            heart.Wishes.Remove(heart.Wishes.OrderBy(w => w.Weight).ThenByDescending(w => w.SinceTick).First());
     }
 
     // ── each day: wishes grow, shortages end, new wishes arise ──
@@ -227,7 +235,7 @@ public sealed class Feelings : IModule
             // shortage: a household use the island knows, that the household lacks
             foreach (var use in _householdUses)
                 if (known.Contains(use.Id) && !own.ContainsKey(use.Id) && !Wants(heart, use.Id) && random.NextDouble() < rules.LackDaily)
-                    Add(id, heart, use.Id, "shortage", null, tick);
+                    Add(id, heart, use.Id, "shortage", null, tick, rules.StartWeight);
 
             // comparison
             var jealousy = rules.ComparisonDaily * Math.Pow((p.Traits.Sensitivity + p.Traits.Status) / 100.0, rules.ComparisonPower);
@@ -237,7 +245,7 @@ public sealed class Feelings : IModule
                     if (!_householdUses.Any(u => u.Id == theirs.Use) || Wants(heart, theirs.Use)) continue;
                     var mine = own.GetValueOrDefault(theirs.Use);
                     if (mine is not null && Score(theirs.Use, theirs.Substance) - Score(theirs.Use, mine.Substance) < rules.Better) continue;
-                    if (random.NextDouble() < jealousy) Add(id, heart, theirs.Use, "comparison", face.ToString(), tick);
+                    if (random.NextDouble() < jealousy) Add(id, heart, theirs.Use, "comparison", face.ToString(), tick, rules.StartWeight);
                 }
 
             // habituation
@@ -247,7 +255,7 @@ public sealed class Feelings : IModule
             {
                 var next = _householdUses.Where(u => !own.ContainsKey(u.Id))
                     .OrderBy(u => holders[u.Id]).ThenBy(u => u.Id, StringComparer.Ordinal).FirstOrDefault();
-                if (next is not null) Add(id, heart, next.Id, "habituation", null, tick);
+                if (next is not null) Add(id, heart, next.Id, "habituation", null, tick, rules.StartWeight);
             }
         }
     }

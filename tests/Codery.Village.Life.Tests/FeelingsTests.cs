@@ -102,6 +102,22 @@ public class FeelingsTests
     }
 
     [Fact]
+    public void A_full_heart_tells_no_wish_it_does_not_keep()
+    {
+        var v = Village(1);
+        var p = Adult(v);
+        var uses = new[] { "lamp", "ornament", "kettle", "store-jar", "bedding" };
+        foreach (var use in uses) v.Feelings.Want(p.Id, use, "comparison", null);
+        v.Engine.Step();
+
+        var held = v.Feelings.Wishes(p.Id).Select(w => w.Use).ToList();
+        Assert.Equal(v.Feelings.Rules.Wishes.MaxWishes, held.Count);
+        var told = v.Events.Of<Wished>().Where(w => w.Person == p.Id).Select(w => w.Use).ToList();
+        var given = v.Events.Of<GaveUp>().Where(g => g.Person == p.Id).Select(g => g.Use).ToList();
+        Assert.All(told, use => Assert.True(held.Contains(use) || given.Contains(use), $"{use} was wished, neither kept nor given up"));
+    }
+
+    [Fact]
     public void Every_wish_has_a_cause()
     {
         var v = Village(2);

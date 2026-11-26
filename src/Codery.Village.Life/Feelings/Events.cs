@@ -7,3 +7,6 @@ public sealed record Wished(long Tick, int Person, string Use, string Cause, str
 
 /// <summary>A wish came true after <paramref name="WaitedTicks"/>.</summary>
 public sealed record Fulfilled(long Tick, int Person, string Use, long WaitedTicks) : VillageEvent(Tick);
+
+/// <summary>Someone gave up wanting <paramref name="Use"/>: something weighed more, and a heart holds only so many wishes.</summary>
+public sealed record GaveUp(long Tick, int Person, string Use) : VillageEvent(Tick);
