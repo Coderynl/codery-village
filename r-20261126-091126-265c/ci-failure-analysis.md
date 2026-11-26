@@ -1,0 +1,10 @@
+**Follow-up 1/3 (failed checks on 625c196): no fix pushed. The tests need a decision from a maintainer.**
+
+None of the failures is a fault in `winery.json` that a release file can fix. The tests in `tests/` assume that no release in `data/releases` serves wine, and Eddie may not change `tests/`:
+
+1. `ProductionTrialTests.Eddies_pull_request_that_adds_a_release_must_answer_the_open_wish(productionRunsEveryRelease: False)` expects "does not answer the open wish: wine" from the checked-out data (comment in the test: "the checked-out data has no release that serves wine"). `Wishes.Step` closes the task as soon as the data serves the label, so **any** release that serves `wine` fails this test, whatever its id or recipe.
+2. `A_building_whose_blueprint_the_data_lacks_fails_a_pull_request` and `A_release_production_runs_that_the_data_lacks_passes_only_as_eddies_revert` (both cases) use a structure and release with id `winery` as "not in data/releases". Now that a real `winery` exists, nothing is forgotten or dropped. Giving the release another id would fix these three, but not item 1.
+3. `ScenarioTests.Four_weeks_of_life_stay_within_bounds`: seed 1, West, 2026-06-06: median happiness 91, above the test's cap of 90. Fulfilling the wine wish raises happiness, so this comes from serving the wish and not from the recipe.
+4. `West_grows_vegetables_and_apples` and `West_bakes_bread_from_its_own_grain` fall below their seed thresholds. A winery can stand only on West, the only island with grapes, and it takes one of West's few workers and some materials. The CI log cuts off the exact counts, and `dotnet` was not available in this run, so I couldn't reproduce them.
+
+What a maintainer could do: give the ProductionTrial tests their own fixture release (with an id other than `winery`) and fixture data without a wine release, then decide whether the scenario bounds should allow a West with a winery. After that, this PR can go through CI again. Auto-merge is still on, and it only merges on green.
