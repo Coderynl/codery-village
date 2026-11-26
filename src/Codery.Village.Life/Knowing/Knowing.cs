@@ -21,6 +21,7 @@ public sealed class Knowing : IModule
     private KnowingRules _rules = null!;
     private Folk.Folk _folk = null!;
     private Living.Living _living = null!;
+    private WorldData _world = null!;
     private IReadOnlyList<string> _startItems = [];
     // a trade's items: its recipes, their processes, and every use its outputs (made or gathered) serve at all
     private Dictionary<string, SortedSet<string>> _tradeItems = [];
@@ -92,7 +93,7 @@ public sealed class Knowing : IModule
         _rules = village.Data.Section<KnowingRules>("knowing");
         _folk = village.Module<Folk.Folk>();
         _living = village.Module<Living.Living>();
-        var world = WorldData.From(village.Data);
+        var world = _world = WorldData.From(village.Data);
         _startItems = [.. world.Start.Processes, .. world.Start.Uses];
         var recipes = world.Start.Recipes.ToDictionary(r => r.Id, StringComparer.Ordinal);
         _tradeItems = world.Start.Trades.ToDictionary(t => t.Id, t =>
@@ -145,7 +146,7 @@ public sealed class Knowing : IModule
     {
         foreach (var built in received.OfType<Living.Built>())
         {
-            var processes = WorldData.From(_village.Data).Processes.Where(p => p.Needs == built.Structure).Select(p => p.Id).ToList();
+            var processes = _world.Processes.Where(p => p.Needs == built.Structure).Select(p => p.Id).ToList();
             var makers = _folk.Living.Where(p => _folk.StageOf(p, tick) >= LifeStage.Adult
                 && (p.Trade == _rules.Builder || Known(p.Id).Any(k => k.Item.EndsWith(":" + built.Substance, StringComparison.Ordinal)))).ToList();
             foreach (var process in processes)

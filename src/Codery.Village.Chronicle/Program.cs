@@ -36,13 +36,19 @@ var engine = LifeVillage.Start(seed, world, map, start);
 var ticks = years * world.Section<LifeSettings>("life").TicksPerLifeYear;
 for (long t = 0; t < ticks; t++) engine.Step();
 
+// a stopped module leaves no chronicle worth writing: say which stopped, and why
+if (engine.Stopped.Count > 0)
+{
+    foreach (var (module, error) in engine.Stopped) Console.Error.WriteLine($"stopped: {module}: {error}");
+    return 1;
+}
+
 T Module<T>() => engine.Running.OfType<T>().Single();
 var folk = Module<FolkModule>();
 File.WriteAllText(output, Markdown.Write(Module<ChronicleModule>(), folk, Module<FeelingsModule>(), language));
-foreach (var (module, error) in engine.Stopped) Console.Error.WriteLine($"stopped: {module}: {error}");
 Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
     $"{clock.Elapsed.TotalSeconds:F1} s, {folk.Living.Count} alive, {Module<InventingModule>().Discoveries.Count} discoveries"));
-return engine.Stopped.Count > 0 ? 1 : 0;
+return 0;
 
 // the folder that holds the solution, from here upwards
 static string Root(string from)
