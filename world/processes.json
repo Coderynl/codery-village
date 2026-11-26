@@ -1,0 +1,81 @@
+[
+  {
+    "id": "dry",
+    "heat": 0,
+    "maxInputs": 1,
+    "nl": "drogen",
+    "en": "dry"
+  },
+  {
+    "id": "soak",
+    "heat": 0,
+    "maxInputs": 2,
+    "nl": "weken",
+    "en": "soak"
+  },
+  {
+    "id": "grind",
+    "heat": 0,
+    "maxInputs": 1,
+    "nl": "malen",
+    "en": "grind"
+  },
+  {
+    "id": "mix",
+    "heat": 0,
+    "maxInputs": 3,
+    "nl": "mengen",
+    "en": "mix"
+  },
+  {
+    "id": "beat",
+    "heat": 0,
+    "maxInputs": 1,
+    "nl": "kloppen",
+    "en": "beat"
+  },
+  {
+    "id": "weave",
+    "heat": 0,
+    "maxInputs": 1,
+    "nl": "vlechten",
+    "en": "weave"
+  },
+  {
+    "id": "cut",
+    "heat": 0,
+    "maxInputs": 1,
+    "nl": "snijden",
+    "en": "cut"
+  },
+  {
+    "id": "ferment",
+    "heat": 0,
+    "maxInputs": 2,
+    "nl": "laten gisten",
+    "en": "ferment"
+  },
+  {
+    "id": "fire",
+    "heat": 800,
+    "maxInputs": 2,
+    "nl": "stoken in het vuur",
+    "en": "fire"
+  },
+  {
+    "id": "kiln",
+    "heat": 1100,
+    "needs": "kiln",
+    "maxInputs": 2,
+    "nl": "bakken in de oven",
+    "en": "kiln"
+  },
+  {
+    "id": "furnace",
+    "heat": 1400,
+    "needs": "furnace",
+    "maxInputs": 2,
+    "nl": "smelten in de smeltoven",
+    "en": "furnace"
+  }
+]

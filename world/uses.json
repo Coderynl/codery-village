@@ -1,0 +1,682 @@
+[
+  {
+    "id": "cut",
+    "nl": "iets om mee te snijden",
+    "en": "something to cut with",
+    "household": true,
+    "needs": [
+      {
+        "property": "hardness",
+        "min": 55,
+        "weight": 1
+      },
+      {
+        "property": "toughness",
+        "min": 10,
+        "weight": 2
+      }
+    ]
+  },
+  {
+    "id": "tool-head",
+    "nl": "een werktuig",
+    "en": "a tool head",
+    "needs": [
+      {
+        "property": "hardness",
+        "min": 55,
+        "weight": 1
+      },
+      {
+        "property": "toughness",
+        "min": 20,
+        "weight": 2
+      }
+    ]
+  },
+  {
+    "id": "pot",
+    "nl": "een pot",
+    "en": "a pot",
+    "household": true,
+    "needs": [
+      {
+        "property": "watertightness",
+        "min": 35,
+        "weight": 2
+      },
+      {
+        "property": "meltingPoint",
+        "min": 40,
+        "weight": 1
+      },
+      {
+        "property": "hardness",
+        "min": 30,
+        "weight": 1,
+        "max": 65
+      },
+      {
+        "property": "flammability",
+        "min": 0,
+        "weight": 1,
+        "max": 10,
+        "low": true
+      }
+    ]
+  },
+  {
+    "id": "kettle",
+    "nl": "een ketel",
+    "en": "a kettle",
+    "household": true,
+    "needs": [
+      {
+        "property": "conductivity",
+        "min": 50,
+        "weight": 1
+      },
+      {
+        "property": "watertightness",
+        "min": 60,
+        "weight": 1
+      },
+      {
+        "property": "meltingPoint",
+        "min": 40,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "store-jar",
+    "nl": "een voorraadkruik",
+    "en": "a storage jar",
+    "household": true,
+    "needs": [
+      {
+        "property": "watertightness",
+        "min": 60,
+        "weight": 2
+      },
+      {
+        "property": "durability",
+        "min": 70,
+        "weight": 1
+      },
+      {
+        "property": "hardness",
+        "min": 30,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "beam",
+    "nl": "een balk",
+    "en": "a beam",
+    "needs": [
+      {
+        "property": "toughness",
+        "min": 50,
+        "weight": 2
+      },
+      {
+        "property": "hardness",
+        "min": 30,
+        "weight": 1
+      },
+      {
+        "property": "durability",
+        "min": 40,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "wall",
+    "nl": "een muur",
+    "en": "a wall",
+    "needs": [
+      {
+        "property": "hardness",
+        "min": 40,
+        "weight": 1
+      },
+      {
+        "property": "durability",
+        "min": 60,
+        "weight": 2
+      },
+      {
+        "property": "watertightness",
+        "min": 30,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "roof",
+    "nl": "een dak",
+    "en": "a roof",
+    "needs": [
+      {
+        "property": "watertightness",
+        "min": 30,
+        "weight": 2
+      },
+      {
+        "property": "density",
+        "min": 0,
+        "weight": 1,
+        "max": 60,
+        "low": true
+      },
+      {
+        "property": "durability",
+        "min": 30,
+        "weight": 1
+      },
+      {
+        "property": "hardness",
+        "min": 10,
+        "weight": 1
+      },
+      {
+        "property": "meltingPoint",
+        "min": 50,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "hull",
+    "nl": "een romp die drijft",
+    "en": "a hull that floats",
+    "needs": [
+      {
+        "property": "density",
+        "min": 0,
+        "weight": 2,
+        "max": 45,
+        "low": true
+      },
+      {
+        "property": "watertightness",
+        "min": 40,
+        "weight": 2
+      },
+      {
+        "property": "toughness",
+        "min": 40,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "rope",
+    "nl": "touw",
+    "en": "rope",
+    "needs": [
+      {
+        "property": "toughness",
+        "min": 40,
+        "weight": 2
+      },
+      {
+        "property": "flexibility",
+        "min": 60,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "cloth",
+    "nl": "kleding",
+    "en": "clothing",
+    "household": true,
+    "needs": [
+      {
+        "property": "flexibility",
+        "min": 70,
+        "weight": 1
+      },
+      {
+        "property": "toughness",
+        "min": 50,
+        "weight": 1
+      },
+      {
+        "property": "durability",
+        "min": 40,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "footwear",
+    "nl": "schoenen",
+    "en": "shoes",
+    "household": true,
+    "needs": [
+      {
+        "property": "toughness",
+        "min": 50,
+        "weight": 1
+      },
+      {
+        "property": "flexibility",
+        "min": 50,
+        "weight": 1
+      },
+      {
+        "property": "watertightness",
+        "min": 30,
+        "weight": 1
+      },
+      {
+        "property": "durability",
+        "min": 40,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "basket",
+    "nl": "een mand",
+    "en": "a basket",
+    "household": true,
+    "needs": [
+      {
+        "property": "flexibility",
+        "min": 40,
+        "weight": 1
+      },
+      {
+        "property": "toughness",
+        "min": 30,
+        "weight": 1
+      },
+      {
+        "property": "hardness",
+        "min": 15,
+        "weight": 1
+      },
+      {
+        "property": "durability",
+        "min": 40,
+        "weight": 1
+      },
+      {
+        "property": "density",
+        "min": 0,
+        "weight": 1,
+        "max": 50,
+        "low": true
+      }
+    ]
+  },
+  {
+    "id": "bedding",
+    "nl": "een zacht bed",
+    "en": "soft bedding",
+    "household": true,
+    "needs": [
+      {
+        "property": "flexibility",
+        "min": 60,
+        "weight": 1
+      },
+      {
+        "property": "density",
+        "min": 0,
+        "weight": 1,
+        "max": 40,
+        "low": true
+      },
+      {
+        "property": "toughness",
+        "min": 30,
+        "weight": 1
+      },
+      {
+        "property": "durability",
+        "min": 55,
+        "weight": 1
+      },
+      {
+        "property": "meltingPoint",
+        "min": 50,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "food",
+    "nl": "eten",
+    "en": "food",
+    "needs": [
+      {
+        "property": "nutrition",
+        "min": 40,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "preserve",
+    "nl": "eten dat goed blijft",
+    "en": "food that keeps",
+    "needs": [
+      {
+        "property": "nutrition",
+        "min": 40,
+        "weight": 1
+      },
+      {
+        "property": "durability",
+        "min": 60,
+        "weight": 2
+      }
+    ]
+  },
+  {
+    "id": "drink",
+    "nl": "een drank",
+    "en": "a drink",
+    "needs": [
+      {
+        "property": "durability",
+        "min": 60,
+        "weight": 1
+      },
+      {
+        "property": "nutrition",
+        "min": 20,
+        "weight": 1
+      },
+      {
+        "property": "flexibility",
+        "min": 80,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "fuel",
+    "nl": "brandstof",
+    "en": "fuel",
+    "needs": [
+      {
+        "property": "flammability",
+        "min": 60,
+        "weight": 2
+      },
+      {
+        "property": "durability",
+        "min": 40,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "lamp",
+    "nl": "licht in huis",
+    "en": "light at home",
+    "household": true,
+    "needs": [
+      {
+        "property": "flammability",
+        "min": 70,
+        "weight": 1
+      },
+      {
+        "property": "durability",
+        "min": 70,
+        "weight": 1
+      },
+      {
+        "property": "toughness",
+        "min": 30,
+        "weight": 1
+      },
+      {
+        "property": "meltingPoint",
+        "min": 0,
+        "weight": 1,
+        "max": 30,
+        "low": true
+      }
+    ]
+  },
+  {
+    "id": "needle",
+    "nl": "een naald",
+    "en": "a needle",
+    "needs": [
+      {
+        "property": "hardness",
+        "min": 35,
+        "weight": 1
+      },
+      {
+        "property": "toughness",
+        "min": 30,
+        "weight": 1
+      },
+      {
+        "property": "flammability",
+        "min": 0,
+        "weight": 1,
+        "max": 30,
+        "low": true
+      }
+    ]
+  },
+  {
+    "id": "spear",
+    "nl": "een speer",
+    "en": "a spear",
+    "needs": [
+      {
+        "property": "hardness",
+        "min": 60,
+        "weight": 1
+      },
+      {
+        "property": "toughness",
+        "min": 50,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "plough",
+    "nl": "een ploeg",
+    "en": "a plough",
+    "needs": [
+      {
+        "property": "hardness",
+        "min": 60,
+        "weight": 1
+      },
+      {
+        "property": "toughness",
+        "min": 60,
+        "weight": 1
+      },
+      {
+        "property": "durability",
+        "min": 60,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "ornament",
+    "nl": "een sieraad",
+    "en": "an ornament",
+    "household": true,
+    "needs": [
+      {
+        "property": "hardness",
+        "min": 40,
+        "weight": 1
+      },
+      {
+        "property": "durability",
+        "min": 90,
+        "weight": 1
+      },
+      {
+        "property": "conductivity",
+        "min": 50,
+        "weight": 1
+      },
+      {
+        "property": "toughness",
+        "min": 30,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "sealant",
+    "nl": "iets om mee te dichten",
+    "en": "something to seal with",
+    "needs": [
+      {
+        "property": "watertightness",
+        "min": 80,
+        "weight": 2
+      },
+      {
+        "property": "flexibility",
+        "min": 30,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "fishing-net",
+    "nl": "een visnet",
+    "en": "a fishing net",
+    "needs": [
+      {
+        "property": "flexibility",
+        "min": 70,
+        "weight": 1
+      },
+      {
+        "property": "toughness",
+        "min": 40,
+        "weight": 1
+      },
+      {
+        "property": "durability",
+        "min": 40,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "id": "kiln-wall",
+    "nl": "een ovenwand",
+    "en": "a kiln wall",
+    "structure": "kiln",
+    "threshold": 0.5,
+    "needs": [
+      {
+        "property": "meltingPoint",
+        "min": 60,
+        "weight": 2
+      },
+      {
+        "property": "hardness",
+        "min": 40,
+        "weight": 1
+      },
+      {
+        "property": "toughness",
+        "min": 25,
+        "weight": 1
+      },
+      {
+        "property": "flammability",
+        "min": 0,
+        "weight": 1,
+        "max": 10,
+        "low": true
+      }
+    ]
+  },
+  {
+    "id": "furnace-wall",
+    "nl": "een smeltovenwand",
+    "en": "a furnace wall",
+    "structure": "furnace",
+    "threshold": 0.55,
+    "needs": [
+      {
+        "property": "meltingPoint",
+        "min": 75,
+        "weight": 2
+      },
+      {
+        "property": "hardness",
+        "min": 50,
+        "weight": 1
+      },
+      {
+        "property": "toughness",
+        "min": 25,
+        "weight": 1
+      },
+      {
+        "property": "flammability",
+        "min": 0,
+        "weight": 1,
+        "max": 10,
+        "low": true
+      }
+    ]
+  },
+  {
+    "id": "writing-surface",
+    "nl": "iets om op te schrijven",
+    "en": "something to write on",
+    "needs": [
+      {
+        "property": "hardness",
+        "min": 10,
+        "weight": 1,
+        "max": 30,
+        "low": true
+      },
+      {
+        "property": "toughness",
+        "min": 10,
+        "weight": 1
+      },
+      {
+        "property": "durability",
+        "min": 50,
+        "weight": 1
+      },
+      {
+        "property": "flexibility",
+        "min": 10,
+        "weight": 1,
+        "max": 40,
+        "low": true
+      },
+      {
+        "property": "nutrition",
+        "min": 0,
+        "weight": 1,
+        "max": 10,
+        "low": true
+      }
+    ]
+  }
+]

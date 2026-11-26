@@ -19,7 +19,7 @@ What every agent working in this repo must know, whatever the tool. Claude Code 
 
 ### Running
 
-- `dotnet test` in the root. Docker must be running: the tests against the database start their own Postgres container. Locally it takes five to six minutes. CI spreads the tests over four machines (the two biggest scenarios each on their own) and takes about ten minutes.
+- `dotnet test` in the root. Docker must be running: the tests against the database start their own Postgres container. Locally it takes five to six minutes. CI spreads the tests over five machines (the two biggest scenarios each on their own, and the chronicle guardrails of the new core, trait `Category=Chronicle`) and takes about ten minutes. A chronicle of 26 life years: `dotnet run --project src/Codery.Village.Chronicle -c Release -- --seed 1 --years 26 --lang nl --out chronicle-1.md` (about 8 s).
 - The tests that use a real server or the real clock are in the collection `RealTimeCollection`; the tests against the database in `PostgresCollection`. Both run only after the rest, and not side by side. A new test of that kind belongs in one of the two: next to the tests that simulate weeks of village, they miss their timeouts on CI (four cores).
 
 

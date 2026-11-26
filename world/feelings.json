@@ -1,0 +1,45 @@
+{
+  "base": 55,
+  "temper": 30,
+  "maxStepPerHour": 3,
+  "memorySize": 12,
+  "memoryHalfLife": 3,
+  "joyScale": 6,
+  "waitFloor": 0.25,
+  "waitCap": 4,
+  "joyHalfLife": 1.5,
+  "expectedAfter": 4,
+  "unwishedStrength": 0.5,
+  "lossAversion": 2,
+  "painHalfLife": 1,
+  "wishPain": 6,
+  "needs": {
+    "hungry": -15,
+    "cold": -12,
+    "ill": -10,
+    "partner": 6,
+    "health": -20
+  },
+  "wishes": {
+    "startWeight": 5,
+    "growthPerYear": 2,
+    "maxWeight": 10,
+    "maxWishes": 4,
+    "lackDaily": 0.05,
+    "comparisonDaily": 0.1,
+    "comparisonPower": 3,
+    "better": 0.15,
+    "neighbours": 3,
+    "habituationDaily": 0.1,
+    "promiseDaily": 0.3
+  },
+  "moments": {
+    "born": 12,
+    "paired": 10,
+    "kin-died": -15,
+    "partner-died": -25,
+    "ill": -4,
+    "village-found": 5,
+    "village-died": -4
+  }
+}

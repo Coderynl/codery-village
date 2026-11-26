@@ -1,0 +1,178 @@
+{
+  "adjectives": [
+    {
+      "property": "hardness",
+      "high": true,
+      "nl": "harde",
+      "en": "hard",
+      "nlNeuter": "hard"
+    },
+    {
+      "property": "hardness",
+      "high": false,
+      "nl": "zachte",
+      "en": "soft",
+      "nlNeuter": "zacht"
+    },
+    {
+      "property": "toughness",
+      "high": true,
+      "nl": "taaie",
+      "en": "tough",
+      "nlNeuter": "taai"
+    },
+    {
+      "property": "toughness",
+      "high": false,
+      "nl": "brosse",
+      "en": "brittle",
+      "nlNeuter": "bros"
+    },
+    {
+      "property": "flexibility",
+      "high": true,
+      "nl": "soepele",
+      "en": "supple",
+      "nlNeuter": "soepel"
+    },
+    {
+      "property": "flexibility",
+      "high": false,
+      "nl": "stugge",
+      "en": "stiff",
+      "nlNeuter": "stug"
+    },
+    {
+      "property": "density",
+      "high": true,
+      "nl": "zware",
+      "en": "heavy",
+      "nlNeuter": "zwaar"
+    },
+    {
+      "property": "density",
+      "high": false,
+      "nl": "lichte",
+      "en": "light",
+      "nlNeuter": "licht"
+    },
+    {
+      "property": "flammability",
+      "high": true,
+      "nl": "brandbare",
+      "en": "flammable",
+      "nlNeuter": "brandbaar"
+    },
+    {
+      "property": "flammability",
+      "high": false,
+      "nl": "onbrandbare",
+      "en": "fireproof",
+      "nlNeuter": "onbrandbaar"
+    },
+    {
+      "property": "meltingPoint",
+      "high": true,
+      "nl": "vuurvaste",
+      "en": "heat-proof",
+      "nlNeuter": "vuurvast"
+    },
+    {
+      "property": "meltingPoint",
+      "high": false,
+      "nl": "smeltende",
+      "en": "melting",
+      "nlNeuter": "smeltend"
+    },
+    {
+      "property": "watertightness",
+      "high": true,
+      "nl": "dichte",
+      "en": "tight",
+      "nlNeuter": "dicht"
+    },
+    {
+      "property": "watertightness",
+      "high": false,
+      "nl": "poreuze",
+      "en": "porous",
+      "nlNeuter": "poreus"
+    },
+    {
+      "property": "nutrition",
+      "high": true,
+      "nl": "voedzame",
+      "en": "hearty",
+      "nlNeuter": "voedzaam"
+    },
+    {
+      "property": "nutrition",
+      "high": false,
+      "nl": "schrale",
+      "en": "meagre",
+      "nlNeuter": "schraal"
+    },
+    {
+      "property": "durability",
+      "high": true,
+      "nl": "duurzame",
+      "en": "lasting",
+      "nlNeuter": "duurzaam"
+    },
+    {
+      "property": "durability",
+      "high": false,
+      "nl": "vergankelijke",
+      "en": "fleeting",
+      "nlNeuter": "vergankelijk"
+    },
+    {
+      "property": "conductivity",
+      "high": true,
+      "nl": "glanzende",
+      "en": "gleaming",
+      "nlNeuter": "glanzend"
+    },
+    {
+      "property": "conductivity",
+      "high": false,
+      "nl": "doffe",
+      "en": "dull",
+      "nlNeuter": "dof"
+    }
+  ],
+  "own": {
+    "nl": "eilandstof",
+    "en": "island stuff"
+  },
+  "numbered": {
+    "nl": "{name} {n}",
+    "en": "{name} {n}"
+  },
+  "neuter": [
+    "wood",
+    "grain",
+    "fruit",
+    "meat",
+    "bone",
+    "sand",
+    "salt",
+    "kelp",
+    "wax",
+    "ore",
+    "water",
+    "flour",
+    "dough",
+    "bread",
+    "block",
+    "ceramic",
+    "metal",
+    "steel",
+    "glass",
+    "leather",
+    "rope",
+    "wicker",
+    "brew",
+    "pitch"
+  ]
+}

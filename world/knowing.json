@@ -1,0 +1,15 @@
+{
+  "knows": 20,
+  "startMin": 60,
+  "startMax": 90,
+  "parentRate": 2,
+  "masterRate": 4,
+  "schoolRate": 15,
+  "watchRate": 1,
+  "teacherMin": 50,
+  "practice": 1,
+  "teacher": "teacher",
+  "school": "school",
+  "builder": "builder",
+  "foundLevel": 40
+}

@@ -1,0 +1,130 @@
+{
+  "ticksPerLifeYear": 2419200,
+  "stages": {
+    "pupil": 6,
+    "adult": 18,
+    "old": 67
+  },
+  "pairing": {
+    "chance": 0.8,
+    "crowd": 2,
+    "ageGap": 10,
+    "max": 0.95,
+    "ownSex": 0.08
+  },
+  "births": {
+    "chance": 0.45,
+    "motherFrom": 20,
+    "motherTo": 42,
+    "gapYears": 2,
+    "spread": 15
+  },
+  "dying": [
+    {
+      "from": 55,
+      "chance": 0.01
+    },
+    {
+      "from": 60,
+      "chance": 0.02
+    },
+    {
+      "from": 65,
+      "chance": 0.04
+    },
+    {
+      "from": 70,
+      "chance": 0.08
+    },
+    {
+      "from": 75,
+      "chance": 0.14
+    },
+    {
+      "from": 80,
+      "chance": 0.24
+    },
+    {
+      "from": 85,
+      "chance": 0.4
+    },
+    {
+      "from": 90,
+      "chance": 0.6
+    },
+    {
+      "from": 95,
+      "chance": 0.8
+    },
+    {
+      "from": 100,
+      "chance": 1
+    }
+  ],
+  "trades": {
+    "parent": 3,
+    "interest": 2,
+    "missing": 3,
+    "agreeableFrom": 50,
+    "agreeable": [
+      "teacher",
+      "carer"
+    ],
+    "interests": {
+      "farmer": [
+        "gardening",
+        "animals",
+        "nature"
+      ],
+      "woodcutter": [
+        "walking",
+        "nature"
+      ],
+      "miller": [
+        "technology",
+        "numbers"
+      ],
+      "baker": [
+        "cooking"
+      ],
+      "builder": [
+        "crafts",
+        "technology"
+      ],
+      "gatherer": [
+        "walking",
+        "nature",
+        "fishing"
+      ],
+      "carer": [
+        "cooking",
+        "music"
+      ],
+      "teacher": [
+        "reading",
+        "history",
+        "numbers",
+        "stars",
+        "art"
+      ]
+    },
+    "essential": [
+      "farmer",
+      "woodcutter",
+      "miller",
+      "baker",
+      "builder"
+    ],
+    "need": {
+      "trades": {
+        "food": "farmer",
+        "fuel": "woodcutter"
+      },
+      "days": 2,
+      "chance": 0.3,
+      "upTo": 50,
+      "weight": 4
+    }
+  },
+  "accident": 0.004
+}

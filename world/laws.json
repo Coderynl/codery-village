@@ -1,0 +1,1264 @@
+[
+  {
+    "id": "dry-food",
+    "process": "dry",
+    "when": [
+      {
+        "property": "nutrition",
+        "min": 30
+      },
+      {
+        "property": "durability",
+        "max": 40
+      }
+    ],
+    "then": [
+      {
+        "property": "durability",
+        "add": 50
+      },
+      {
+        "property": "density",
+        "add": -10
+      },
+      {
+        "property": "flexibility",
+        "add": -20
+      }
+    ]
+  },
+  {
+    "id": "dry-peat",
+    "process": "dry",
+    "when": [
+      {
+        "kind": "peat"
+      },
+      {
+        "kind": "peat",
+        "property": "flammability",
+        "max": 60
+      }
+    ],
+    "then": [
+      {
+        "property": "flammability",
+        "add": 30
+      },
+      {
+        "property": "density",
+        "add": -10
+      },
+      {
+        "property": "watertightness",
+        "add": -20
+      }
+    ]
+  },
+  {
+    "id": "dry-clay",
+    "process": "dry",
+    "when": [
+      {
+        "kind": "clay"
+      },
+      {
+        "kind": "clay",
+        "property": "hardness",
+        "max": 24
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "add": 10
+      },
+      {
+        "property": "flexibility",
+        "add": -40
+      }
+    ]
+  },
+  {
+    "id": "dry-hide",
+    "process": "dry",
+    "when": [
+      {
+        "kind": "hide"
+      },
+      {
+        "kind": "hide",
+        "property": "hardness",
+        "max": 20
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "add": 20
+      },
+      {
+        "property": "flexibility",
+        "add": -40
+      }
+    ]
+  },
+  {
+    "id": "dry-kelp",
+    "process": "dry",
+    "when": [
+      {
+        "kind": "kelp"
+      },
+      {
+        "kind": "kelp",
+        "property": "flammability",
+        "max": 25
+      }
+    ],
+    "then": [
+      {
+        "property": "flammability",
+        "add": 30
+      },
+      {
+        "property": "durability",
+        "add": 40
+      }
+    ]
+  },
+  {
+    "id": "dry-wood",
+    "process": "dry",
+    "when": [
+      {
+        "kind": "wood"
+      },
+      {
+        "kind": "wood",
+        "property": "flammability",
+        "max": 74
+      }
+    ],
+    "then": [
+      {
+        "property": "durability",
+        "add": 15
+      },
+      {
+        "property": "density",
+        "add": -5
+      },
+      {
+        "property": "flammability",
+        "add": 15
+      }
+    ]
+  },
+  {
+    "id": "soak-fibre",
+    "process": "soak",
+    "when": [
+      {
+        "kind": "fibre"
+      },
+      {
+        "kind": "water",
+        "min": 20
+      },
+      {
+        "kind": "fibre",
+        "property": "toughness",
+        "max": 42
+      }
+    ],
+    "then": [
+      {
+        "property": "toughness",
+        "add": 30
+      }
+    ]
+  },
+  {
+    "id": "soak-hide",
+    "process": "soak",
+    "when": [
+      {
+        "kind": "hide"
+      },
+      {
+        "kind": "ash",
+        "min": 10
+      }
+    ],
+    "then": [
+      {
+        "property": "durability",
+        "add": 40
+      },
+      {
+        "property": "watertightness",
+        "add": 20
+      },
+      {
+        "property": "flexibility",
+        "add": 10
+      }
+    ],
+    "becomes": "leather"
+  },
+  {
+    "id": "soak-grain",
+    "process": "soak",
+    "when": [
+      {
+        "kind": "grain"
+      },
+      {
+        "kind": "water",
+        "min": 20
+      },
+      {
+        "kind": "grain",
+        "property": "durability",
+        "min": 60
+      }
+    ],
+    "then": [
+      {
+        "property": "nutrition",
+        "add": 10
+      },
+      {
+        "property": "durability",
+        "add": -40
+      }
+    ]
+  },
+  {
+    "id": "grind-grain",
+    "process": "grind",
+    "when": [
+      {
+        "kind": "grain"
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "set": 0
+      },
+      {
+        "property": "flexibility",
+        "set": 0
+      },
+      {
+        "property": "density",
+        "add": -10
+      }
+    ],
+    "becomes": "flour"
+  },
+  {
+    "id": "grind-stone",
+    "process": "grind",
+    "when": [
+      {
+        "kind": "stone"
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "set": 15
+      },
+      {
+        "property": "toughness",
+        "set": 0
+      },
+      {
+        "property": "watertightness",
+        "set": 0
+      }
+    ],
+    "becomes": "sand"
+  },
+  {
+    "id": "mix-dough",
+    "process": "mix",
+    "when": [
+      {
+        "kind": "flour"
+      },
+      {
+        "kind": "water",
+        "min": 10
+      }
+    ],
+    "then": [
+      {
+        "property": "flexibility",
+        "add": 40
+      },
+      {
+        "property": "durability",
+        "set": 20
+      }
+    ],
+    "becomes": "dough"
+  },
+  {
+    "id": "mix-temper",
+    "process": "mix",
+    "when": [
+      {
+        "kind": "clay"
+      },
+      {
+        "kind": "sand",
+        "min": 10
+      },
+      {
+        "kind": "clay",
+        "property": "toughness",
+        "max": 15
+      }
+    ],
+    "then": [
+      {
+        "property": "toughness",
+        "add": 15
+      }
+    ]
+  },
+  {
+    "id": "mix-daub",
+    "process": "mix",
+    "when": [
+      {
+        "kind": "clay"
+      },
+      {
+        "kind": "fibre",
+        "min": 10
+      },
+      {
+        "kind": "clay",
+        "property": "toughness",
+        "max": 25
+      }
+    ],
+    "then": [
+      {
+        "property": "toughness",
+        "add": 20
+      },
+      {
+        "property": "hardness",
+        "add": 5
+      }
+    ]
+  },
+  {
+    "id": "mix-mortar",
+    "process": "mix",
+    "when": [
+      {
+        "kind": "lime",
+        "min": 30
+      },
+      {
+        "kind": "sand",
+        "min": 30
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "set": 55
+      },
+      {
+        "property": "watertightness",
+        "set": 50
+      },
+      {
+        "property": "flexibility",
+        "set": 40
+      }
+    ],
+    "becomes": "mortar"
+  },
+  {
+    "id": "mix-caulk",
+    "process": "mix",
+    "when": [
+      {
+        "kind": "wood",
+        "min": 70
+      },
+      {
+        "kind": "pitch",
+        "min": 10
+      },
+      {
+        "kind": "wood",
+        "property": "watertightness",
+        "max": 50
+      }
+    ],
+    "then": [
+      {
+        "property": "watertightness",
+        "add": 40
+      },
+      {
+        "property": "durability",
+        "add": 15
+      }
+    ]
+  },
+  {
+    "id": "mix-candle",
+    "process": "mix",
+    "when": [
+      {
+        "kind": "wax",
+        "min": 60
+      },
+      {
+        "kind": "fibre",
+        "min": 10
+      }
+    ],
+    "then": [
+      {
+        "property": "flammability",
+        "add": 15
+      },
+      {
+        "property": "durability",
+        "add": 5
+      },
+      {
+        "property": "toughness",
+        "add": 20
+      }
+    ],
+    "becomes": "candle"
+  },
+  {
+    "id": "mix-salt",
+    "process": "mix",
+    "when": [
+      {
+        "kind": "meat",
+        "min": 60
+      },
+      {
+        "kind": "salt",
+        "min": 10
+      },
+      {
+        "kind": "meat",
+        "property": "durability",
+        "max": 50
+      }
+    ],
+    "then": [
+      {
+        "property": "durability",
+        "add": 60
+      }
+    ]
+  },
+  {
+    "id": "beat-flint",
+    "process": "beat",
+    "when": [
+      {
+        "kind": "flint"
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "add": 10
+      },
+      {
+        "property": "toughness",
+        "add": 5
+      }
+    ],
+    "becomes": "edge"
+  },
+  {
+    "id": "beat-metal",
+    "process": "beat",
+    "when": [
+      {
+        "kind": "metal"
+      },
+      {
+        "kind": "metal",
+        "property": "toughness",
+        "max": 52
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "add": 10
+      },
+      {
+        "property": "toughness",
+        "add": 5
+      }
+    ]
+  },
+  {
+    "id": "beat-alloy",
+    "process": "beat",
+    "when": [
+      {
+        "kind": "alloy"
+      },
+      {
+        "kind": "alloy",
+        "property": "toughness",
+        "max": 57
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "add": 10
+      },
+      {
+        "property": "toughness",
+        "add": 5
+      }
+    ]
+  },
+  {
+    "id": "beat-hide",
+    "process": "beat",
+    "when": [
+      {
+        "kind": "hide"
+      },
+      {
+        "kind": "hide",
+        "property": "flexibility",
+        "max": 80
+      }
+    ],
+    "then": [
+      {
+        "property": "flexibility",
+        "add": 20
+      },
+      {
+        "property": "hardness",
+        "add": -5
+      }
+    ]
+  },
+  {
+    "id": "beat-fibre",
+    "process": "beat",
+    "when": [
+      {
+        "kind": "fibre"
+      },
+      {
+        "kind": "fibre",
+        "property": "durability",
+        "max": 54
+      }
+    ],
+    "then": [
+      {
+        "property": "flexibility",
+        "add": 5
+      },
+      {
+        "property": "durability",
+        "add": 25
+      }
+    ]
+  },
+  {
+    "id": "weave-cloth",
+    "process": "weave",
+    "when": [
+      {
+        "kind": "fibre",
+        "min": 80
+      },
+      {
+        "property": "flexibility",
+        "min": 85
+      }
+    ],
+    "then": [
+      {
+        "property": "toughness",
+        "add": 20
+      },
+      {
+        "property": "durability",
+        "add": 10
+      }
+    ],
+    "becomes": "cloth"
+  },
+  {
+    "id": "weave-rope",
+    "process": "weave",
+    "when": [
+      {
+        "kind": "fibre",
+        "min": 80
+      },
+      {
+        "property": "flexibility",
+        "max": 84
+      },
+      {
+        "property": "toughness",
+        "min": 45
+      }
+    ],
+    "then": [
+      {
+        "property": "toughness",
+        "add": 20
+      }
+    ],
+    "becomes": "rope"
+  },
+  {
+    "id": "weave-wicker",
+    "process": "weave",
+    "when": [
+      {
+        "kind": "wood"
+      },
+      {
+        "property": "flexibility",
+        "min": 60
+      }
+    ],
+    "then": [
+      {
+        "property": "durability",
+        "add": 10
+      }
+    ],
+    "becomes": "wicker"
+  },
+  {
+    "id": "cut-wood",
+    "process": "cut",
+    "when": [
+      {
+        "kind": "wood"
+      }
+    ],
+    "then": [
+      {
+        "property": "flexibility",
+        "add": -10
+      },
+      {
+        "property": "durability",
+        "add": 5
+      },
+      {
+        "property": "hardness",
+        "add": 5
+      }
+    ],
+    "becomes": "plank"
+  },
+  {
+    "id": "cut-stone",
+    "process": "cut",
+    "when": [
+      {
+        "kind": "stone"
+      }
+    ],
+    "then": [
+      {
+        "property": "watertightness",
+        "add": 10
+      }
+    ],
+    "becomes": "block"
+  },
+  {
+    "id": "ferment-fruit",
+    "process": "ferment",
+    "when": [
+      {
+        "kind": "fruit"
+      },
+      {
+        "kind": "water",
+        "min": 20
+      }
+    ],
+    "then": [
+      {
+        "property": "durability",
+        "set": 70
+      },
+      {
+        "property": "nutrition",
+        "add": -10
+      },
+      {
+        "property": "flexibility",
+        "set": 95
+      }
+    ],
+    "becomes": "brew"
+  },
+  {
+    "id": "ferment-sweet",
+    "process": "ferment",
+    "when": [
+      {
+        "kind": "sweet"
+      },
+      {
+        "kind": "water",
+        "min": 20
+      }
+    ],
+    "then": [
+      {
+        "property": "durability",
+        "set": 80
+      },
+      {
+        "property": "nutrition",
+        "add": -10
+      },
+      {
+        "property": "flexibility",
+        "set": 95
+      }
+    ],
+    "becomes": "brew"
+  },
+  {
+    "id": "ferment-grain",
+    "process": "ferment",
+    "when": [
+      {
+        "kind": "grain"
+      },
+      {
+        "kind": "water",
+        "min": 20
+      }
+    ],
+    "then": [
+      {
+        "property": "durability",
+        "set": 60
+      },
+      {
+        "property": "flexibility",
+        "set": 95
+      }
+    ],
+    "becomes": "brew"
+  },
+  {
+    "id": "ferment-dough",
+    "process": "ferment",
+    "when": [
+      {
+        "kind": "dough",
+        "min": 100
+      },
+      {
+        "kind": "dough",
+        "property": "flexibility",
+        "max": 70
+      }
+    ],
+    "then": [
+      {
+        "property": "density",
+        "add": -15
+      },
+      {
+        "property": "flexibility",
+        "add": 10
+      }
+    ]
+  },
+  {
+    "id": "fire-clay",
+    "process": "fire",
+    "when": [
+      {
+        "kind": "clay",
+        "min": 60
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "add": 40
+      },
+      {
+        "property": "watertightness",
+        "add": 40
+      },
+      {
+        "property": "flexibility",
+        "set": 0
+      }
+    ],
+    "becomes": "ceramic"
+  },
+  {
+    "id": "fire-dough",
+    "process": "fire",
+    "when": [
+      {
+        "kind": "dough"
+      }
+    ],
+    "then": [
+      {
+        "property": "flexibility",
+        "add": -40
+      },
+      {
+        "property": "durability",
+        "add": 30
+      },
+      {
+        "property": "nutrition",
+        "add": 20
+      },
+      {
+        "property": "density",
+        "add": -10
+      },
+      {
+        "property": "hardness",
+        "add": 15
+      }
+    ],
+    "becomes": "bread"
+  },
+  {
+    "id": "fire-wood",
+    "process": "fire",
+    "when": [
+      {
+        "kind": "wood",
+        "min": 80
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "set": 10
+      },
+      {
+        "property": "density",
+        "add": -15
+      },
+      {
+        "property": "flammability",
+        "set": 90
+      },
+      {
+        "property": "durability",
+        "set": 90
+      },
+      {
+        "property": "flexibility",
+        "set": 0
+      }
+    ],
+    "becomes": "charcoal"
+  },
+  {
+    "id": "fire-chalk",
+    "process": "fire",
+    "when": [
+      {
+        "kind": "chalk"
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "add": -10
+      }
+    ],
+    "becomes": "lime"
+  },
+  {
+    "id": "fire-meat",
+    "process": "fire",
+    "when": [
+      {
+        "kind": "meat"
+      },
+      {
+        "kind": "meat",
+        "property": "durability",
+        "max": 25
+      }
+    ],
+    "then": [
+      {
+        "property": "durability",
+        "add": 30
+      },
+      {
+        "property": "nutrition",
+        "add": 5
+      }
+    ]
+  },
+  {
+    "id": "fire-resin",
+    "process": "fire",
+    "when": [
+      {
+        "kind": "resin"
+      },
+      {
+        "kind": "resin",
+        "melts": true
+      }
+    ],
+    "then": [
+      {
+        "property": "watertightness",
+        "add": 5
+      },
+      {
+        "property": "flammability",
+        "add": -20
+      },
+      {
+        "property": "durability",
+        "add": 10
+      }
+    ],
+    "becomes": "pitch"
+  },
+  {
+    "id": "kiln-clay",
+    "process": "kiln",
+    "when": [
+      {
+        "kind": "clay"
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "add": 50
+      },
+      {
+        "property": "watertightness",
+        "add": 55
+      },
+      {
+        "property": "flexibility",
+        "set": 0
+      },
+      {
+        "property": "meltingPoint",
+        "add": 10
+      }
+    ],
+    "becomes": "ceramic"
+  },
+  {
+    "id": "kiln-reduce",
+    "process": "kiln",
+    "when": [
+      {
+        "kind": "ore"
+      },
+      {
+        "kind": "ore",
+        "property": "meltingPoint",
+        "max": 60
+      },
+      {
+        "kind": "charcoal",
+        "min": 20
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "of": "ore"
+      },
+      {
+        "property": "toughness",
+        "of": "ore",
+        "add": 40
+      },
+      {
+        "property": "flexibility",
+        "of": "ore",
+        "add": 20
+      },
+      {
+        "property": "density",
+        "of": "ore"
+      },
+      {
+        "property": "flammability",
+        "set": 0
+      },
+      {
+        "property": "meltingPoint",
+        "of": "ore"
+      },
+      {
+        "property": "watertightness",
+        "set": 90
+      },
+      {
+        "property": "nutrition",
+        "set": 0
+      },
+      {
+        "property": "durability",
+        "of": "ore"
+      },
+      {
+        "property": "conductivity",
+        "of": "ore"
+      }
+    ],
+    "becomes": "metal"
+  },
+  {
+    "id": "kiln-alloy",
+    "process": "kiln",
+    "when": [
+      {
+        "kind": "metal",
+        "min": 100
+      },
+      {
+        "min": 75,
+        "max": 95
+      },
+      {
+        "melts": true
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "aboveBoth": 15
+      },
+      {
+        "property": "toughness",
+        "aboveBoth": 5
+      }
+    ],
+    "becomes": "alloy"
+  },
+  {
+    "id": "kiln-glaze",
+    "process": "kiln",
+    "when": [
+      {
+        "kind": "ceramic",
+        "min": 70
+      },
+      {
+        "kind": "ash",
+        "min": 10
+      },
+      {
+        "kind": "ceramic",
+        "property": "watertightness",
+        "max": 94
+      }
+    ],
+    "then": [
+      {
+        "property": "watertightness",
+        "set": 95
+      },
+      {
+        "property": "durability",
+        "add": 10
+      }
+    ]
+  },
+  {
+    "id": "furnace-reduce",
+    "process": "furnace",
+    "when": [
+      {
+        "kind": "ore"
+      },
+      {
+        "kind": "charcoal",
+        "min": 20
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "of": "ore"
+      },
+      {
+        "property": "toughness",
+        "of": "ore",
+        "add": 40
+      },
+      {
+        "property": "flexibility",
+        "of": "ore",
+        "add": 20
+      },
+      {
+        "property": "density",
+        "of": "ore"
+      },
+      {
+        "property": "flammability",
+        "set": 0
+      },
+      {
+        "property": "meltingPoint",
+        "of": "ore"
+      },
+      {
+        "property": "watertightness",
+        "set": 90
+      },
+      {
+        "property": "nutrition",
+        "set": 0
+      },
+      {
+        "property": "durability",
+        "of": "ore"
+      },
+      {
+        "property": "conductivity",
+        "of": "ore"
+      }
+    ],
+    "becomes": "metal"
+  },
+  {
+    "id": "furnace-alloy",
+    "process": "furnace",
+    "when": [
+      {
+        "kind": "metal",
+        "min": 100
+      },
+      {
+        "min": 75,
+        "max": 95
+      },
+      {
+        "melts": true
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "aboveBoth": 15
+      },
+      {
+        "property": "toughness",
+        "aboveBoth": 5
+      }
+    ],
+    "becomes": "alloy"
+  },
+  {
+    "id": "furnace-steel",
+    "process": "furnace",
+    "when": [
+      {
+        "kind": "metal",
+        "min": 80
+      },
+      {
+        "kind": "metal",
+        "property": "meltingPoint",
+        "min": 70
+      },
+      {
+        "kind": "charcoal",
+        "min": 5
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "add": 20
+      },
+      {
+        "property": "toughness",
+        "add": 10
+      }
+    ],
+    "becomes": "steel"
+  },
+  {
+    "id": "furnace-glass",
+    "process": "furnace",
+    "when": [
+      {
+        "kind": "sand",
+        "min": 60
+      },
+      {
+        "kind": "ash",
+        "min": 10
+      }
+    ],
+    "then": [
+      {
+        "property": "hardness",
+        "set": 60
+      },
+      {
+        "property": "toughness",
+        "set": 10
+      },
+      {
+        "property": "flexibility",
+        "set": 0
+      },
+      {
+        "property": "watertightness",
+        "set": 100
+      },
+      {
+        "property": "durability",
+        "set": 95
+      }
+    ],
+    "becomes": "glass"
+  }
+]

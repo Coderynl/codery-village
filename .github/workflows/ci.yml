@@ -69,7 +69,8 @@ jobs:
         run: dotnet run --project src/Codery.Village.Checks -c Release -- production https://village-engine.codery.nl 345600 ${{ github.event.pull_request.user.login == vars.EDDIE_BOT && '--eddie' || '' }}
 
   # the scenarios keep every core busy for minutes (30 seeds at once), so the two biggest get a machine each,
-  # the other scenarios (new ones too) a third, and all other tests a fourth
+  # the other scenarios (new ones too) a third, the chronicle guardrails of the new core a fourth, and all other
+  # tests a fifth
   part:
     needs: changes
     if: needs.changes.outputs.docs != 'true'
@@ -84,8 +85,10 @@ jobs:
             filter: Category=Scenario&FullyQualifiedName~ScenarioTests.Everyone_saves
           - name: other scenarios
             filter: Category=Scenario&FullyQualifiedName!~ScenarioTests.Four_weeks&FullyQualifiedName!~ScenarioTests.Everyone_saves
+          - name: chronicle guardrails
+            filter: Category=Chronicle
           - name: rest
-            filter: Category!=Scenario
+            filter: Category!=Scenario&Category!=Chronicle
     name: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@v4

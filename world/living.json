@@ -1,0 +1,68 @@
+{
+  "start": {
+    "grain": 1500,
+    "wood": 500
+  },
+  "built": [
+    "house"
+  ],
+  "endless": [
+    "water"
+  ],
+  "ash": "ash",
+  "output": {
+    "farmer": 60,
+    "woodcutter": 20,
+    "gatherer": 24,
+    "miller": 30,
+    "baker": 30,
+    "builder": 6
+  },
+  "tilesPerWorker": 3,
+  "seasons": {
+    "grain": [0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+    "berries": [0, 0, 0, 0, 0, 0.5, 1, 1, 1, 0.5, 0, 0],
+    "flax": [0, 0, 0, 0, 0.5, 1, 1, 1, 0.5, 0, 0, 0]
+  },
+  "cold": [90, 80, 60, 35, 15, 0, 0, 0, 10, 35, 60, 85],
+  "drought": {
+    "months": [6, 7, 8],
+    "chance": 0.03,
+    "minDays": 7,
+    "maxDays": 21,
+    "factor": 0.3
+  },
+  "dailyNutrition": 100,
+  "fuelPerHousehold": 4,
+  "ashShare": 0.1,
+  "spoilRate": 0.02,
+  "breakRate": 0.01,
+  "upgrade": 0.15,
+  "maxDepth": 3,
+  "structureCost": 40,
+  "school": {
+    "pupils": 6,
+    "of": "wall"
+  },
+  "roles": {
+    "builder": "builder",
+    "carer": "carer",
+    "teacher": "teacher"
+  },
+  "harm": {
+    "hunger": 3,
+    "cold": 4,
+    "old": 3,
+    "child": 1.5,
+    "heal": 5
+  },
+  "sickness": {
+    "chance": 0.002,
+    "hungry": 3,
+    "cold": 2,
+    "household": 0.05,
+    "beyond": 0.001,
+    "harm": 2,
+    "recover": 0.2
+  }
+}

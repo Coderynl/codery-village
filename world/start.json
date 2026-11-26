@@ -1,0 +1,172 @@
+{
+  "processes": [
+    "dry",
+    "cut",
+    "grind",
+    "fire",
+    "beat",
+    "mix"
+  ],
+  "recipes": [
+    {
+      "label": "flour",
+      "nl": "meel",
+      "en": "flour",
+      "process": "grind",
+      "in": [
+        {
+          "substance": "grain",
+          "parts": 1
+        }
+      ]
+    },
+    {
+      "label": "dough",
+      "nl": "deeg",
+      "en": "dough",
+      "process": "mix",
+      "in": [
+        {
+          "substance": "flour",
+          "parts": 3
+        },
+        {
+          "substance": "water",
+          "parts": 1
+        }
+      ]
+    },
+    {
+      "label": "bread",
+      "nl": "brood",
+      "en": "bread",
+      "process": "fire",
+      "in": [
+        {
+          "substance": "dough",
+          "parts": 1
+        }
+      ]
+    },
+    {
+      "label": "plank",
+      "nl": "plank",
+      "en": "plank",
+      "process": "cut",
+      "in": [
+        {
+          "substance": "wood",
+          "parts": 1
+        }
+      ]
+    },
+    {
+      "label": "edge",
+      "nl": "vuurstenen mes",
+      "en": "flint knife",
+      "process": "beat",
+      "in": [
+        {
+          "substance": "flint",
+          "parts": 1
+        }
+      ]
+    }
+  ],
+  "uses": [
+    "food",
+    "fuel",
+    "beam",
+    "wall",
+    "roof",
+    "cut",
+    "tool-head"
+  ],
+  "trades": [
+    {
+      "id": "farmer",
+      "nl": "boer",
+      "en": "farmer",
+      "recipes": [],
+      "gathers": [
+        "grain"
+      ]
+    },
+    {
+      "id": "woodcutter",
+      "nl": "houthakker",
+      "en": "woodcutter",
+      "recipes": [],
+      "gathers": [
+        "wood"
+      ]
+    },
+    {
+      "id": "miller",
+      "nl": "molenaar",
+      "en": "miller",
+      "recipes": [
+        "flour"
+      ],
+      "gathers": []
+    },
+    {
+      "id": "baker",
+      "nl": "bakker",
+      "en": "baker",
+      "recipes": [
+        "dough",
+        "bread"
+      ],
+      "gathers": [
+        "water"
+      ]
+    },
+    {
+      "id": "builder",
+      "nl": "bouwer",
+      "en": "builder",
+      "recipes": [
+        "plank",
+        "edge"
+      ],
+      "gathers": []
+    },
+    {
+      "id": "gatherer",
+      "nl": "verzamelaar",
+      "en": "gatherer",
+      "recipes": [],
+      "gathers": [
+        "berries",
+        "flax"
+      ]
+    },
+    {
+      "id": "carer",
+      "nl": "verzorger",
+      "en": "carer",
+      "recipes": [],
+      "gathers": []
+    },
+    {
+      "id": "teacher",
+      "nl": "leraar",
+      "en": "teacher",
+      "recipes": [],
+      "gathers": []
+    }
+  ],
+  "structures": [
+    {
+      "id": "house",
+      "nl": "huis",
+      "en": "house"
+    },
+    {
+      "id": "school",
+      "nl": "school",
+      "en": "school"
+    }
+  ]
+}

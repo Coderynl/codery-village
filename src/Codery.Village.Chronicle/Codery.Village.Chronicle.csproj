@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Runs the new core for a number of life years and writes its chronicle as Markdown. A console tool: it reads the world from the repo and writes a file. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Codery.Village.Core\Codery.Village.Core.csproj" />
+    <ProjectReference Include="..\Codery.Village.Life\Codery.Village.Life.csproj" />
+  </ItemGroup>
+
+</Project>
