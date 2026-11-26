@@ -77,7 +77,7 @@ public sealed class Knowing : IModule
     public void Step(ModuleContext village)
     {
         // the tick after the day began: then the events of Folk's and Living's 06:00 arrive
-        if (village.Clocks.Tick % Hourly.TicksPerHour != 1 || village.Clocks.Calendar.Now.Hour != 6) return;
+        if (!Hourly.DayBegan(village)) return;
 
         var tick = village.Clocks.Tick;
         Practise(village.Received);

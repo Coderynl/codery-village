@@ -4,6 +4,8 @@ using Codery.Village.Core.Data;
 using Codery.Village.Core.Modules;
 using Codery.Village.Core.Save;
 using Codery.Village.Core.Time;
+using Codery.Village.Laws;
+using Recipe = Codery.Village.Laws.Recipe;
 using Codery.Village.Life.Folk;
 using Codery.Village.Life.Knowing;
 using FolkModule = Codery.Village.Life.Folk.Folk;
@@ -98,6 +100,49 @@ public class KnowingTests
 
         Assert.True(with >= 0.8, $"with a school {with:P0} of the pupils know weaving");
         Assert.True(without < 0.4, $"without a school {without:P0} of the pupils know weaving");
+    }
+
+    [Fact]
+    public void Practice_raises_what_a_worker_uses()
+    {
+        var bread = World.Laws.Start.Recipes.Single(r => r.Out == World.Laws.Labels["bread"]).Id;
+        var village = Village(World.Data, 1);
+        // the best baker: nobody teaches them more, so only practice can raise their bread
+        var baker = village.Folk.Living.Where(p => p.Trade == "baker").MaxBy(p => village.Knowing.Level(p.Id, bread))!;
+        var before = village.Knowing.Level(baker.Id, bread);
+
+        Run(village.Engine, 7 * Day);
+
+        Assert.True(village.Knowing.Level(baker.Id, bread) > before, $"bread stays at level {before}");
+    }
+
+    [Fact]
+    public void Those_who_raised_a_kiln_know_how_to_fire_in_it()
+    {
+        var laws = World.Laws;
+        var village = Village(World.Data, 1);
+        var tempered = laws.Nature.Apply("mix", [new(laws.Substances["clay"], 3), new(laws.Substances["sand"], 1)])!;
+        var brick = laws.Nature.Apply("fire", [new(tempered, 1)])!;
+        var mix = new Recipe($"mix:{tempered.Id}", "mix", [new("clay", 3), new("sand", 1)], tempered.Id);
+        var fire = new Recipe($"fire:{brick.Id}", "fire", [new(tempered.Id, 1)], brick.Id);
+        village.Living.Learn(mix, tempered);
+        village.Living.Learn(fire, brick);
+        Assert.NotEmpty(village.Living.TilesOf("clay"));
+        Assert.NotEmpty(village.Living.TilesOf("sand"));
+        var builders = village.Folk.Living.Where(p => p.Trade == "builder" && village.Folk.StageOf(p, 0) >= LifeStage.Adult).ToList();
+        Assert.NotEmpty(builders);
+        foreach (var b in builders)
+        {
+            village.Knowing.Learn(b.Id, mix.Id, 80, "found");
+            village.Knowing.Learn(b.Id, fire.Id, 80, "found");
+        }
+
+        for (var day = 0; day < 120 && !village.Living.Structures.Contains("kiln"); day++) Run(village.Engine, Day);
+        Assert.Contains("kiln", village.Living.Structures);
+        Run(village.Engine, Day);
+
+        foreach (var b in builders.Where(b => village.Folk.Get(b.Id)!.DiedTick is null))
+            Assert.True(village.Knowing.Knows(b.Id, "kiln"), $"builder {b.Id} knows the kiln at level {village.Knowing.Level(b.Id, "kiln")}");
     }
 
     [Fact]
