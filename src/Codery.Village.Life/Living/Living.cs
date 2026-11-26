@@ -30,6 +30,7 @@ public sealed partial class Living : IModule
     private Folk.Folk _folk = null!;
     private Dictionary<string, Trade> _trades = [];
     private List<Recipe> _recipes = [];
+    private readonly List<(Recipe Recipe, Substance Output)> _learned = [];
     private Dictionary<string, Recipe> _recipeById = [];
     private Dictionary<string, Substance> _substances = [];
     private List<Use> _householdUses = [];
@@ -76,6 +77,24 @@ public sealed partial class Living : IModule
 
     /// <summary>The tiles that hold a substance; empty for one not at hand.</summary>
     public IReadOnlyList<Cell> TilesOf(string substance) => _tiles.TryGetValue(substance, out var tiles) ? tiles : [];
+
+    /// <summary>
+    /// Takes up a recipe found on the island and the substance it makes, so that whoever knows it can make it: for a
+    /// household, for a structure, or at <see cref="Make"/>. Kept in the save.
+    /// </summary>
+    public void Learn(Recipe recipe, Substance output)
+    {
+        if (_recipeById.ContainsKey(recipe.Id)) return;
+        _learned.Add((recipe, output));
+        Take(recipe, output);
+    }
+
+    private void Take(Recipe recipe, Substance output)
+    {
+        _recipes.Add(recipe);
+        _recipeById[recipe.Id] = recipe;
+        _substances.TryAdd(output.Id, output);
+    }
 
     /// <summary>A substance Living knows (raw, the island's own, or made), or null.</summary>
     public Substance? SubstanceOf(string id) => _substances.GetValueOrDefault(id);
@@ -216,7 +235,9 @@ public sealed partial class Living : IModule
         _fuelShortDays,
         Weather.Drought,
         _droughtLeft,
-        Weather.Cold), SaveJson.Options)!;
+        Weather.Cold,
+        [.. _learned.Select(l => new SavedLearned(l.Recipe.Id, l.Recipe.Process, [.. l.Recipe.In], l.Output.Id, l.Output.Kind, [.. l.Output.Profile.Values]))]),
+        SaveJson.Options)!;
 
     public void Load(ModuleContext village, JsonNode data, int version)
     {
@@ -245,11 +266,21 @@ public sealed partial class Living : IModule
         _fuelShortDays = saved.FuelShortDays;
         _droughtLeft = saved.DroughtLeft;
         Weather = new Weather(saved.Drought, saved.Cold);
+        _learned.Clear();
+        foreach (var l in saved.Learned ?? [])
+        {
+            var learned = (new Recipe(l.Recipe, l.Process, l.In, l.Out), new Substance(l.Out, l.Kind, new Profile([.. l.Profile]), Raw: false));
+            _learned.Add(learned);
+            Take(learned.Item1, learned.Item2);
+        }
     }
 
     private sealed record SavedLiving(IReadOnlyList<int> Own, Dictionary<string, List<Cell>> Tiles, Dictionary<string, double> Stock,
         IReadOnlyList<string> Structures, IReadOnlyList<SavedPossession> Possessions, IReadOnlyList<SavedWait> Waiting, IReadOnlyList<int> Ill,
-        IReadOnlyList<int> Households, int FoodShortDays, int FuelShortDays, bool Drought, int DroughtLeft, int Cold);
+        IReadOnlyList<int> Households, int FoodShortDays, int FuelShortDays, bool Drought, int DroughtLeft, int Cold,
+        IReadOnlyList<SavedLearned>? Learned = null);
+
+    private sealed record SavedLearned(string Recipe, string Process, IReadOnlyList<RecipeInput> In, string Out, string Kind, IReadOnlyList<int> Profile);
 
     private sealed record SavedPossession(int Household, string Use, string Substance, long SinceTick);
 

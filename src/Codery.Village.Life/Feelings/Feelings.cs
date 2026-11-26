@@ -6,6 +6,7 @@ using Codery.Village.Core.Save;
 using Codery.Village.Core.Time;
 using Codery.Village.Laws;
 using Codery.Village.Life.Folk;
+using Codery.Village.Life.Inventing;
 using Codery.Village.Life.Living;
 using FolkModule = Codery.Village.Life.Folk.Folk;
 using KnowingModule = Codery.Village.Life.Knowing.Knowing;
@@ -131,7 +132,27 @@ public sealed class Feelings : IModule
                 case Lost lost:
                     foreach (var p in Members(lost.Household)) Lose(p, lost.Use, e.Tick);
                     break;
+                case Discovered found:
+                    Promise(found.D.Substance, e.Tick);
+                    break;
             }
+        }
+    }
+
+    // a discovery suggests more: the open-minded come to want what it could serve, where nobody has that yet
+    private void Promise(string substance, long tick)
+    {
+        if (Living.SubstanceOf(substance) is not { } found) return;
+        var had = Households().SelectMany(h => Living.Of(h).Select(o => o.Use)).ToHashSet(StringComparer.Ordinal);
+        var promised = _world.Uses.Where(u => !had.Contains(u.Id) && u.Score(found.Profile) > 0)
+            .OrderByDescending(u => u.Score(found.Profile)).ThenBy(u => u.Id, StringComparer.Ordinal).FirstOrDefault();
+        if (promised is null) return;
+        foreach (var (id, heart) in _hearts)
+        {
+            var p = Folk.Get(id)!;
+            if (Folk.StageOf(p, tick) == LifeStage.Child || Wants(heart, promised.Id)) continue;
+            if (_village.Random.NextDouble() < _rules.Wishes.PromiseDaily * p.Traits.Openness / 100.0)
+                Add(id, heart, promised.Id, "promise", substance, tick, _rules.Wishes.StartWeight);
         }
     }
 

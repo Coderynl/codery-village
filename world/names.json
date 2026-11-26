@@ -1,0 +1,132 @@
+{
+  "adjectives": [
+    {
+      "property": "hardness",
+      "high": true,
+      "nl": "harde",
+      "en": "hard"
+    },
+    {
+      "property": "hardness",
+      "high": false,
+      "nl": "zachte",
+      "en": "soft"
+    },
+    {
+      "property": "toughness",
+      "high": true,
+      "nl": "taaie",
+      "en": "tough"
+    },
+    {
+      "property": "toughness",
+      "high": false,
+      "nl": "brosse",
+      "en": "brittle"
+    },
+    {
+      "property": "flexibility",
+      "high": true,
+      "nl": "soepele",
+      "en": "supple"
+    },
+    {
+      "property": "flexibility",
+      "high": false,
+      "nl": "stugge",
+      "en": "stiff"
+    },
+    {
+      "property": "density",
+      "high": true,
+      "nl": "zware",
+      "en": "heavy"
+    },
+    {
+      "property": "density",
+      "high": false,
+      "nl": "lichte",
+      "en": "light"
+    },
+    {
+      "property": "flammability",
+      "high": true,
+      "nl": "brandende",
+      "en": "fiery"
+    },
+    {
+      "property": "flammability",
+      "high": false,
+      "nl": "onbrandbare",
+      "en": "fireproof"
+    },
+    {
+      "property": "meltingPoint",
+      "high": true,
+      "nl": "vuurvaste",
+      "en": "heat-proof"
+    },
+    {
+      "property": "meltingPoint",
+      "high": false,
+      "nl": "smeltende",
+      "en": "melting"
+    },
+    {
+      "property": "watertightness",
+      "high": true,
+      "nl": "dichte",
+      "en": "tight"
+    },
+    {
+      "property": "watertightness",
+      "high": false,
+      "nl": "poreuze",
+      "en": "porous"
+    },
+    {
+      "property": "nutrition",
+      "high": true,
+      "nl": "voedzame",
+      "en": "hearty"
+    },
+    {
+      "property": "nutrition",
+      "high": false,
+      "nl": "schrale",
+      "en": "meagre"
+    },
+    {
+      "property": "durability",
+      "high": true,
+      "nl": "duurzame",
+      "en": "lasting"
+    },
+    {
+      "property": "durability",
+      "high": false,
+      "nl": "vergankelijke",
+      "en": "fleeting"
+    },
+    {
+      "property": "conductivity",
+      "high": true,
+      "nl": "glanzende",
+      "en": "gleaming"
+    },
+    {
+      "property": "conductivity",
+      "high": false,
+      "nl": "doffe",
+      "en": "dull"
+    }
+  ],
+  "own": {
+    "nl": "eilandstof",
+    "en": "island stuff"
+  },
+  "numbered": {
+    "nl": "{name} {n}",
+    "en": "{name} {n}"
+  }
+}
