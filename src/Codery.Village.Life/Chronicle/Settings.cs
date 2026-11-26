@@ -10,6 +10,10 @@ namespace Codery.Village.Life.Chronicle;
 /// <param name="IllnessWave">An illness wave is told once this many people are ill at once.</param>
 /// <param name="HeavyWish">Each life year, a line for every use this many people want.</param>
 /// <param name="TopWishes">A year in which no use is wanted that much tells the this-many most wanted.</param>
+/// <param name="WishChangeBy">A use's wish line is told again when this many more or fewer people want it than at its last line,</param>
+/// <param name="WishChangeShare">or this share of them more or fewer, or when its leading cause changed;</param>
+/// <param name="WishStillEvery">unchanged, it is told as "still" after this many life years.</param>
+/// <param name="IllnessNames">An illness wave of at most this many people names them; a larger one tells the count.</param>
 /// <param name="Numbers">Numbers in words, from zero; larger numbers stay digits.</param>
 /// <param name="Months">The names of the months, January first.</param>
 /// <param name="Structures">What a structure is called in a sentence, with its article.</param>
@@ -19,6 +23,10 @@ public sealed record ChronicleRules(
     int IllnessWave,
     int HeavyWish,
     int TopWishes,
+    int WishChangeBy,
+    double WishChangeShare,
+    int WishStillEvery,
+    int IllnessNames,
     Words Numbers,
     Words Months,
     IReadOnlyDictionary<string, Name> Structures,

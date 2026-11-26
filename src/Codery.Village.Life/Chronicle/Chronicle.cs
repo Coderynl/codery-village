@@ -29,10 +29,12 @@ public sealed class Chronicle(ulong seed = 0) : IModule
     private readonly List<LifeYear> _years = [];
     private readonly SortedDictionary<int, string> _causes = [];
     private readonly SortedDictionary<int, List<Name>> _found = [];
+    private readonly SortedDictionary<string, ToldWish> _told = new(StringComparer.Ordinal);
     private ModuleContext _village = null!;
     private ChronicleRules _rules = null!;
     private WorldData _world = null!;
     private long _ticksPerYear;
+    private IReadOnlyDictionary<string, Name> _processes = new Dictionary<string, Name>();
     private ulong _seed = seed;
     private int _openYear = 1;
     private DateOnly _openFirst;
@@ -184,7 +186,7 @@ public sealed class Chronicle(ulong seed = 0) : IModule
         {
             var inputs = _rules.List([.. (recipe?.In ?? []).Select(i => Substance(i.Substance, l))], l);
             var text = _rules.Say($"discovered.{how}", l, ("name", NameOf(d.By)), ("substance", Pick(substance, l)), ("inputs", inputs),
-                ("process", recipe is null ? "" : Named(recipe.Process, l)), ("use", UseName(d.Use, l)));
+                ("process", recipe is null ? "" : ProcessName(recipe.Process, l)), ("use", UseName(d.Use, l)));
             if (d.Witnesses.Count == 0) return text;
             var witnesses = _rules.List([.. d.Witnesses.Select(NameOf)], l);
             return $"{text} {_rules.Say(d.Witnesses.Count == 1 ? "witness.one" : "witness.many", l, ("names", witnesses))}";
@@ -200,15 +202,21 @@ public sealed class Chronicle(ulong seed = 0) : IModule
         {
             _wave = true;
             var count = ill.Count;
-            Tell(now - 1, now, "illness", [.. ill.Order()], l => _rules.Say("illness", l, ("count", _rules.Number(count, l))));
+            var who = ill.Order().ToList();
+            Tell(now - 1, now, "illness", who, l => count <= _rules.IllnessNames
+                ? _rules.Say("illness.names", l, ("names", _rules.List([.. who.Select(NameOf)], l)))
+                : _rules.Say("illness", l, ("count", _rules.Number(count, l))));
         }
         else if (_wave && ill.Count < _rules.IllnessWave) _wave = false;
     }
 
     // ── once a life year: the wishes many share, with their causes ──
 
+    // a wish line is told when it is new, or changed against the last line told for its use; unchanged, now and then as
+    // "still"; and once when nobody wants the use any more
     private void Wishes(long tick)
     {
+        var year = YearOf(tick);
         var wanted = Folk.Living
             .SelectMany(p => Feelings.Wishes(p.Id).Select(w => (Person: p.Id, Wish: w)))
             .GroupBy(x => x.Wish.Use, StringComparer.Ordinal)
@@ -223,6 +231,23 @@ public sealed class Chronicle(ulong seed = 0) : IModule
             var causes = wishes.GroupBy(x => x.Wish.Cause, StringComparer.Ordinal)
                 .Select(g => (Cause: g.Key, Count: g.Count(), Because: Commonest(g.Select(x => x.Wish.Because))))
                 .OrderByDescending(c => c.Count).ThenBy(c => IndexOf(c.Cause)).ToList();
+            var told = new ToldWish(wishes.Count, causes[0].Cause, year);
+            if (_told.TryGetValue(use, out var last))
+            {
+                var by = Math.Abs(told.Count - last.Count);
+                var changed = (by > 0 && (by >= _rules.WishChangeBy || by >= last.Count * _rules.WishChangeShare)) || told.Cause != last.Cause;
+                if (!changed)
+                {
+                    if (year - last.Year < _rules.WishStillEvery) continue;
+                    _told[use] = last with { Year = year };
+                    var people = wishes.Select(x => x.Person).ToList();
+                    Tell(tick, tick + 1, "wish-still", people, l => people.Count == 1
+                        ? _rules.Say("wish.still.one", l, ("name", NameOf(people[0])), ("use", UseName(use, l)))
+                        : _rules.Say(CountKey("wish.still", people.Count), l, ("count", _rules.Number(people.Count, l)), ("use", UseName(use, l))));
+                    continue;
+                }
+            }
+            _told[use] = told;
             Tell(tick, tick + 1, "wish", [.. wishes.Select(x => x.Person)], l =>
             {
                 string Reason((string Cause, int Count, string? Because) c) => _rules.Say($"because.{c.Cause}", l,
@@ -232,12 +257,22 @@ public sealed class Chronicle(ulong seed = 0) : IModule
                 if (wishes.Count == 1)
                     return _rules.Say("wish.one", l, ("name", NameOf(wishes[0].Person)), ("use", name), ("reasons", _rules.List([.. causes.Select(Reason)], l)));
                 var count = _rules.Number(wishes.Count, l);
-                if (causes.Count == 1) return _rules.Say(wishes.Count == 2 ? "wish.both" : "wish.all", l, ("count", count), ("use", name), ("reason", Reason(causes[0])));
+                if (causes.Count == 1) return _rules.Say(wishes.Count == 2 ? "wish.both" : CountKey("wish.all", wishes.Count), l, ("count", count), ("use", name), ("reason", Reason(causes[0])));
                 var parts = causes.Select(c => _rules.Say("wish.part", l, ("count", _rules.Number(c.Count, l)), ("reason", Reason(c)))).ToList();
-                return _rules.Say("wish.many", l, ("count", count), ("use", name), ("reasons", _rules.List(parts, l)));
+                return _rules.Say(CountKey("wish.many", wishes.Count), l, ("count", count), ("use", name), ("reasons", _rules.List(parts, l)));
             });
         }
+
+        foreach (var gone in _told.Keys.Where(use => !wanted.Any(g => g.Use == use)).ToList())
+        {
+            _told.Remove(gone);
+            Tell(tick, tick + 1, "wish-gone", [], l => _rules.Say("wish.gone", l, ("use", UseName(gone, l))));
+        }
     }
+
+    // a sentence that opens with a count has a form for a count in digits, which never opens a sentence
+    private string CountKey(string key, int count) =>
+        count >= _rules.Numbers.Nl.Count && _rules.Sentences.ContainsKey($"{key}.digits") ? $"{key}.digits" : key;
 
     private static int IndexOf(string cause)
     {
@@ -285,6 +320,9 @@ public sealed class Chronicle(ulong seed = 0) : IModule
     private static string Pick(Name name, string language) => language == "en" ? name.En : name.Nl;
 
     // a trade, process, raw or start substance by its name in the world
+    // processes by their own names: a process and a use can share an id (cut), and the world's names keep one per id
+    private string ProcessName(string id, string language) => _processes.TryGetValue(id, out var name) ? Pick(name, language) : Named(id, language);
+
     internal string Named(string id, string language) => _world.NamesById.TryGetValue(id, out var name) ? Pick(name, language) : id;
 
     private string Substance(string id, string language) => Inventing?.NameOf(id, language) ?? Named(id, language);
@@ -296,7 +334,7 @@ public sealed class Chronicle(ulong seed = 0) : IModule
     {
         var colon = item.IndexOf(':');
         if (colon > 0) return _rules.Say("item.recipe", language, ("substance", Substance(item[(colon + 1)..], language)));
-        if (_world.Processes.Any(p => p.Id == item)) return _rules.Say("item.process", language, ("process", Named(item, language)));
+        if (_world.Processes.Any(p => p.Id == item)) return _rules.Say("item.process", language, ("process", ProcessName(item, language)));
         return _rules.Say("item.use", language, ("use", UseName(item, language)));
     }
 
@@ -308,10 +346,11 @@ public sealed class Chronicle(ulong seed = 0) : IModule
         _rules = village.Data.Section<ChronicleRules>("chronicle");
         _world = WorldData.From(village.Data);
         _ticksPerYear = village.Data.Section<LifeSettings>("life").TicksPerLifeYear;
+        _processes = village.Data.Section<List<ProcessNames>>("processes").ToDictionary(x => x.Id, x => new Name(x.Nl, x.En), StringComparer.Ordinal);
     }
 
     public JsonNode Save() => JsonSerializer.SerializeToNode(new SavedChronicle(_seed, _entries, _years, _openYear, _openFirst, _openLast, _tally, _wave,
-        _causes, _found.ToDictionary(f => f.Key, f => (IReadOnlyList<Name>)f.Value)), SaveJson.Options)!;
+        _causes, _found.ToDictionary(f => f.Key, f => (IReadOnlyList<Name>)f.Value), _told), SaveJson.Options)!;
 
     public void Load(ModuleContext village, JsonNode data, int version)
     {
@@ -327,11 +366,20 @@ public sealed class Chronicle(ulong seed = 0) : IModule
         foreach (var (person, cause) in saved.Causes) _causes[person] = cause;
         _found.Clear();
         foreach (var (person, found) in saved.Found) _found[person] = [.. found];
+        _told.Clear();
+        foreach (var (use, told) in saved.Told) _told[use] = told;
     }
 
     /// <summary>The counts of the running life year.</summary>
     private sealed record Tally(int Born, int Died, int Tried, int Made, int Learned, int Discoveries);
 
     private sealed record SavedChronicle(ulong Seed, IReadOnlyList<Entry> Entries, IReadOnlyList<LifeYear> Years, int OpenYear, DateOnly OpenFirst,
-        DateOnly OpenLast, Tally Tally, bool Wave, IReadOnlyDictionary<int, string> Causes, IReadOnlyDictionary<int, IReadOnlyList<Name>> Found);
+        DateOnly OpenLast, Tally Tally, bool Wave, IReadOnlyDictionary<int, string> Causes, IReadOnlyDictionary<int, IReadOnlyList<Name>> Found,
+        IReadOnlyDictionary<string, ToldWish> Told);
+
+    /// <summary>A process's names, from the section "processes".</summary>
+    private sealed record ProcessNames(string Id, string Nl, string En);
+
+    /// <summary>The last wish line told for a use: how many wanted it, the leading cause, and the life year.</summary>
+    private sealed record ToldWish(int Count, string Cause, int Year);
 }

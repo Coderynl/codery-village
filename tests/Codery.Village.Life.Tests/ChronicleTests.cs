@@ -56,6 +56,7 @@ public class ChronicleTests
         Assert.Contains(folk.Get(found.By)!.Name, entry.En);
         Assert.Contains(how, entry.En);
         foreach (var input in inventing.Recipes[found.Recipe].In) Assert.Contains(inventing.NameOf(input.Substance, "en"), entry.En);
+        Assert.Contains(ProcessName(inventing.Recipes[found.Recipe].Process, "nl"), entry.Nl);
         Assert.Contains(world.Uses.Single(u => u.Id == found.Use).En, entry.En);
         Assert.Contains(world.Uses.Single(u => u.Id == found.Use).Nl, entry.Nl);
         Assert.DoesNotContain(found.Substance, entry.Nl);
@@ -104,6 +105,23 @@ public class ChronicleTests
         Assert.Equal(Write(SixYears.Value, "nl"), Write(loaded, "nl"));
     }
 
+    [Fact]
+    public void An_unchanged_wish_is_not_told_every_year()
+    {
+        // four adults come to want an ornament, which nobody on the island can make, so the wish stays as it is
+        var engine = LifeVillage.Start(3, World.Data, World.Map, Spring);
+        var folk = Module<FolkModule>(engine);
+        var wanting = folk.Living.Where(p => folk.StageOf(p, 0) == LifeStage.Adult).Take(4).Select(p => p.Id).ToList();
+        foreach (var id in wanting) Module<FeelingsModule>(engine).Want(id, "ornament", "habituation", null);
+        Run(engine, 7 * TicksPerYear);
+
+        var told = Module<ChronicleModule>(engine).Entries
+            .Where(e => e.Kind.StartsWith("wish", StringComparison.Ordinal) && e.En.Contains("an ornament", StringComparison.Ordinal)).ToList();
+        Assert.Equal([1, 6], told.Select(e => e.LifeYear));
+        Assert.Equal(["wish", "wish-still"], told.Select(e => e.Kind));
+        Assert.StartsWith("Nog steeds", told[1].Nl, StringComparison.Ordinal);
+    }
+
     // ── helpers ──
 
     private static string Write(Engine engine, string language) =>
@@ -125,6 +143,13 @@ public class ChronicleTests
         return [.. json.RootElement.GetProperty("sentences").EnumerateObject()
             .Where(s => s.Name.StartsWith("because.", StringComparison.Ordinal))
             .Select(s => s.Value.GetProperty(language).GetString()!.Split('{')[0])];
+    }
+
+    // a process by its own name in processes.json: a use can share its id
+    private static string ProcessName(string id, string language)
+    {
+        using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "world", "processes.json")));
+        return json.RootElement.EnumerateArray().Single(p => p.GetProperty("id").GetString() == id).GetProperty(language).GetString()!;
     }
 
     private static long TicksPerYear => World.Data.Section<LifeSettings>("life").TicksPerLifeYear;

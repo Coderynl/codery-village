@@ -77,9 +77,10 @@ public static class Markdown
         if (found.Count > 0) parts.Add(rules.Say("cast.found", language, ("what", rules.List([.. found.Select(n => language == "en" ? n.En : n.Nl)], language))));
         if (p.DiedTick is { } died)
         {
-            var cause = c.CauseOfDeath(p.Id) is { } why ? rules.Say($"cause.{why}", language) : "";
-            parts.Add(rules.Say("cast.died", language, ("year", Digits(died / c.TicksPerYear + 1)), ("cause", cause), ("age", c.Age(p.Id, died, language)))
-                .Replace("  ", " ", StringComparison.Ordinal));
+            (string, string)[] values = [("year", Digits(died / c.TicksPerYear + 1)), ("age", c.Age(p.Id, died, language))];
+            parts.Add(c.CauseOfDeath(p.Id) is { } why
+                ? rules.Say("cast.died", language, [.. values, ("cause", rules.Say($"cause.{why}", language))])
+                : rules.Say("cast.died.unknown", language, values));
         }
         else parts.Add(rules.Say("cast.alive", language, ("age", c.Age(p.Id, c.Tick, language))));
         return $"- **{p.Name}** — {string.Join(" · ", parts)}";
