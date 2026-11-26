@@ -41,7 +41,8 @@ public class FeelingsTests
     [Fact]
     public void Joy_fades_until_the_new_is_normal()
     {
-        var v = Village(1);
+        // seed 2: on seed 1 the household finds a fired pot of its own within two years, which hides the given one
+        var v = Village(2);
         var p = Adult(v);
         v.Feelings.Want(p.Id, "pot", "comparison", null);
         Run(v, 2.0);
@@ -59,7 +60,8 @@ public class FeelingsTests
     [Fact]
     public void Losing_the_ordinary_hurts_more_than_getting_it_gave()
     {
-        var v = Village(1);
+        // seed 2: on seed 1 the household finds a fired pot of its own within two years, which hides the given one
+        var v = Village(2);
         var p = Adult(v);
         v.Feelings.Want(p.Id, "pot", "comparison", null);
         Run(v, 2.0);
