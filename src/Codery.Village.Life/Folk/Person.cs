@@ -9,7 +9,7 @@ public enum LifeStage { Child, Pupil, Adult, Old }
 public sealed class Person
 {
     internal Person(int id, string name, Sex sex, long bornTick, Personality traits, IReadOnlyList<string> interests,
-        int? mother, int? father, int household)
+        Sex drawnTo, int? mother, int? father, int household)
     {
         Id = id;
         Name = name;
@@ -17,6 +17,7 @@ public sealed class Person
         BornTick = bornTick;
         Traits = traits;
         Interests = interests;
+        DrawnTo = drawnTo;
         Mother = mother;
         Father = father;
         Household = household;
@@ -26,7 +27,7 @@ public sealed class Person
 
     public string Name { get; }
 
-    /// <summary>Chooses the name and the pronoun, and which of a pair is the mother of their child.</summary>
+    /// <summary>Chooses the name and the pronoun; a pair has a child only when it is a woman and a man.</summary>
     public Sex Sex { get; }
 
     /// <summary>The tick of birth; below 0 for those who were there at the start.</summary>
@@ -36,6 +37,9 @@ public sealed class Person
 
     /// <summary>One to three interest ids from the section "people".</summary>
     public IReadOnlyList<string> Interests { get; }
+
+    /// <summary>The sex this person pairs with; drawn once, at birth or at the start.</summary>
+    public Sex DrawnTo { get; }
 
     /// <summary>Null for those who were there at the start.</summary>
     public int? Mother { get; }

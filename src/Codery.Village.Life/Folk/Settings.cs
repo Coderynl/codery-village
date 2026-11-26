@@ -20,9 +20,11 @@ public sealed record Stages(int Pupil, int Adult, int Old);
 
 /// <summary>
 /// A single adult pairs with <paramref name="Chance"/> a life year, times 0.5 + extraversion/100, times the share of
-/// <paramref name="Crowd"/> that the singles they could pair with make up. Partners differ at most <paramref name="AgeGap"/> years.
+/// <paramref name="Crowd"/> that the singles they could pair with make up, at most <paramref name="Max"/> (below 1, so
+/// extraversion keeps mattering). Partners differ at most <paramref name="AgeGap"/> years, and each is drawn to the other's sex:
+/// <paramref name="OwnSex"/> is the share of people drawn to their own sex.
 /// </summary>
-public sealed record PairingRules(double Chance, int Crowd, int AgeGap);
+public sealed record PairingRules(double Chance, int Crowd, int AgeGap, double Max, double OwnSex);
 
 /// <summary>
 /// A pair has a child with <paramref name="Chance"/> a life year while the mother is <paramref name="MotherFrom"/> up to and

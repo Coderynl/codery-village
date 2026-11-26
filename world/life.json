@@ -8,7 +8,9 @@
   "pairing": {
     "chance": 0.8,
     "crowd": 2,
-    "ageGap": 10
+    "ageGap": 10,
+    "max": 0.95,
+    "ownSex": 0.08
   },
   "births": {
     "chance": 0.45,

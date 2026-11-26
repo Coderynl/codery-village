@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Codery.Village.Core;
+using Codery.Village.Core.Data;
 using Codery.Village.Core.Modules;
 using Codery.Village.Core.Save;
 using Codery.Village.Core.Time;
@@ -47,11 +48,8 @@ public class FolkTests
     [Fact]
     public void The_old_die_and_are_gone_from_the_living()
     {
-        var people = JsonNode.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "world", "people.json")))!;
-        people["start"]!["pairAges"] = JsonNode.Parse("""[{ "from": 95, "to": 95, "weight": 1 }]""");
         var events = new Recorder();
-        var engine = new Engine([.. LifeVillage.Modules(), events], World.With(new Dictionary<string, string> { ["people"] = people.ToJsonString() }),
-            World.Map, 1, new SimulatedTime(Spring));
+        var engine = new Engine([.. LifeVillage.Modules(), events], OldWorld(), World.Map, 1, new SimulatedTime(Spring));
         engine.Start();
         var folk = FolkOf(engine);
         var old = folk.Living.Select(p => p.Id).ToList();
@@ -93,6 +91,39 @@ public class FolkTests
         Run(loaded, 5 * TicksPerYear);
 
         Assert.Equal(Snapshot(FolkOf(unbroken)), Snapshot(FolkOf(loaded)));
+    }
+
+    [Fact]
+    public void The_dead_come_back_the_same_after_saving()
+    {
+        var unbroken = LifeVillage.Start(1, OldWorld(), World.Map, Spring);
+        Run(unbroken, 2 * TicksPerYear);
+
+        var first = LifeVillage.Start(1, OldWorld(), World.Map, Spring);
+        var founders = FolkOf(first).Living.Count;
+        Run(first, TicksPerYear);
+        Assert.InRange(FolkOf(first).Living.Count, 1, founders - 1);
+        var saved = SaveJson.FromJson(SaveJson.ToJson(first.Save()));
+        var loaded = Engine.Load(saved, LifeVillage.Modules(), OldWorld(), World.Map, new SimulatedTime(saved.Calendar));
+        Run(loaded, TicksPerYear);
+
+        Assert.Equal(Snapshot(FolkOf(unbroken)), Snapshot(FolkOf(loaded)));
+        Assert.Equal(Everyone(FolkOf(unbroken)), Everyone(FolkOf(loaded)));
+    }
+
+    // the world with everyone at the start 95
+    private static DataSet OldWorld()
+    {
+        var people = JsonNode.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "world", "people.json")))!;
+        people["start"]!["pairAges"] = JsonNode.Parse("""[{ "from": 95, "to": 95, "weight": 1 }]""");
+        return World.With(new Dictionary<string, string> { ["people"] = people.ToJsonString() });
+    }
+
+    private static List<(int Id, long? DiedTick, int Health, int Household)> Everyone(FolkModule folk)
+    {
+        var everyone = new List<(int, long?, int, int)>();
+        for (var id = 0; folk.Get(id) is { } p; id++) everyone.Add((p.Id, p.DiedTick, p.Health, p.Household));
+        return everyone;
     }
 
     private static FolkModule FolkOf(Engine engine) => engine.Running.OfType<FolkModule>().Single();

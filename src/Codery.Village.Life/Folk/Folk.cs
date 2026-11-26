@@ -76,15 +76,25 @@ public sealed class Folk : IModule
             var band = Pick(random, start.PairAges, b => b.Weight);
             if (count - _living.Count == 1)
             {
-                Add(random.Next(2) == 0 ? Sex.Man : Sex.Woman, YearsIn(random, band), null, null, _nextHousehold++);
+                Add(random.Next(2) == 0 ? Sex.Man : Sex.Woman, YearsIn(random, band), null, null, _nextHousehold++, null);
                 continue;
             }
 
             var household = _nextHousehold++;
             var first = band.From + random.Next(band.To - band.From + 1);
             var second = Math.Clamp(first + random.Next(2 * start.PartnerGap + 1) - start.PartnerGap, band.From, band.To);
-            var man = Add(Sex.Man, first + random.NextDouble(), null, null, household);
-            var woman = Add(Sex.Woman, second + random.NextDouble(), null, null, household);
+            // a pair of one sex, at the share drawn to their own sex, has no children
+            if (random.NextDouble() < _rules.Pairing.OwnSex)
+            {
+                var sex = random.Next(2) == 0 ? Sex.Man : Sex.Woman;
+                var one = Add(sex, first + random.NextDouble(), null, null, household, sex);
+                var other = Add(sex, second + random.NextDouble(), null, null, household, sex);
+                one.Partner = other.Id;
+                other.Partner = one.Id;
+                continue;
+            }
+            var man = Add(Sex.Man, first + random.NextDouble(), null, null, household, Sex.Woman);
+            var woman = Add(Sex.Woman, second + random.NextDouble(), null, null, household, Sex.Man);
             man.Partner = woman.Id;
             woman.Partner = man.Id;
 
@@ -94,7 +104,7 @@ public sealed class Folk : IModule
             var youngest = Math.Max(0, mother - (_rules.Births.MotherTo + 1));
             var oldest = Math.Min(_rules.Stages.Adult, mother - _rules.Births.MotherFrom);
             for (var i = 0; i < children && youngest < oldest; i++)
-                Add(random.Next(2) == 0 ? Sex.Man : Sex.Woman, youngest + random.NextDouble() * (oldest - youngest), woman.Id, man.Id, household);
+                Add(random.Next(2) == 0 ? Sex.Man : Sex.Woman, youngest + random.NextDouble() * (oldest - youngest), woman.Id, man.Id, household, null);
         }
 
         foreach (var p in _living)
@@ -140,17 +150,18 @@ public sealed class Folk : IModule
         village.Publish(new CameOfAge(tick, p.Id));
     }
 
-    // a single adult pairs with someone single of the other sex, near in age and not close kin
+    // a single adult pairs with a single adult they are drawn to and who is drawn to them, near in age and not close kin
     private void TryToPair(ModuleContext village, Person p, long tick)
     {
         if (p.Partner is not null || StageOf(p, tick) < LifeStage.Adult) return;
         var age = AgeOf(p, tick);
-        var singles = _living.Where(q => q.Sex != p.Sex && q.Partner is null && StageOf(q, tick) >= LifeStage.Adult
+        var singles = _living.Where(q => q.Sex == p.DrawnTo && q.DrawnTo == p.Sex && q.Partner is null && StageOf(q, tick) >= LifeStage.Adult
             && Math.Abs(AgeOf(q, tick) - age) <= _rules.Pairing.AgeGap && !Kin(p, q)).ToList();
         if (singles.Count == 0) return;
 
         var pairing = _rules.Pairing;
-        var chance = pairing.Chance * (0.5 + p.Traits.Extraversion / 100.0) * Math.Min(1.0, (double)singles.Count / pairing.Crowd);
+        // capped below 1, so the most outgoing still differ from the less outgoing
+        var chance = Math.Min(pairing.Max, pairing.Chance * (0.5 + p.Traits.Extraversion / 100.0) * Math.Min(1.0, (double)singles.Count / pairing.Crowd));
         if (village.Random.NextDouble() >= Daily(chance)) return;
 
         var q = singles[village.Random.Next(singles.Count)];
@@ -173,7 +184,8 @@ public sealed class Folk : IModule
 
     private void TryForAChild(ModuleContext village, Person mother, long tick)
     {
-        if (mother.Sex != Sex.Woman || mother.Partner is not { } partner) return;
+        // a child needs a woman and a man in the pair
+        if (mother.Sex != Sex.Woman || mother.Partner is not { } partner || _everyone[partner].Sex != Sex.Man) return;
         var births = _rules.Births;
         var age = AgeOf(mother, tick);
         if (age < births.MotherFrom || age >= births.MotherTo + 1) return;
@@ -186,7 +198,7 @@ public sealed class Folk : IModule
         var sex = random.Next(2) == 0 ? Sex.Man : Sex.Woman;
         var name = FreeName(sex, random.Next(int.MaxValue));
         var child = new Person(_everyone.Count, name, sex, tick, Inherit(random, mother.Traits, father.Traits), DrawInterests(random),
-            mother.Id, father.Id, mother.Household);
+            DrawnTo(random, sex), mother.Id, father.Id, mother.Household);
         _everyone.Add(child);
         _living.Add(child);
         village.Publish(new Born(tick, child.Id, mother.Id, father.Id));
@@ -240,16 +252,21 @@ public sealed class Folk : IModule
 
     // ── making people ──
 
-    private Person Add(Sex sex, double age, int? mother, int? father, int household)
+    // drawnTo null: drawn as for anyone born here
+    private Person Add(Sex sex, double age, int? mother, int? father, int household, Sex? drawnTo)
     {
         var random = _village.Random;
         var name = FreeName(sex, random.Next(int.MaxValue));
         var p = new Person(_everyone.Count, name, sex, _village.Clocks.Tick - _life.TickOfAge(age), DrawTraits(random), DrawInterests(random),
-            mother, father, household);
+            drawnTo ?? DrawnTo(random, sex), mother, father, household);
         _everyone.Add(p);
         _living.Add(p);
         return p;
     }
+
+    // their own sex at the share in the data, else the other
+    private Sex DrawnTo(Rng random, Sex sex) =>
+        random.NextDouble() < _rules.Pairing.OwnSex ? sex : sex == Sex.Man ? Sex.Woman : Sex.Man;
 
     private static double YearsIn(Rng random, AgeBand band) => band.From + random.Next(band.To - band.From + 1) + random.NextDouble();
 
@@ -337,12 +354,12 @@ public sealed class Folk : IModule
     private sealed record SavedFolk(int NextHousehold, IReadOnlyList<SavedPerson> People);
 
     private sealed record SavedPerson(int Id, string Name, Sex Sex, long BornTick, Personality Traits, IReadOnlyList<string> Interests,
-        int Household, int Health, int? Mother = null, int? Father = null, int? Partner = null, string? Trade = null, long? DiedTick = null)
+        Sex DrawnTo, int Household, int Health, int? Mother = null, int? Father = null, int? Partner = null, string? Trade = null, long? DiedTick = null)
     {
         public static SavedPerson Of(Person p) =>
-            new(p.Id, p.Name, p.Sex, p.BornTick, p.Traits, p.Interests, p.Household, p.Health, p.Mother, p.Father, p.Partner, p.Trade, p.DiedTick);
+            new(p.Id, p.Name, p.Sex, p.BornTick, p.Traits, p.Interests, p.DrawnTo, p.Household, p.Health, p.Mother, p.Father, p.Partner, p.Trade, p.DiedTick);
 
-        public Person ToPerson() => new(Id, Name, Sex, BornTick, Traits, Interests, Mother, Father, Household)
+        public Person ToPerson() => new(Id, Name, Sex, BornTick, Traits, Interests, DrawnTo, Mother, Father, Household)
         {
             Partner = Partner,
             Trade = Trade,
